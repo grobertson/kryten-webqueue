@@ -1,0 +1,27 @@
+{
+  "channel": "Q_A",
+  "host": "0.0.0.0",
+  "port": 2010,
+  "secret_key": "CHANGE_ME_long_random_string",
+  "session_ttl_hours": 24,
+
+  "api_gate_url": "http://127.0.0.1:24444",
+  "api_gate_token": "CHANGE_ME",
+
+  "mediacms_url": "https://www.dropsugar.com",
+  "mediacms_token": "CHANGE_ME",
+
+  "tmdb_api_key": "",
+  "omdb_api_key": "",
+
+  "db_path": "/var/lib/kryten-webqueue/webqueue.db",
+
+  "image_dir": "/var/lib/kryten-webqueue/images",
+  "placeholder_dir": "/var/lib/kryten-webqueue/images/placeholders",
+
+  "catalog_sync_interval_hours": 4,
+  "pre_fire_lock_minutes_default": 15,
+  "state_poll_interval_sec": 3.0,
+
+  "prometheus_port": 28292
+}

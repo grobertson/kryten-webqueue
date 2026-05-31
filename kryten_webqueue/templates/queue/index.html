@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Queue{% endblock %}
+{% block body_class %}queue-page{% endblock %}
+
+{% block content %}
+<div class="queue-layout">
+    <div class="now-playing-section">
+        <h2>Now Playing</h2>
+        <div id="now-playing" class="now-playing-card">
+            <p class="empty-state">Nothing playing</p>
+        </div>
+    </div>
+
+    <div class="queue-section">
+        <h2>Up Next</h2>
+        <div id="queue-list" class="queue-list">
+            <p class="empty-state">Queue is empty</p>
+        </div>
+    </div>
+
+    <div class="queue-info-sidebar">
+        <div id="schedule-info" class="schedule-info hidden">
+            <h3>Scheduled Playlist</h3>
+            <p id="schedule-label"></p>
+            <p id="schedule-time"></p>
+        </div>
+        <div class="queue-stats">
+            <p>Connected: <span id="ws-status" class="ws-disconnected">●</span></p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let ws = null;
+let reconnectTimer = null;
+
+function connectWebSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(`${proto}//${location.host}/ws`);
+
+    ws.onopen = () => {
+        document.getElementById('ws-status').className = 'ws-connected';
+        document.getElementById('ws-status').title = 'Connected';
+    };
+
+    ws.onclose = () => {
+        document.getElementById('ws-status').className = 'ws-disconnected';
+        reconnectTimer = setTimeout(connectWebSocket, 3000);
+    };
+
+    ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'queue_state' || msg.type === 'queue_update') {
+            renderQueue(msg.data);
+        } else if (msg.type === 'pong') {
+            // keepalive ack
+        } else if (msg.type === 'schedule_fired') {
+            showToast(`Scheduled playlist loaded: ${msg.data.playlist_name}`);
+        }
+    };
+
+    // Keepalive
+    setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({type: 'ping'}));
+        }
+    }, 30000);
+}
+
+function renderQueue(state) {
+    const npEl = document.getElementById('now-playing');
+    const qlEl = document.getElementById('queue-list');
+
+    if (state.now_playing) {
+        const np = state.now_playing;
+        npEl.innerHTML = `
+            <div class="np-info">
+                <h3>${escapeHtml(np.title || 'Unknown')}</h3>
+                <div class="np-progress">
+                    <div class="progress-bar" style="width: ${((np.currentTime || 0) / (np.duration || 1) * 100)}%"></div>
+                </div>
+                <span class="np-time">${formatTime(np.currentTime || 0)} / ${formatTime(np.duration || 0)}</span>
+            </div>
+        `;
+    } else {
+        npEl.innerHTML = '<p class="empty-state">Nothing playing</p>';
+    }
+
+    if (state.items && state.items.length > 0) {
+        qlEl.innerHTML = state.items.map((item, i) => `
+            <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''}" data-uid="${item.uid}">
+                <span class="qi-pos">${i + 1}</span>
+                <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
+                <span class="qi-duration">${formatTime(item.duration_sec || 0)}</span>
+                ${item.is_pay ? `<span class="qi-badge badge-paid">${item.tier}</span>` : ''}
+                ${item.paid_by ? `<span class="qi-user">${escapeHtml(item.paid_by)}</span>` : ''}
+                <span class="qi-eta">${item.estimated_start_at ? formatEta(item.estimated_start_at) : ''}</span>
+            </div>
+        `).join('');
+    } else {
+        qlEl.innerHTML = '<p class="empty-state">Queue is empty</p>';
+    }
+}
+
+function formatTime(sec) {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatEta(isoStr) {
+    const d = new Date(isoStr);
+    return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+connectWebSocket();
+</script>
+{% endblock %}

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Login{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <h1>Login</h1>
+    <p>Enter your CyTube username to receive a one-time code via PM.</p>
+
+    <div id="otp-request" class="auth-form">
+        <input type="text" id="username" placeholder="CyTube username" autocomplete="username" maxlength="50">
+        <button id="request-otp-btn" class="btn btn-primary">Send Code</button>
+    </div>
+
+    <div id="otp-verify" class="auth-form hidden">
+        <p class="otp-sent-msg">Code sent! Check your PMs from Kryten.</p>
+        <input type="text" id="otp-code" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
+        <button id="verify-otp-btn" class="btn btn-primary">Verify</button>
+    </div>
+
+    <div id="auth-error" class="error-msg hidden"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('request-otp-btn').addEventListener('click', async () => {
+    const username = document.getElementById('username').value.trim();
+    if (!username) return;
+    const errEl = document.getElementById('auth-error');
+    errEl.classList.add('hidden');
+
+    const resp = await fetch('/auth/otp/request', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username})
+    });
+    if (resp.ok) {
+        document.getElementById('otp-request').classList.add('hidden');
+        document.getElementById('otp-verify').classList.remove('hidden');
+    } else {
+        const data = await resp.json();
+        errEl.textContent = data.detail || 'Failed to send OTP';
+        errEl.classList.remove('hidden');
+    }
+});
+
+document.getElementById('verify-otp-btn').addEventListener('click', async () => {
+    const username = document.getElementById('username').value.trim();
+    const code = document.getElementById('otp-code').value.trim();
+    if (!code) return;
+    const errEl = document.getElementById('auth-error');
+    errEl.classList.add('hidden');
+
+    const resp = await fetch('/auth/otp/verify', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username, code})
+    });
+    if (resp.ok) {
+        window.location.href = '/catalog/browse';
+    } else {
+        const data = await resp.json();
+        errEl.textContent = data.detail || 'Invalid code';
+        errEl.classList.remove('hidden');
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,562 @@
+import aiosqlite
+from pathlib import Path
+from datetime import datetime, UTC
+
+
+MIGRATIONS = [
+    # v1: Migration tracking table
+    """
+    CREATE TABLE IF NOT EXISTS _migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+    """,
+    # v2: Core schema
+    """
+    CREATE TABLE IF NOT EXISTS catalog (
+        friendly_token   TEXT PRIMARY KEY,
+        title            TEXT NOT NULL,
+        description      TEXT,
+        duration_sec     INTEGER,
+        manifest_url     TEXT NOT NULL,
+        thumbnail_url    TEXT,
+        cover_art_path   TEXT,
+        cover_art_source TEXT,
+        added_at         TIMESTAMP,
+        updated_at       TIMESTAMP,
+        synced_at        TIMESTAMP
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS catalog_fts USING fts5(
+        friendly_token UNINDEXED,
+        title,
+        description,
+        content='catalog',
+        content_rowid='rowid'
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+        id    INTEGER PRIMARY KEY,
+        name  TEXT NOT NULL UNIQUE,
+        slug  TEXT NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS catalog_categories (
+        friendly_token TEXT REFERENCES catalog(friendly_token) ON DELETE CASCADE,
+        category_id    INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+        PRIMARY KEY (friendly_token, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+        id   INTEGER PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS catalog_tags (
+        friendly_token TEXT REFERENCES catalog(friendly_token) ON DELETE CASCADE,
+        tag_id         INTEGER REFERENCES tags(id) ON DELETE CASCADE,
+        PRIMARY KEY (friendly_token, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS sync_log (
+        id            INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at    TIMESTAMP NOT NULL,
+        ended_at      TIMESTAMP,
+        items_seen    INTEGER,
+        items_new     INTEGER,
+        items_updated INTEGER,
+        errors        INTEGER,
+        status        TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS otps (
+        username    TEXT NOT NULL,
+        code        TEXT NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at  TIMESTAMP NOT NULL,
+        used        BOOLEAN NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_otps_username ON otps(username);
+
+    CREATE TABLE IF NOT EXISTS queue_shadow (
+        uid              INTEGER PRIMARY KEY,
+        position         INTEGER NOT NULL,
+        title            TEXT,
+        friendly_token   TEXT,
+        media_type       TEXT NOT NULL,
+        media_id         TEXT NOT NULL,
+        duration_sec     INTEGER,
+        is_pay           BOOLEAN NOT NULL DEFAULT 0,
+        paid_by          TEXT,
+        tier             TEXT,
+        z_cost           INTEGER,
+        schedule_id      INTEGER,
+        estimated_start_at TIMESTAMP,
+        added_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_playlists (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        name         TEXT NOT NULL,
+        description  TEXT,
+        is_immutable BOOLEAN NOT NULL DEFAULT 0,
+        created_by   TEXT NOT NULL,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_playlist_items (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        playlist_id  INTEGER NOT NULL REFERENCES saved_playlists(id) ON DELETE CASCADE,
+        position     INTEGER NOT NULL,
+        media_type   TEXT NOT NULL,
+        media_id     TEXT NOT NULL,
+        title        TEXT,
+        duration_sec INTEGER,
+        UNIQUE(playlist_id, position)
+    );
+
+    CREATE TABLE IF NOT EXISTS playlist_schedules (
+        id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+        playlist_id             INTEGER REFERENCES saved_playlists(id) ON DELETE SET NULL,
+        label                   TEXT NOT NULL,
+        fire_at                 TIMESTAMP NOT NULL,
+        is_recurring            BOOLEAN DEFAULT 0,
+        rrule                   TEXT,
+        immutability_expires_at TIMESTAMP,
+        pre_fire_lock_minutes   INTEGER DEFAULT 15,
+        fired_at                TIMESTAMP,
+        is_active               BOOLEAN DEFAULT 1,
+        created_by              TEXT NOT NULL,
+        created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS active_schedule (
+        id               INTEGER PRIMARY KEY DEFAULT 1,
+        schedule_id      INTEGER REFERENCES playlist_schedules(id),
+        playlist_id      INTEGER REFERENCES saved_playlists(id),
+        is_immutable     BOOLEAN NOT NULL DEFAULT 0,
+        started_at       TIMESTAMP,
+        estimated_end_at TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS spend_requests (
+        request_id     TEXT PRIMARY KEY,
+        username       TEXT NOT NULL,
+        uid            INTEGER,
+        friendly_token TEXT,
+        tier           TEXT,
+        z_cost         INTEGER,
+        created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        refunded       BOOLEAN DEFAULT 0,
+        refunded_at    TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS queue_history (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        username       TEXT NOT NULL,
+        friendly_token TEXT,
+        title          TEXT,
+        tier           TEXT,
+        z_cost         INTEGER,
+        queued_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        status         TEXT DEFAULT 'queued'
+    );
+    CREATE INDEX IF NOT EXISTS idx_queue_history_user ON queue_history(username);
+    """,
+]
+
+
+class Database:
+    """Async SQLite database wrapper."""
+
+    def __init__(self, db_path: str):
+        self._db_path = db_path
+        self._db: aiosqlite.Connection | None = None
+
+    async def connect(self):
+        Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
+        self._db = await aiosqlite.connect(self._db_path)
+        self._db.row_factory = aiosqlite.Row
+        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA foreign_keys=ON")
+
+    async def close(self):
+        if self._db:
+            await self._db.close()
+
+    async def run_migrations(self):
+        """Apply pending migrations sequentially."""
+        await self._executescript(MIGRATIONS[0])
+        row = await self._fetch_one("SELECT MAX(version) as v FROM _migrations")
+        current_version = (row["v"] or 0) if row else 0
+
+        for version, sql in enumerate(MIGRATIONS[1:], start=1):
+            if version > current_version:
+                await self._executescript(sql)
+                await self._execute("INSERT INTO _migrations (version) VALUES (?)", [version])
+
+    # --- Low-level helpers ---
+
+    async def _execute(self, sql: str, params: list | None = None):
+        await self._db.execute(sql, params or [])
+        await self._db.commit()
+
+    async def _executescript(self, sql: str):
+        await self._db.executescript(sql)
+        await self._db.commit()
+
+    async def _fetch_one(self, sql: str, params: list | None = None) -> dict | None:
+        cursor = await self._db.execute(sql, params or [])
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def _fetch_all(self, sql: str, params: list | None = None) -> list[dict]:
+        cursor = await self._db.execute(sql, params or [])
+        rows = await cursor.fetchall()
+        return [dict(r) for r in rows]
+
+    # --- Catalog ---
+
+    async def browse(self, *, category: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
+        query = """
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.manifest_url
+            FROM catalog c
+            WHERE c.friendly_token NOT IN (
+                SELECT spi.media_id FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+            )
+        """
+        params: list = []
+        if category:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cc.friendly_token FROM catalog_categories cc
+                    JOIN categories cat ON cc.category_id = cat.id
+                    WHERE cat.slug = ?
+                )
+            """
+            params.append(category)
+        query += " ORDER BY c.title ASC LIMIT ? OFFSET ?"
+        params.extend([per_page, (page - 1) * per_page])
+        return await self._fetch_all(query, params)
+
+    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24) -> list[dict]:
+        sql = """
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.manifest_url,
+                   rank AS relevance
+            FROM catalog_fts fts
+            JOIN catalog c ON c.rowid = fts.rowid
+            WHERE catalog_fts MATCH ?
+              AND c.friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+              )
+            ORDER BY rank
+            LIMIT ? OFFSET ?
+        """
+        return await self._fetch_all(sql, [query_text, per_page, (page - 1) * per_page])
+
+    async def get_item(self, friendly_token: str) -> dict | None:
+        sql = """
+            SELECT * FROM catalog
+            WHERE friendly_token = ?
+              AND friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+              )
+        """
+        return await self._fetch_one(sql, [friendly_token])
+
+    async def get_item_admin(self, friendly_token: str) -> dict | None:
+        return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
+
+    async def is_restricted(self, friendly_token: str) -> bool:
+        sql = """
+            SELECT 1 FROM saved_playlist_items spi
+            JOIN saved_playlists sp ON spi.playlist_id = sp.id
+            WHERE sp.is_immutable = 1
+              AND spi.media_type = 'cm'
+              AND spi.media_id = ?
+            LIMIT 1
+        """
+        row = await self._fetch_one(sql, [friendly_token])
+        return row is not None
+
+    async def get_categories(self) -> list[dict]:
+        return await self._fetch_all("SELECT id, name, slug FROM categories ORDER BY name")
+
+    async def insert_catalog(self, row: dict):
+        sql = """
+            INSERT INTO catalog (friendly_token, title, description, duration_sec,
+                                 manifest_url, thumbnail_url, synced_at)
+            VALUES (:friendly_token, :title, :description, :duration_sec,
+                    :manifest_url, :thumbnail_url, :synced_at)
+        """
+        await self._db.execute(sql, row)
+        # Update FTS index
+        await self._db.execute(
+            "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
+            "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
+            [row["friendly_token"]],
+        )
+        await self._db.commit()
+
+    async def update_catalog(self, friendly_token: str, row: dict):
+        sql = """
+            UPDATE catalog SET title=:title, description=:description,
+                   duration_sec=:duration_sec, manifest_url=:manifest_url,
+                   thumbnail_url=:thumbnail_url, synced_at=:synced_at, updated_at=:synced_at
+            WHERE friendly_token=:friendly_token
+        """
+        await self._db.execute(sql, row)
+        # Rebuild FTS for this row
+        await self._db.execute(
+            "DELETE FROM catalog_fts WHERE friendly_token = ?", [friendly_token]
+        )
+        await self._db.execute(
+            "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
+            "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
+            [friendly_token],
+        )
+        await self._db.commit()
+
+    async def update_cover_art(self, friendly_token: str, path: str, source: str):
+        await self._execute(
+            "UPDATE catalog SET cover_art_path=?, cover_art_source=? WHERE friendly_token=?",
+            [path, source, friendly_token],
+        )
+
+    # --- Sync log ---
+
+    async def start_sync_log(self) -> int:
+        cursor = await self._db.execute(
+            "INSERT INTO sync_log (started_at, status) VALUES (?, 'running')",
+            [datetime.now(UTC).isoformat()],
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def finish_sync_log(self, log_id: int, stats: dict, status: str):
+        await self._execute(
+            "UPDATE sync_log SET ended_at=?, items_seen=?, items_new=?, items_updated=?, errors=?, status=? WHERE id=?",
+            [datetime.now(UTC).isoformat(), stats["seen"], stats["new"], stats["updated"], stats["errors"], status, log_id],
+        )
+
+    async def get_sync_logs(self, limit: int = 10) -> list[dict]:
+        return await self._fetch_all(
+            "SELECT * FROM sync_log ORDER BY id DESC LIMIT ?", [limit]
+        )
+
+    # --- OTP ---
+
+    async def store_otp(self, username: str, code: str, expires_at: str):
+        await self._execute(
+            "INSERT INTO otps (username, code, expires_at) VALUES (?, ?, ?)",
+            [username, code, expires_at],
+        )
+
+    async def verify_otp(self, username: str, code: str) -> bool:
+        row = await self._fetch_one(
+            "SELECT rowid FROM otps WHERE username=? AND code=? AND used=0 AND expires_at > datetime('now')",
+            [username, code],
+        )
+        if row:
+            await self._execute("UPDATE otps SET used=1 WHERE rowid=?", [row["rowid"]])
+            return True
+        return False
+
+    async def cleanup_expired_otps(self):
+        await self._execute("DELETE FROM otps WHERE expires_at < datetime('now') OR used=1")
+
+    # --- Queue shadow ---
+
+    async def get_shadow_items(self) -> list[dict]:
+        return await self._fetch_all("SELECT * FROM queue_shadow ORDER BY position ASC")
+
+    async def upsert_shadow_item(self, item: dict):
+        sql = """
+            INSERT OR REPLACE INTO queue_shadow
+                (uid, position, title, media_type, media_id, duration_sec, is_pay, paid_by, tier, z_cost, schedule_id, added_at)
+            VALUES (:uid, :position, :title, :media_type, :media_id, :duration_sec, :is_pay,
+                    :paid_by, :tier, :z_cost, :schedule_id, :added_at)
+        """
+        defaults = {"paid_by": None, "tier": None, "z_cost": None, "schedule_id": None,
+                    "friendly_token": None, "added_at": datetime.now(UTC).isoformat()}
+        row = {**defaults, **item}
+        await self._db.execute(sql, row)
+        await self._db.commit()
+
+    async def remove_shadow_items(self, uids: set[int]):
+        placeholders = ",".join("?" * len(uids))
+        await self._execute(f"DELETE FROM queue_shadow WHERE uid IN ({placeholders})", list(uids))
+
+    async def update_shadow_position(self, uid: int, position: int):
+        await self._db.execute("UPDATE queue_shadow SET position=? WHERE uid=?", [position, uid])
+        await self._db.commit()
+
+    async def update_shadow_estimated_start(self, uid: int, estimated: str):
+        await self._db.execute(
+            "UPDATE queue_shadow SET estimated_start_at=? WHERE uid=?", [estimated, uid]
+        )
+        await self._db.commit()
+
+    async def get_last_pay_uid(self) -> int | None:
+        row = await self._fetch_one(
+            "SELECT uid FROM queue_shadow WHERE is_pay = 1 ORDER BY position DESC LIMIT 1"
+        )
+        return row["uid"] if row else None
+
+    async def get_shadow_position_after(self, after_uid: int) -> int:
+        row = await self._fetch_one("SELECT position FROM queue_shadow WHERE uid = ?", [after_uid])
+        return (row["position"] + 1) if row else 0
+
+    async def get_pay_items(self) -> list[dict]:
+        return await self._fetch_all("SELECT * FROM queue_shadow WHERE is_pay = 1 ORDER BY position ASC")
+
+    # --- Spend requests ---
+
+    async def save_spend_request(self, request_id: str, *, username: str, uid: int | None,
+                                 friendly_token: str | None = None, tier: str | None = None,
+                                 z_cost: int | None = None):
+        sql = """
+            INSERT OR IGNORE INTO spend_requests (request_id, username, uid, friendly_token, tier, z_cost)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """
+        await self._execute(sql, [request_id, username, uid, friendly_token, tier, z_cost])
+
+    async def get_request_id_for_uid(self, uid: int) -> str | None:
+        row = await self._fetch_one(
+            "SELECT request_id FROM spend_requests WHERE uid = ? AND refunded = 0 LIMIT 1", [uid]
+        )
+        return row["request_id"] if row else None
+
+    async def mark_spend_refunded(self, request_id: str):
+        await self._execute(
+            "UPDATE spend_requests SET refunded=1, refunded_at=datetime('now') WHERE request_id=?",
+            [request_id],
+        )
+
+    # --- Queue history ---
+
+    async def add_queue_history(self, *, username: str, friendly_token: str | None,
+                                title: str | None, tier: str, z_cost: int):
+        await self._execute(
+            "INSERT INTO queue_history (username, friendly_token, title, tier, z_cost) VALUES (?, ?, ?, ?, ?)",
+            [username, friendly_token, title, tier, z_cost],
+        )
+
+    async def get_user_queue_history(self, username: str, limit: int = 50) -> list[dict]:
+        return await self._fetch_all(
+            "SELECT * FROM queue_history WHERE username=? ORDER BY id DESC LIMIT ?",
+            [username, limit],
+        )
+
+    # --- Saved playlists ---
+
+    async def get_saved_playlists(self) -> list[dict]:
+        return await self._fetch_all("SELECT * FROM saved_playlists ORDER BY name")
+
+    async def get_saved_playlist(self, playlist_id: int) -> dict | None:
+        return await self._fetch_one("SELECT * FROM saved_playlists WHERE id=?", [playlist_id])
+
+    async def create_saved_playlist(self, *, name: str, description: str | None, is_immutable: bool, created_by: str) -> int:
+        cursor = await self._db.execute(
+            "INSERT INTO saved_playlists (name, description, is_immutable, created_by) VALUES (?, ?, ?, ?)",
+            [name, description, int(is_immutable), created_by],
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def update_saved_playlist(self, playlist_id: int, *, name: str, description: str | None, is_immutable: bool):
+        await self._execute(
+            "UPDATE saved_playlists SET name=?, description=?, is_immutable=?, updated_at=datetime('now') WHERE id=?",
+            [name, description, int(is_immutable), playlist_id],
+        )
+
+    async def delete_saved_playlist(self, playlist_id: int):
+        await self._execute("DELETE FROM saved_playlists WHERE id=?", [playlist_id])
+
+    async def get_saved_playlist_items(self, playlist_id: int) -> list[dict]:
+        return await self._fetch_all(
+            "SELECT * FROM saved_playlist_items WHERE playlist_id=? ORDER BY position", [playlist_id]
+        )
+
+    async def replace_playlist_items(self, playlist_id: int, items: list[dict]):
+        await self._db.execute("DELETE FROM saved_playlist_items WHERE playlist_id=?", [playlist_id])
+        for i, item in enumerate(items):
+            await self._db.execute(
+                "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [playlist_id, i, item["media_type"], item["media_id"], item.get("title"), item.get("duration_sec")],
+            )
+        await self._db.commit()
+
+    # --- Schedules ---
+
+    async def get_schedules(self) -> list[dict]:
+        return await self._fetch_all("SELECT * FROM playlist_schedules ORDER BY fire_at")
+
+    async def get_schedule(self, schedule_id: int) -> dict | None:
+        return await self._fetch_one("SELECT * FROM playlist_schedules WHERE id=?", [schedule_id])
+
+    async def create_schedule(self, **kwargs) -> int:
+        keys = ", ".join(kwargs.keys())
+        placeholders = ", ".join("?" * len(kwargs))
+        cursor = await self._db.execute(
+            f"INSERT INTO playlist_schedules ({keys}) VALUES ({placeholders})",
+            list(kwargs.values()),
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def update_schedule(self, schedule_id: int, **kwargs):
+        sets = ", ".join(f"{k}=?" for k in kwargs.keys())
+        await self._execute(
+            f"UPDATE playlist_schedules SET {sets} WHERE id=?",
+            [*kwargs.values(), schedule_id],
+        )
+
+    async def delete_schedule(self, schedule_id: int):
+        await self._execute("DELETE FROM playlist_schedules WHERE id=?", [schedule_id])
+
+    async def mark_schedule_fired(self, schedule_id: int, fired_at: str):
+        await self._execute(
+            "UPDATE playlist_schedules SET fired_at=? WHERE id=?", [fired_at, schedule_id]
+        )
+
+    # --- Active schedule ---
+
+    async def get_active_schedule(self) -> dict | None:
+        return await self._fetch_one("SELECT * FROM active_schedule WHERE id=1")
+
+    async def set_active_schedule(self, *, schedule_id: int, playlist_id: int,
+                                  is_immutable: bool, started_at: str, estimated_end_at: str):
+        await self._execute(
+            "INSERT OR REPLACE INTO active_schedule (id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at) "
+            "VALUES (1, ?, ?, ?, ?, ?)",
+            [schedule_id, playlist_id, int(is_immutable), started_at, estimated_end_at],
+        )
+
+    async def clear_active_schedule(self):
+        await self._execute("DELETE FROM active_schedule WHERE id=1")
+
+    # --- Pre-fire lock check ---
+
+    async def is_pre_fire_lock_active(self) -> bool:
+        row = await self._fetch_one("""
+            SELECT 1 FROM playlist_schedules
+            WHERE is_active = 1
+              AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
+              AND fire_at > datetime('now')
+            LIMIT 1
+        """)
+        return row is not None
+
+    async def get_next_schedule(self) -> dict | None:
+        return await self._fetch_one(
+            "SELECT * FROM playlist_schedules WHERE is_active=1 AND fire_at > datetime('now') ORDER BY fire_at LIMIT 1"
+        )

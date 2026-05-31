@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Browse{% endblock %}
+{% block body_class %}catalog-page{% endblock %}
+
+{% block content %}
+<div class="catalog-header">
+    <h1>Browse Catalog</h1>
+    <div class="catalog-controls">
+        <form class="search-form" action="/catalog/search" method="get">
+            <input type="text" name="q" placeholder="Search movies & shows..." value="{{ query or '' }}">
+            <button type="submit" class="btn btn-sm">Search</button>
+        </form>
+        <div class="category-filter">
+            <select id="category-select" onchange="filterCategory(this.value)">
+                <option value="">All Categories</option>
+                {% for cat in categories %}
+                    <option value="{{ cat.slug }}" {% if active_category == cat.slug %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+</div>
+
+<div class="catalog-grid">
+    {% for item in items %}
+    <div class="catalog-card" data-token="{{ item.friendly_token }}">
+        <div class="card-poster">
+            {% if item.cover_art_path %}
+                <img src="/static/images/{{ item.cover_art_path }}/400.webp"
+                     srcset="/static/images/{{ item.cover_art_path }}/200.webp 200w,
+                             /static/images/{{ item.cover_art_path }}/400.webp 400w,
+                             /static/images/{{ item.cover_art_path }}/800.webp 800w"
+                     sizes="(max-width: 600px) 200px, 400px"
+                     alt="{{ item.title }}" loading="lazy">
+            {% else %}
+                <div class="card-poster-placeholder">
+                    <span>{{ item.title[:1] }}</span>
+                </div>
+            {% endif %}
+        </div>
+        <div class="card-info">
+            <h3 class="card-title">{{ item.title }}</h3>
+            <span class="card-duration">{{ (item.duration_sec // 60) }}m</span>
+        </div>
+        <div class="card-actions">
+            <button class="btn btn-sm btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
+            <button class="btn btn-sm btn-playnext" onclick="playNext('{{ item.friendly_token }}')">Play Next</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not items %}
+<div class="empty-state">
+    <p>No items found.</p>
+</div>
+{% endif %}
+
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="?page={{ page - 1 }}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">← Prev</a>
+    {% endif %}
+    <span class="page-num">Page {{ page }}</span>
+    {% if items | length == 24 %}
+        <a href="?page={{ page + 1 }}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">Next →</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function filterCategory(slug) {
+    const url = slug ? `/catalog/browse?category=${slug}` : '/catalog/browse';
+    window.location.href = url;
+}
+
+async function queueItem(token) {
+    const resp = await fetch('/queue/add', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({friendly_token: token, tier: 'queue'})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+        showToast('Added to queue!');
+    } else {
+        showToast(data.detail || 'Failed to queue', 'error');
+    }
+}
+
+async function playNext(token) {
+    const resp = await fetch('/queue/playnext', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({friendly_token: token})
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+        showToast('Playing next!');
+    } else {
+        showToast(data.detail || 'Failed', 'error');
+    }
+}
+</script>
+{% endblock %}

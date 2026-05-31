@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Queue{% endblock %} — DropSugar</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <nav class="navbar">
+        <div class="nav-brand">
+            <a href="/catalog/browse">DropSugar Queue</a>
+        </div>
+        <div class="nav-links">
+            <a href="/catalog/browse">Browse</a>
+            <a href="/queue">Queue</a>
+            {% if user %}
+                <a href="/user/dashboard">{{ user.username }}</a>
+                {% if user.rank >= 3 %}
+                    <a href="/admin">Admin</a>
+                {% endif %}
+                <a href="#" id="logout-btn">Logout</a>
+            {% else %}
+                <a href="/auth/login">Login</a>
+            {% endif %}
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>&copy; DropSugar — Powered by kryten-webqueue</p>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

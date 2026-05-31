@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h1>Admin Panel</h1>
+
+    <div class="admin-nav">
+        <a href="/admin/playlists" class="btn">Playlists</a>
+        <a href="/admin/schedules" class="btn">Schedules</a>
+        <a href="/admin/queue-mgmt" class="btn">Queue Management</a>
+    </div>
+
+    <div class="admin-section">
+        <h2>Quick Actions</h2>
+        <div class="quick-actions">
+            <button class="btn btn-danger" onclick="clearQueue()">Clear Queue</button>
+            <button class="btn btn-primary" onclick="triggerSync()">Sync Catalog</button>
+            <button class="btn" onclick="clearActiveSchedule()">Clear Active Schedule</button>
+        </div>
+    </div>
+
+    <div class="admin-section">
+        <h2>Queue Status</h2>
+        <div id="queue-status">Loading...</div>
+    </div>
+
+    <div class="admin-section">
+        <h2>Sync Logs</h2>
+        <div id="sync-logs">Loading...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function clearQueue() {
+    if (!confirm('Clear the entire queue? All pay items will be refunded.')) return;
+    const resp = await fetch('/admin/queue/clear', {method: 'POST'});
+    const data = await resp.json();
+    showToast(resp.ok ? `Cleared! ${data.refunded} items refunded.` : 'Failed', resp.ok ? 'success' : 'error');
+}
+
+async function triggerSync() {
+    const resp = await fetch('/admin/queue/sync-now', {method: 'POST'});
+    showToast(resp.ok ? 'Sync started' : 'Failed', resp.ok ? 'success' : 'error');
+}
+
+async function clearActiveSchedule() {
+    const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
+    showToast(resp.ok ? 'Active schedule cleared' : 'Failed', resp.ok ? 'success' : 'error');
+}
+
+async function loadAdminData() {
+    // Queue status
+    const qResp = await fetch('/queue/state');
+    if (qResp.ok) {
+        const state = await qResp.json();
+        document.getElementById('queue-status').innerHTML = `
+            <p>Items in queue: ${(state.items || []).length}</p>
+            <p>Now playing: ${state.now_playing ? escapeHtml(state.now_playing.title || 'Unknown') : 'Nothing'}</p>
+        `;
+    }
+
+    // Sync logs
+    const sResp = await fetch('/admin/queue/sync-logs');
+    if (sResp.ok) {
+        const logs = await sResp.json();
+        const el = document.getElementById('sync-logs');
+        if (logs.length > 0) {
+            el.innerHTML = `<table class="admin-table">
+                <tr><th>Started</th><th>Status</th><th>New</th><th>Updated</th><th>Errors</th></tr>
+                ${logs.slice(0, 5).map(l => `
+                    <tr>
+                        <td>${l.started_at || ''}</td>
+                        <td>${l.status || ''}</td>
+                        <td>${l.items_new || 0}</td>
+                        <td>${l.items_updated || 0}</td>
+                        <td>${l.errors || 0}</td>
+                    </tr>
+                `).join('')}
+            </table>`;
+        } else {
+            el.innerHTML = '<p>No sync logs yet</p>';
+        }
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+loadAdminData();
+</script>
+{% endblock %}

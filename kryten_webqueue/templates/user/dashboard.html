@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block body_class %}user-page{% endblock %}
+
+{% block content %}
+<div class="user-dashboard">
+    <h1>{{ user.username }}</h1>
+
+    <div class="dashboard-grid">
+        <div class="balance-card">
+            <h2>Balance</h2>
+            <p class="balance-amount" id="balance-amount">Loading...</p>
+        </div>
+
+        <div class="history-card">
+            <h2>Queue History</h2>
+            <div id="queue-history">
+                <p class="empty-state">Loading...</p>
+            </div>
+        </div>
+
+        <div class="transactions-card">
+            <h2>Recent Transactions</h2>
+            <div id="transactions">
+                <p class="empty-state">Loading...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    // Balance
+    const balResp = await fetch('/user/balance');
+    if (balResp.ok) {
+        const bal = await balResp.json();
+        document.getElementById('balance-amount').textContent = `${bal.balance || 0} Z`;
+    }
+
+    // Queue history
+    const histResp = await fetch('/queue/history');
+    if (histResp.ok) {
+        const hist = await histResp.json();
+        const el = document.getElementById('queue-history');
+        if (hist.items && hist.items.length > 0) {
+            el.innerHTML = hist.items.slice(0, 20).map(h => `
+                <div class="history-item">
+                    <span class="hi-title">${escapeHtml(h.title || 'Unknown')}</span>
+                    <span class="hi-cost">${h.z_cost} Z</span>
+                    <span class="hi-tier badge-${h.tier}">${h.tier}</span>
+                </div>
+            `).join('');
+        } else {
+            el.innerHTML = '<p class="empty-state">No queue history yet</p>';
+        }
+    }
+
+    // Transactions
+    const txResp = await fetch('/user/transactions');
+    if (txResp.ok) {
+        const tx = await txResp.json();
+        const el = document.getElementById('transactions');
+        const items = tx.transactions || tx.items || [];
+        if (items.length > 0) {
+            el.innerHTML = items.slice(0, 20).map(t => `
+                <div class="tx-item">
+                    <span class="tx-desc">${escapeHtml(t.description || t.type || '')}</span>
+                    <span class="tx-amount ${t.amount > 0 ? 'tx-credit' : 'tx-debit'}">${t.amount > 0 ? '+' : ''}${t.amount} Z</span>
+                </div>
+            `).join('');
+        } else {
+            el.innerHTML = '<p class="empty-state">No transactions</p>';
+        }
+    }
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+loadDashboard();
+</script>
+{% endblock %}
