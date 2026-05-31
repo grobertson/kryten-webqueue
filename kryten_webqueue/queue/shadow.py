@@ -56,7 +56,7 @@ class QueueShadow:
                         "title": polled.get("title", ""),
                         "media_type": polled.get("type", "unknown"),
                         "media_id": polled.get("id", ""),
-                        "duration_sec": polled.get("duration", 0),
+                        "duration_sec": float(polled.get("duration", 0) or 0),
                         "is_pay": False,
                         "paid_by": None,
                         "tier": None,
@@ -79,12 +79,12 @@ class QueueShadow:
         # Start from now-playing elapsed or now
         start_cursor = datetime.now(UTC)
         if self._now_playing:
-            remaining = (self._now_playing.get("duration", 0) or 0) - (self._now_playing.get("currentTime", 0) or 0)
+            remaining = float(self._now_playing.get("duration", 0) or 0) - float(self._now_playing.get("currentTime", 0) or 0)
             start_cursor += timedelta(seconds=max(0, remaining))
 
         for item in self._items:
             item["estimated_start_at"] = start_cursor.isoformat()
-            duration = item.get("duration_sec", 0) or 0
+            duration = float(item.get("duration_sec", 0) or 0)
             start_cursor += timedelta(seconds=duration)
 
     async def insert_at(self, item: dict, position: int):
