@@ -128,9 +128,6 @@ class CatalogSync:
             stats["new"] += 1
 
     def _build_manifest_url(self, media: dict) -> str:
-        hls_file = media.get("hls_file")
-        if hls_file:
-            return hls_file if hls_file.startswith("http") else f"{self._url}{hls_file}"
-        # Fallback to original URL
-        original = media.get("original_media_url", "")
-        return original if original.startswith("http") else f"{self._url}{original}"
+        # Use the MediaCMS watch page URL (e.g. https://www.dropsugar.co/view?m=TOKEN)
+        url = media.get("url", "")
+        return url if url.startswith("http") else f"{self._url}{url}"

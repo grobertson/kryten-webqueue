@@ -57,6 +57,26 @@ async def catalog_browse_page(request: Request, category: str | None = None, pag
     })
 
 
+@router.get("/catalog/search", response_class=HTMLResponse)
+async def catalog_search_page(request: Request, q: str = "", page: int = 1):
+    user = _get_user_or_none(request)
+    if not user:
+        return RedirectResponse("/auth/login")
+    if not q.strip():
+        return RedirectResponse("/catalog/browse")
+    db = request.app.state.db
+    items = await db.search(q, page=page)
+    categories = await db.get_categories()
+    return templates.TemplateResponse(request, "catalog/browse.html", {
+        "user": user,
+        "items": items,
+        "categories": categories,
+        "page": page,
+        "active_category": None,
+        "query": q,
+    })
+
+
 @router.get("/queue", response_class=HTMLResponse)
 async def queue_page(request: Request):
     user = _get_user_or_none(request)
