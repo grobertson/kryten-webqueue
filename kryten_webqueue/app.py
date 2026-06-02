@@ -45,15 +45,7 @@ async def lifespan(app: FastAPI):
     api_gate = ApiGateClient(config.api_gate_url, config.api_gate_token)
     app.state.api_gate = api_gate
 
-    # Catalog sync
-    catalog_sync = CatalogSync(
-        mediacms_url=config.mediacms_url,
-        mediacms_token=config.mediacms_token,
-        db=db,
-    )
-    app.state.catalog_sync = catalog_sync
-
-    # Cover art resolver
+    # Cover art resolver (created before sync so it can be passed in)
     cover_art = CoverArtResolver(
         image_dir=config.image_dir,
         placeholder_dir=config.placeholder_dir,
@@ -61,6 +53,15 @@ async def lifespan(app: FastAPI):
         omdb_api_key=config.omdb_api_key,
     )
     app.state.cover_art = cover_art
+
+    # Catalog sync
+    catalog_sync = CatalogSync(
+        mediacms_url=config.mediacms_url,
+        mediacms_token=config.mediacms_token,
+        db=db,
+        cover_art=cover_art,
+    )
+    app.state.catalog_sync = catalog_sync
 
     # WebSocket manager
     ws_manager = WebSocketManager()

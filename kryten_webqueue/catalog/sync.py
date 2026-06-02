@@ -28,7 +28,7 @@ def _describe_httpx_error(exc: Exception, url: str) -> str:
 class CatalogSync:
     """Synchronizes catalog data from MediaCMS."""
 
-    def __init__(self, *, mediacms_url: str, mediacms_token: str, db):
+    def __init__(self, *, mediacms_url: str, mediacms_token: str, db, cover_art=None):
         # Strip any accidental /api/v1 suffix — the sync code appends it itself
         url = mediacms_url.rstrip("/")
         for suffix in ("/api/v1", "/api"):
@@ -38,6 +38,7 @@ class CatalogSync:
         self._url = url
         self._token = mediacms_token
         self._db = db
+        self._cover_art = cover_art
         self._client = httpx.AsyncClient(
             headers={"Authorization": f"Token {mediacms_token}"},
             timeout=30.0,
@@ -126,6 +127,13 @@ class CatalogSync:
         else:
             await self._db.insert_catalog(row)
             stats["new"] += 1
+
+        # Fetch TMDB/OMDB cover art if not already cached
+        if self._cover_art and not (existing and existing.get("cover_art_path")):
+            try:
+                await self._cover_art.resolve(token, row["title"], self._db)
+            except Exception as e:
+                logger.debug(f"Cover art resolve failed for {token}: {e}")
 
     def _build_manifest_url(self, media: dict) -> str:
         # Use the MediaCMS watch page URL (e.g. https://www.dropsugar.co/view?m=TOKEN)
