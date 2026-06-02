@@ -220,7 +220,7 @@ class Database:
 
     async def browse(self, *, category: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
         query = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.manifest_url
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url
             FROM catalog c
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
@@ -244,7 +244,7 @@ class Database:
 
     async def search(self, query_text: str, *, page: int = 1, per_page: int = 24) -> list[dict]:
         sql = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.manifest_url,
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid

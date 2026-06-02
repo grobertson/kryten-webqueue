@@ -32,6 +32,9 @@
                              /static/images/{{ item.cover_art_path }}/800.webp 800w"
                      sizes="(max-width: 600px) 200px, 400px"
                      alt="{{ item.title }}" loading="lazy">
+            {% elif item.thumbnail_url %}
+                <img src="{{ item.thumbnail_url }}"
+                     alt="{{ item.title }}" loading="lazy">
             {% else %}
                 <div class="card-poster-placeholder">
                     <span>{{ item.title[:1] }}</span>
