@@ -52,16 +52,16 @@ class CatalogSync:
         stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0}
 
         try:
-            page = 1
-            while True:
-                api_url = f"{self._url}/api/v1/media"
+            next_url: str | None = f"{self._url}/api/v1/media"
+            params: dict = {"page_size": 50}
+            page = 0
+
+            while next_url:
+                page += 1
                 try:
-                    resp = await self._client.get(
-                        api_url,
-                        params={"page": page, "page_size": 50},
-                    )
+                    resp = await self._client.get(next_url, params=params if page == 1 else None)
                 except httpx.TransportError as exc:
-                    logger.error(_describe_httpx_error(exc, api_url))
+                    logger.error(_describe_httpx_error(exc, next_url))
                     stats["errors"] += 1
                     break
 
@@ -87,13 +87,12 @@ class CatalogSync:
                         logger.warning(f"Error processing {media.get('friendly_token')}: {e}")
                         stats["errors"] += 1
 
-                # Check for next page
-                if isinstance(data, dict) and not data.get("next"):
-                    break
-                page += 1
+                # Follow the next URL from the response — don't construct it ourselves
+                next_url = data.get("next") if isinstance(data, dict) else None
+                logger.debug(f"Catalog sync page {page}: seen={stats['seen']} next={next_url!r}")
 
             await self._db.finish_sync_log(log_id, stats, "completed")
-            logger.info(f"Catalog sync: {stats}")
+            logger.info(f"Catalog sync complete: {stats} ({page} pages)")
         except httpx.TransportError as exc:
             logger.error(_describe_httpx_error(exc, f"{self._url}/api/v1/media"))
             stats["errors"] += 1
