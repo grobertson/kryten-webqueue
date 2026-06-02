@@ -1,3 +1,4 @@
+import asyncio
 import httpx
 import logging
 from datetime import datetime, UTC
@@ -134,6 +135,7 @@ class CatalogSync:
                 await self._cover_art.resolve(token, row["title"], self._db)
             except Exception as e:
                 logger.debug(f"Cover art resolve failed for {token}: {e}")
+            await asyncio.sleep(0.25)
 
     def _build_manifest_url(self, media: dict) -> str:
         # Use the MediaCMS watch page URL (e.g. https://www.dropsugar.co/view?m=TOKEN)
