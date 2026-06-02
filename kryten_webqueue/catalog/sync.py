@@ -52,7 +52,8 @@ class CatalogSync:
         stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0}
 
         try:
-            next_url: str | None = f"{self._url}/api/v1/media"
+            # /manage_media returns all items (9k+); /media is capped at 1000
+            next_url: str | None = f"{self._url}/api/v1/manage_media"
             params: dict = {"page_size": 50}
             page = 0
 
