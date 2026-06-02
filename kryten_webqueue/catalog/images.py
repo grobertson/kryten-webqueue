@@ -33,15 +33,27 @@ class CoverArtResolver:
         if existing and existing.get("cover_art_path"):
             return existing["cover_art_path"]
 
+        if not self._tmdb_key and not self._omdb_key:
+            logger.warning("No TMDB or OMDB API keys configured — cover art lookup skipped")
+            return None
+
         # Try TMDB first
         image_url = None
         source = None
         if self._tmdb_key:
             image_url = await self._search_tmdb(title)
-            source = "tmdb"
+            if image_url:
+                source = "tmdb"
+                logger.debug(f"TMDB found art for {friendly_token!r}: {title!r}")
+            else:
+                logger.debug(f"TMDB found no art for {friendly_token!r}: {title!r}")
         if not image_url and self._omdb_key:
             image_url = await self._search_omdb(title)
-            source = "omdb"
+            if image_url:
+                source = "omdb"
+                logger.debug(f"OMDB found art for {friendly_token!r}: {title!r}")
+            else:
+                logger.debug(f"OMDB found no art for {friendly_token!r}: {title!r}")
 
         if not image_url:
             return None
@@ -50,8 +62,11 @@ class CoverArtResolver:
         try:
             resp = await self._client.get(image_url)
             if resp.status_code != 200:
+                logger.warning(f"Cover art download failed for {friendly_token!r}: HTTP {resp.status_code} {image_url}")
                 return None
-            return await self._save_responsive(friendly_token, resp.content, source, db)
+            path = await self._save_responsive(friendly_token, resp.content, source, db)
+            logger.info(f"Cover art saved for {friendly_token!r} ({source}): {path}")
+            return path
         except Exception as e:
             logger.warning(f"Failed to download cover art for {friendly_token}: {e}")
             return None
@@ -63,14 +78,15 @@ class CoverArtResolver:
                 params={"api_key": self._tmdb_key, "query": title},
             )
             if resp.status_code != 200:
+                logger.warning(f"TMDB API returned {resp.status_code} for {title!r}")
                 return None
             results = resp.json().get("results", [])
             if results:
                 poster = results[0].get("poster_path")
                 if poster:
                     return f"https://image.tmdb.org/t/p/w500{poster}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"TMDB search error for {title!r}: {e}")
         return None
 
     async def _search_omdb(self, title: str) -> str | None:
@@ -80,13 +96,14 @@ class CoverArtResolver:
                 params={"apikey": self._omdb_key, "t": title},
             )
             if resp.status_code != 200:
+                logger.warning(f"OMDB API returned {resp.status_code} for {title!r}")
                 return None
             data = resp.json()
             poster = data.get("Poster")
             if poster and poster != "N/A":
                 return poster
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"OMDB search error for {title!r}: {e}")
         return None
 
     async def _save_responsive(self, friendly_token: str, data: bytes, source: str, db) -> str:
