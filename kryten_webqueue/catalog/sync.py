@@ -9,7 +9,13 @@ class CatalogSync:
     """Synchronizes catalog data from MediaCMS."""
 
     def __init__(self, *, mediacms_url: str, mediacms_token: str, db):
-        self._url = mediacms_url.rstrip("/")
+        # Strip any accidental /api/v1 suffix — the sync code appends it itself
+        url = mediacms_url.rstrip("/")
+        for suffix in ("/api/v1", "/api"):
+            if url.endswith(suffix):
+                url = url[: -len(suffix)]
+                break
+        self._url = url
         self._token = mediacms_token
         self._db = db
         self._client = httpx.AsyncClient(
@@ -33,7 +39,10 @@ class CatalogSync:
                     params={"page": page, "page_size": 50},
                 )
                 if resp.status_code != 200:
-                    logger.error(f"MediaCMS API returned {resp.status_code}")
+                    logger.error(
+                        f"MediaCMS API returned {resp.status_code} for URL {resp.url} — "
+                        f"body: {resp.text[:200]}"
+                    )
                     stats["errors"] += 1
                     break
 
