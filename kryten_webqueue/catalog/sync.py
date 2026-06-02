@@ -59,7 +59,7 @@ class CatalogSync:
             await self._db.finish_sync_log(log_id, stats, "completed")
             logger.info(f"Catalog sync: {stats}")
         except Exception as e:
-            logger.error(f"Catalog sync failed: {e}")
+            logger.exception(f"Catalog sync failed: {type(e).__name__}: {e}")
             stats["errors"] += 1
             await self._db.finish_sync_log(log_id, stats, "error")
 

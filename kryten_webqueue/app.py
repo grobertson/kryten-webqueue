@@ -96,7 +96,7 @@ async def lifespan(app: FastAPI):
             try:
                 await catalog_sync.sync()
             except Exception as e:
-                logger.error(f"Catalog sync error: {e}")
+                logger.exception(f"Catalog sync error: {type(e).__name__}: {e}")
             await asyncio.sleep(interval)
 
     async def _otp_cleanup_loop():
