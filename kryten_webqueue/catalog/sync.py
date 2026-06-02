@@ -1,8 +1,28 @@
 import httpx
 import logging
 from datetime import datetime, UTC
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+
+def _describe_httpx_error(exc: Exception, url: str) -> str:
+    """Return a human-readable description of an httpx network error."""
+    host = urlparse(url).netloc or url
+    if isinstance(exc, httpx.ConnectTimeout):
+        return f"Connection to {host} timed out — check host/port and firewall"
+    if isinstance(exc, httpx.ConnectError):
+        cause = str(exc.__cause__ or exc).lower()
+        if "name or service not known" in cause or "nodename nor servname" in cause or "getaddrinfo" in cause:
+            return f"DNS lookup failed for {host} — check mediacms_url in config"
+        if "connection refused" in cause:
+            return f"Connection refused by {host} — service may be down"
+        return f"Could not connect to {host}: {exc.__cause__ or exc}"
+    if isinstance(exc, httpx.ReadTimeout):
+        return f"Read timed out waiting for response from {host}"
+    if isinstance(exc, httpx.TimeoutException):
+        return f"Request to {host} timed out"
+    return f"{type(exc).__name__} connecting to {host}: {exc}"
 
 
 class CatalogSync:
@@ -34,10 +54,17 @@ class CatalogSync:
         try:
             page = 1
             while True:
-                resp = await self._client.get(
-                    f"{self._url}/api/v1/media",
-                    params={"page": page, "page_size": 50},
-                )
+                api_url = f"{self._url}/api/v1/media"
+                try:
+                    resp = await self._client.get(
+                        api_url,
+                        params={"page": page, "page_size": 50},
+                    )
+                except httpx.TransportError as exc:
+                    logger.error(_describe_httpx_error(exc, api_url))
+                    stats["errors"] += 1
+                    break
+
                 if resp.status_code != 200:
                     logger.error(
                         f"MediaCMS API returned {resp.status_code} for URL {resp.url} — "
@@ -67,8 +94,12 @@ class CatalogSync:
 
             await self._db.finish_sync_log(log_id, stats, "completed")
             logger.info(f"Catalog sync: {stats}")
-        except Exception as e:
-            logger.exception(f"Catalog sync failed: {type(e).__name__}: {e}")
+        except httpx.TransportError as exc:
+            logger.error(_describe_httpx_error(exc, f"{self._url}/api/v1/media"))
+            stats["errors"] += 1
+            await self._db.finish_sync_log(log_id, stats, "error")
+        except Exception as exc:
+            logger.exception(f"Catalog sync failed: {type(exc).__name__}: {exc}")
             stats["errors"] += 1
             await self._db.finish_sync_log(log_id, stats, "error")
 
