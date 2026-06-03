@@ -1,11 +1,29 @@
-import httpx
-import logging
-from pathlib import Path
-from PIL import Image
-import io
+import asyncio
 import hashlib
+import io
+import logging
+import re
+from pathlib import Path
+
+import httpx
+from PIL import Image
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_title(title: str) -> tuple[str, str | None]:
+    """Return (cleaned_title, year_or_None) stripping common noise."""
+    # Extract 4-digit year in parens or at end: "Title (2019)" or "Title 2019"
+    year = None
+    m = re.search(r"\b((?:19|20)\d{2})\b", title)
+    if m:
+        year = m.group(1)
+    # Remove year, episode tags, resolution tags, etc.
+    cleaned = re.sub(r"\s*[\(\[]?(?:19|20)\d{2}[\)\]]?", "", title)
+    cleaned = re.sub(r"\s*[Ss]\d{1,2}[Ee]\d{1,2}.*", "", cleaned)
+    cleaned = re.sub(r"\s*\b(?:720p|1080p|2160p|4K|HDR|BluRay|BDRip|WEB[-.]?DL|HDTV)\b.*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = cleaned.strip(" .-")
+    return cleaned or title, year
 
 
 class CoverArtResolver:
@@ -37,9 +55,9 @@ class CoverArtResolver:
             logger.warning("No TMDB or OMDB API keys configured — cover art lookup skipped")
             return None
 
-        # Try TMDB first
         image_url = None
         source = None
+
         if self._tmdb_key:
             image_url = await self._search_tmdb(title)
             if image_url:
@@ -47,6 +65,7 @@ class CoverArtResolver:
                 logger.debug(f"TMDB found art for {friendly_token!r}: {title!r}")
             else:
                 logger.debug(f"TMDB found no art for {friendly_token!r}: {title!r}")
+
         if not image_url and self._omdb_key:
             image_url = await self._search_omdb(title)
             if image_url:
@@ -55,10 +74,15 @@ class CoverArtResolver:
             else:
                 logger.debug(f"OMDB found no art for {friendly_token!r}: {title!r}")
 
+        # Last resort: use the MediaCMS thumbnail already in the DB
+        if not image_url and existing and existing.get("thumbnail_url"):
+            image_url = existing["thumbnail_url"]
+            source = "thumbnail"
+            logger.debug(f"Falling back to thumbnail for {friendly_token!r}")
+
         if not image_url:
             return None
 
-        # Download and generate responsive variants
         try:
             resp = await self._client.get(image_url)
             if resp.status_code != 200:
@@ -72,40 +96,72 @@ class CoverArtResolver:
             return None
 
     async def _search_tmdb(self, title: str) -> str | None:
+        """Search TMDB for a poster: tries movie+TV in parallel, retries with cleaned title."""
+        result = await self._tmdb_search_both(title)
+        if result:
+            return result
+        # Retry with cleaned title if it differs
+        cleaned, year = _clean_title(title)
+        if cleaned != title:
+            result = await self._tmdb_search_both(cleaned, year=year)
+        return result
+
+    async def _tmdb_search_both(self, title: str, year: str | None = None) -> str | None:
+        """Search TMDB movie and TV endpoints in parallel, pick best poster by popularity."""
+        movie_task = asyncio.create_task(self._tmdb_search_type("movie", title, year))
+        tv_task = asyncio.create_task(self._tmdb_search_type("tv", title, year))
+        movie_hit, tv_hit = await asyncio.gather(movie_task, tv_task)
+
+        # Pick whichever has a poster; prefer movie if both have one and similar popularity
+        candidates = [h for h in (movie_hit, tv_hit) if h and h[0]]
+        if not candidates:
+            return None
+        # Sort by popularity descending, return the best poster URL
+        candidates.sort(key=lambda h: h[1], reverse=True)
+        return candidates[0][0]
+
+    async def _tmdb_search_type(self, media_type: str, title: str, year: str | None = None) -> tuple[str | None, float]:
+        """Search a specific TMDB media type. Returns (poster_url_or_None, popularity)."""
+        params: dict = {"api_key": self._tmdb_key, "query": title}
+        if year and media_type == "movie":
+            params["year"] = year
+        elif year and media_type == "tv":
+            params["first_air_date_year"] = year
         try:
             resp = await self._client.get(
-                "https://api.themoviedb.org/3/search/multi",
-                params={"api_key": self._tmdb_key, "query": title},
+                f"https://api.themoviedb.org/3/search/{media_type}",
+                params=params,
             )
             if resp.status_code != 200:
-                logger.warning(f"TMDB API returned {resp.status_code} for {title!r}")
-                return None
+                logger.warning(f"TMDB {media_type} search returned {resp.status_code} for {title!r}")
+                return None, 0.0
             results = resp.json().get("results", [])
-            # Prefer movie/tv results (have poster_path); skip person results
             for result in results:
-                if result.get("media_type") in ("movie", "tv"):
-                    poster = result.get("poster_path")
-                    if poster:
-                        return f"https://image.tmdb.org/t/p/w500{poster}"
+                poster = result.get("poster_path")
+                if poster:
+                    # w780 gives better quality than w500
+                    url = f"https://image.tmdb.org/t/p/w780{poster}"
+                    return url, float(result.get("popularity", 0))
         except Exception as e:
-            logger.warning(f"TMDB search error for {title!r}: {e}")
-        return None
+            logger.warning(f"TMDB {media_type} search error for {title!r}: {e}")
+        return None, 0.0
 
     async def _search_omdb(self, title: str) -> str | None:
-        try:
-            resp = await self._client.get(
-                "https://www.omdbapi.com/",
-                params={"apikey": self._omdb_key, "t": title},
-            )
-            if resp.status_code != 200:
-                logger.warning(f"OMDB API returned {resp.status_code} for {title!r}")
-                return None
-            data = resp.json()
-            poster = data.get("Poster")
-            if poster and poster != "N/A":
-                return poster
-        except Exception as e:
-            logger.warning(f"OMDB search error for {title!r}: {e}")
+        cleaned, year = _clean_title(title)
+        for t in dict.fromkeys([title, cleaned]):  # try original then cleaned, deduped
+            params: dict = {"apikey": self._omdb_key, "t": t}
+            if year:
+                params["y"] = year
+            try:
+                resp = await self._client.get("https://www.omdbapi.com/", params=params)
+                if resp.status_code != 200:
+                    continue
+                data = resp.json()
+                poster = data.get("Poster")
+                if poster and poster != "N/A":
+                    return poster
+            except Exception as e:
+                logger.warning(f"OMDB search error for {t!r}: {e}")
         return None
 
     async def _save_responsive(self, friendly_token: str, data: bytes, source: str, db) -> str:

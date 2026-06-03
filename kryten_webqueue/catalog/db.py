@@ -164,6 +164,11 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_queue_history_user ON queue_history(username);
     """,
+    # v3: Clear all cached cover art to force a full repoll (fixes TMDB poster/person
+    # preference and /static/images -> /images path correction)
+    """
+    UPDATE catalog SET cover_art_path = NULL, cover_art_source = NULL;
+    """,
 ]
 
 
