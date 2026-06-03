@@ -182,4 +182,10 @@ def create_app(config: Config) -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    # Cover art images (nginx serves this in production, but also mount here
+    # so uvicorn handles it directly when nginx isn't in front)
+    image_dir = Path(config.image_dir)
+    image_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/images", StaticFiles(directory=str(image_dir)), name="images")
+
     return app
