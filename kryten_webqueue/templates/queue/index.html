@@ -7,15 +7,16 @@
     <div class="now-playing-section">
         <h2>Now Playing</h2>
         <div id="now-playing" class="now-playing-card">
-            <p class="empty-state">Nothing playing</p>
+            <p class="empty-state">Connecting...</p>
         </div>
     </div>
 
     <div class="queue-section">
         <h2>Up Next</h2>
         <div id="queue-list" class="queue-list">
-            <p class="empty-state">Queue is empty</p>
+            <p class="empty-state">Connecting...</p>
         </div>
+        <div id="queue-summary" class="queue-summary"></div>
     </div>
 
     <div class="queue-info-sidebar">
@@ -25,7 +26,7 @@
             <p id="schedule-time"></p>
         </div>
         <div class="queue-stats">
-            <p>Connected: <span id="ws-status" class="ws-disconnected">●</span></p>
+            <p>Status: <span id="ws-status" class="ws-disconnected">● Disconnected</span></p>
         </div>
     </div>
 </div>
@@ -41,12 +42,15 @@ function connectWebSocket() {
     ws = new WebSocket(`${proto}//${location.host}/ws`);
 
     ws.onopen = () => {
-        document.getElementById('ws-status').className = 'ws-connected';
-        document.getElementById('ws-status').title = 'Connected';
+        const el = document.getElementById('ws-status');
+        el.className = 'ws-connected';
+        el.textContent = '● Live';
     };
 
     ws.onclose = () => {
-        document.getElementById('ws-status').className = 'ws-disconnected';
+        const el = document.getElementById('ws-status');
+        el.className = 'ws-disconnected';
+        el.textContent = '● Disconnected';
         reconnectTimer = setTimeout(connectWebSocket, 3000);
     };
 
@@ -72,16 +76,26 @@ function connectWebSocket() {
 function renderQueue(state) {
     const npEl = document.getElementById('now-playing');
     const qlEl = document.getElementById('queue-list');
+    const sumEl = document.getElementById('queue-summary');
 
     if (state.now_playing) {
         const np = state.now_playing;
+        const elapsed = np.currentTime || 0;
+        const total = np.duration || 0;
+        const remaining = Math.max(0, total - elapsed);
         npEl.innerHTML = `
             <div class="np-info">
                 <h3>${escapeHtml(np.title || 'Unknown')}</h3>
-                <div class="np-progress">
-                    <div class="progress-bar" style="width: ${((np.currentTime || 0) / (np.duration || 1) * 100)}%"></div>
+                <div class="np-meta">
+                    ${np.paid_by ? `<span class="np-user">Queued by ${escapeHtml(np.paid_by)}</span>` : ''}
                 </div>
-                <span class="np-time">${formatTime(np.currentTime || 0)} / ${formatTime(np.duration || 0)}</span>
+                <div class="np-progress">
+                    <div class="progress-bar" style="width: ${total > 0 ? (elapsed / total * 100) : 0}%"></div>
+                </div>
+                <div class="np-times">
+                    <span class="np-time">${formatTime(elapsed)} / ${formatTime(total)}</span>
+                    <span class="np-remaining">${formatTime(remaining)} remaining</span>
+                </div>
             </div>
         `;
     } else {
@@ -89,24 +103,37 @@ function renderQueue(state) {
     }
 
     if (state.items && state.items.length > 0) {
+        const totalDuration = state.items.reduce((sum, i) => sum + (i.duration_sec || 0), 0);
+        sumEl.innerHTML = `<span>${state.items.length} items · ${formatTime(totalDuration)} total</span>`;
+
         qlEl.innerHTML = state.items.map((item, i) => `
             <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''}" data-uid="${item.uid}">
                 <span class="qi-pos">${i + 1}</span>
-                <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
-                <span class="qi-duration">${formatTime(item.duration_sec || 0)}</span>
-                ${item.is_pay ? `<span class="qi-badge badge-paid">${item.tier}</span>` : ''}
-                ${item.paid_by ? `<span class="qi-user">${escapeHtml(item.paid_by)}</span>` : ''}
-                <span class="qi-eta">${item.estimated_start_at ? formatEta(item.estimated_start_at) : ''}</span>
+                <div class="qi-info">
+                    <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
+                    <span class="qi-meta">
+                        ${item.paid_by ? `<span class="qi-user">by ${escapeHtml(item.paid_by)}</span>` : ''}
+                        ${item.is_pay ? `<span class="qi-badge badge-paid">${item.tier}</span>` : ''}
+                    </span>
+                </div>
+                <div class="qi-right">
+                    <span class="qi-duration">${formatTime(item.duration_sec || 0)}</span>
+                    ${item.estimated_start_at ? `<span class="qi-eta">~${formatEta(item.estimated_start_at)}</span>` : ''}
+                </div>
             </div>
         `).join('');
     } else {
         qlEl.innerHTML = '<p class="empty-state">Queue is empty</p>';
+        sumEl.innerHTML = '';
     }
 }
 
 function formatTime(sec) {
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
+    sec = Math.floor(sec);
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
@@ -121,6 +148,18 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// Initial load via HTTP (in case WS takes a moment)
+async function initialLoad() {
+    try {
+        const resp = await fetch('/queue/state', {credentials: 'same-origin'});
+        if (resp.ok) {
+            const state = await resp.json();
+            renderQueue(state);
+        }
+    } catch (e) { /* WS will take over */ }
+}
+
+initialLoad();
 connectWebSocket();
 </script>
 {% endblock %}

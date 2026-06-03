@@ -46,12 +46,15 @@ async def catalog_browse_page(request: Request, category: str | None = None, pag
         return RedirectResponse("/auth/login")
     db = request.app.state.db
     items = await db.browse(category=category, page=page)
+    total = await db.browse_count(category=category)
+    total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories()
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
         "categories": categories,
         "page": page,
+        "total_pages": total_pages,
         "active_category": category,
         "query": None,
     })
@@ -66,12 +69,15 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1):
         return RedirectResponse("/catalog/browse")
     db = request.app.state.db
     items = await db.search(q, page=page)
+    total = await db.search_count(q)
+    total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories()
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
         "categories": categories,
         "page": page,
+        "total_pages": total_pages,
         "active_category": None,
         "query": q,
     })
@@ -99,3 +105,27 @@ async def admin_page(request: Request):
     if not user or user.get("rank", 0) < 3:
         return RedirectResponse("/auth/login")
     return templates.TemplateResponse(request, "admin/index.html", {"user": user})
+
+
+@router.get("/admin/playlists", response_class=HTMLResponse)
+async def admin_playlists_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user or user.get("rank", 0) < 3:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "admin/playlists.html", {"user": user})
+
+
+@router.get("/admin/schedules", response_class=HTMLResponse)
+async def admin_schedules_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user or user.get("rank", 0) < 3:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "admin/schedules.html", {"user": user})
+
+
+@router.get("/admin/queue-mgmt", response_class=HTMLResponse)
+async def admin_queue_mgmt_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user or user.get("rank", 0) < 3:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "admin/queue_mgmt.html", {"user": user})

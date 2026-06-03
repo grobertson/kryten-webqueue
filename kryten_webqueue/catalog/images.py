@@ -81,10 +81,12 @@ class CoverArtResolver:
                 logger.warning(f"TMDB API returned {resp.status_code} for {title!r}")
                 return None
             results = resp.json().get("results", [])
-            if results:
-                poster = results[0].get("poster_path")
-                if poster:
-                    return f"https://image.tmdb.org/t/p/w500{poster}"
+            # Prefer movie/tv results (have poster_path); skip person results
+            for result in results:
+                if result.get("media_type") in ("movie", "tv"):
+                    poster = result.get("poster_path")
+                    if poster:
+                        return f"https://image.tmdb.org/t/p/w500{poster}"
         except Exception as e:
             logger.warning(f"TMDB search error for {title!r}: {e}")
         return None

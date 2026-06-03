@@ -143,14 +143,16 @@ a:hover {
 
 .catalog-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.25rem;
 }
 .catalog-card {
     background: var(--bg-card);
     border-radius: var(--radius);
     overflow: hidden;
     transition: transform 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
 }
 .catalog-card:hover {
     transform: translateY(-4px);
@@ -177,34 +179,41 @@ a:hover {
     background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
 }
 .card-info {
-    padding: 0.75rem;
+    padding: 0.6rem 0.75rem 0.25rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
 }
 .card-title {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    margin-bottom: 0.25rem;
-    white-space: nowrap;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 .card-duration {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: var(--text-secondary);
 }
 .card-actions {
-    padding: 0 0.75rem 0.75rem;
+    padding: 0.4rem 0.75rem 0.6rem;
     display: flex;
-    gap: 0.5rem;
+    gap: 0.4rem;
 }
 .btn-queue {
     background: var(--accent);
     border-color: var(--accent);
     color: white;
+    flex: 1;
 }
 .btn-playnext {
     background: var(--warning);
     border-color: var(--warning);
     color: #333;
+    flex: 1;
 }
 
 /* Queue Page */
@@ -249,6 +258,12 @@ a:hover {
     flex-direction: column;
     gap: 0.5rem;
 }
+.queue-summary {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.75rem;
+    text-align: right;
+}
 .queue-item {
     display: flex;
     align-items: center;
@@ -266,12 +281,30 @@ a:hover {
     color: var(--text-secondary);
     min-width: 1.5rem;
 }
-.qi-title {
+.qi-info {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.qi-title {
     font-size: 0.9rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+.qi-meta {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+.qi-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.15rem;
+    white-space: nowrap;
 }
 .qi-duration {
     font-size: 0.8rem;
@@ -292,7 +325,21 @@ a:hover {
     color: var(--text-secondary);
 }
 .qi-eta {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+.np-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0.25rem 0;
+}
+.np-times {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+.np-remaining {
     color: var(--text-secondary);
 }
 
@@ -340,6 +387,27 @@ a:hover {
 }
 
 /* User Dashboard */
+.user-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+.user-rank {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: var(--bg-card);
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius);
+}
+.user-online {
+    border: 1px solid var(--success);
+}
+.balance-meta {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.5rem;
+}
 .dashboard-grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -365,9 +433,23 @@ a:hover {
 .history-item, .tx-item {
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.5rem 0;
     border-bottom: 1px solid var(--border);
     font-size: 0.85rem;
+}
+.tx-desc, .hi-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tx-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
 }
 .tx-credit {
     color: var(--success);
@@ -418,12 +500,28 @@ a:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.5rem;
     margin-top: 2rem;
+    flex-wrap: wrap;
 }
 .page-num {
     color: var(--text-secondary);
     font-size: 0.9rem;
+}
+.page-current {
+    background: var(--accent);
+    color: white;
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--radius);
+    font-weight: 700;
+}
+.page-info {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+.btn-page {
+    min-width: 2rem;
+    text-align: center;
 }
 
 /* Toast */

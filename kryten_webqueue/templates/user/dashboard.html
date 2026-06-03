@@ -4,12 +4,16 @@
 
 {% block content %}
 <div class="user-dashboard">
-    <h1>{{ user.username }}</h1>
+    <div class="user-header">
+        <h1>{{ user.username }}</h1>
+        <span class="user-rank" id="user-rank">Rank {{ user.rank }}</span>
+    </div>
 
     <div class="dashboard-grid">
         <div class="balance-card">
-            <h2>Balance</h2>
+            <h2>Z Coin Balance</h2>
             <p class="balance-amount" id="balance-amount">Loading...</p>
+            <div class="balance-meta" id="balance-meta"></div>
         </div>
 
         <div class="history-card">
@@ -31,12 +35,46 @@
 
 {% block scripts %}
 <script>
+const RANK_NAMES = {1: 'Viewer', 2: 'Regular', 3: 'Moderator', 4: 'Admin', 5: 'Owner'};
+
+function formatZ(amount) {
+    return Number(amount).toLocaleString() + ' Z';
+}
+
+function describeTx(t) {
+    const type = (t.type || '').toLowerCase();
+    if (t.description) return t.description;
+    if (type === 'queue_spend') return `Queued: ${t.title || t.media_id || 'item'}`;
+    if (type === 'playnext_spend') return `Play Next: ${t.title || t.media_id || 'item'}`;
+    if (type === 'refund') return `Refund: ${t.reason || 'queue item removed'}`;
+    if (type === 'daily_bonus' || type === 'bonus') return 'Daily bonus';
+    if (type === 'watch_reward') return 'Watch reward';
+    if (type === 'gift') return `Gift from ${t.from_user || 'system'}`;
+    if (type === 'admin_grant') return 'Admin grant';
+    return type || 'Transaction';
+}
+
 async function loadDashboard() {
+    // Profile + rank
+    const profResp = await fetch('/user/profile');
+    if (profResp.ok) {
+        const prof = await profResp.json();
+        const rankEl = document.getElementById('user-rank');
+        const rankName = RANK_NAMES[prof.rank] || `Rank ${prof.rank}`;
+        rankEl.textContent = rankName;
+        if (prof.online) rankEl.classList.add('user-online');
+    }
+
     // Balance
     const balResp = await fetch('/user/balance');
     if (balResp.ok) {
         const bal = await balResp.json();
-        document.getElementById('balance-amount').textContent = `${bal.balance || 0} Z`;
+        document.getElementById('balance-amount').textContent = formatZ(bal.balance || 0);
+        const meta = document.getElementById('balance-meta');
+        const parts = [];
+        if (bal.earned_today != null) parts.push(`Today: +${formatZ(bal.earned_today)}`);
+        if (bal.spent_today != null) parts.push(`Spent: ${formatZ(bal.spent_today)}`);
+        meta.textContent = parts.join(' · ');
     }
 
     // Queue history
@@ -48,7 +86,7 @@ async function loadDashboard() {
             el.innerHTML = hist.items.slice(0, 20).map(h => `
                 <div class="history-item">
                     <span class="hi-title">${escapeHtml(h.title || 'Unknown')}</span>
-                    <span class="hi-cost">${h.z_cost} Z</span>
+                    <span class="hi-cost">${formatZ(h.z_cost)}</span>
                     <span class="hi-tier badge-${h.tier}">${h.tier}</span>
                 </div>
             `).join('');
@@ -66,8 +104,9 @@ async function loadDashboard() {
         if (items.length > 0) {
             el.innerHTML = items.slice(0, 20).map(t => `
                 <div class="tx-item">
-                    <span class="tx-desc">${escapeHtml(t.description || t.type || '')}</span>
-                    <span class="tx-amount ${t.amount > 0 ? 'tx-credit' : 'tx-debit'}">${t.amount > 0 ? '+' : ''}${t.amount} Z</span>
+                    <span class="tx-desc">${escapeHtml(describeTx(t))}</span>
+                    <span class="tx-amount ${t.amount > 0 ? 'tx-credit' : 'tx-debit'}">${t.amount > 0 ? '+' : ''}${formatZ(t.amount)}</span>
+                    <span class="tx-time">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</span>
                 </div>
             `).join('');
         } else {

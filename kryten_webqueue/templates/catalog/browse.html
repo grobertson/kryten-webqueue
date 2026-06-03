@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Browse{% endblock %}
+{% block title %}{% if query %}Search: {{ query }}{% else %}Browse{% endif %}{% endblock %}
 {% block body_class %}catalog-page{% endblock %}
 
 {% block content %}
 <div class="catalog-header">
-    <h1>Browse Catalog</h1>
+    <h1>{% if query %}Results for "{{ query }}"{% else %}Browse Catalog{% endif %}</h1>
     <div class="catalog-controls">
         <form class="search-form" action="/catalog/search" method="get">
             <input type="text" name="q" placeholder="Search movies & shows..." value="{{ query or '' }}">
@@ -26,10 +26,10 @@
     <div class="catalog-card" data-token="{{ item.friendly_token }}">
         <div class="card-poster">
             {% if item.cover_art_path %}
-                <img src="/static/images/{{ item.cover_art_path }}/400.webp"
-                     srcset="/static/images/{{ item.cover_art_path }}/200.webp 200w,
-                             /static/images/{{ item.cover_art_path }}/400.webp 400w,
-                             /static/images/{{ item.cover_art_path }}/800.webp 800w"
+                <img src="/images/{{ item.cover_art_path }}/400.webp"
+                     srcset="/images/{{ item.cover_art_path }}/200.webp 200w,
+                             /images/{{ item.cover_art_path }}/400.webp 400w,
+                             /images/{{ item.cover_art_path }}/800.webp 800w"
                      sizes="(max-width: 600px) 200px, 400px"
                      alt="{{ item.title }}" loading="lazy">
             {% elif item.thumbnail_url %}
@@ -42,7 +42,7 @@
             {% endif %}
         </div>
         <div class="card-info">
-            <h3 class="card-title">{{ item.title }}</h3>
+            <h3 class="card-title" title="{{ item.title }}">{{ item.title }}</h3>
             <span class="card-duration">{{ (item.duration_sec // 60) }}m</span>
         </div>
         <div class="card-actions">
@@ -61,11 +61,23 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">← Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
-    <span class="page-num">Page {{ page }}</span>
-    {% if items | length == 24 %}
-        <a href="?page={{ page + 1 }}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">Next →</a>
+
+    {% set start_page = [1, page - 2] | max %}
+    {% set end_page = [total_pages, page + 2] | min %}
+    {% for p in range(start_page, end_page + 1) %}
+        {% if p == page %}
+            <span class="page-num page-current">{{ p }}</span>
+        {% else %}
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm btn-page">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+
+    <span class="page-info">of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
@@ -78,30 +90,40 @@ function filterCategory(slug) {
 }
 
 async function queueItem(token) {
-    const resp = await fetch('/queue/add', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({friendly_token: token, tier: 'queue'})
-    });
-    const data = await resp.json();
-    if (resp.ok) {
-        showToast('Added to queue!');
-    } else {
-        showToast(data.detail || 'Failed to queue', 'error');
+    try {
+        const resp = await fetch('/queue/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({friendly_token: token, tier: 'queue'})
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast('Added to queue!');
+        } else {
+            showToast(data.detail || `Failed (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
     }
 }
 
 async function playNext(token) {
-    const resp = await fetch('/queue/playnext', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({friendly_token: token})
-    });
-    const data = await resp.json();
-    if (resp.ok) {
-        showToast('Playing next!');
-    } else {
-        showToast(data.detail || 'Failed', 'error');
+    try {
+        const resp = await fetch('/queue/playnext', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            body: JSON.stringify({friendly_token: token})
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast('Playing next!');
+        } else {
+            showToast(data.detail || `Failed (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
     }
 }
 </script>

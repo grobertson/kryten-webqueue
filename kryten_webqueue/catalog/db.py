@@ -242,6 +242,28 @@ class Database:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
+    async def browse_count(self, *, category: str | None = None) -> int:
+        query = """
+            SELECT COUNT(*) as cnt FROM catalog c
+            WHERE c.friendly_token NOT IN (
+                SELECT spi.media_id FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+            )
+        """
+        params: list = []
+        if category:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cc.friendly_token FROM catalog_categories cc
+                    JOIN categories cat ON cc.category_id = cat.id
+                    WHERE cat.slug = ?
+                )
+            """
+            params.append(category)
+        row = await self._fetch_one(query, params)
+        return row["cnt"] if row else 0
+
     async def search(self, query_text: str, *, page: int = 1, per_page: int = 24) -> list[dict]:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url,
@@ -258,6 +280,21 @@ class Database:
             LIMIT ? OFFSET ?
         """
         return await self._fetch_all(sql, [query_text, per_page, (page - 1) * per_page])
+
+    async def search_count(self, query_text: str) -> int:
+        sql = """
+            SELECT COUNT(*) as cnt
+            FROM catalog_fts fts
+            JOIN catalog c ON c.rowid = fts.rowid
+            WHERE catalog_fts MATCH ?
+              AND c.friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+              )
+        """
+        row = await self._fetch_one(sql, [query_text])
+        return row["cnt"] if row else 0
 
     async def get_item(self, friendly_token: str) -> dict | None:
         sql = """
