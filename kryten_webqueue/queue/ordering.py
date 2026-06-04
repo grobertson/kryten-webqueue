@@ -2,6 +2,8 @@ import asyncio
 import uuid
 import logging
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 # Module-level lock for queue ordering
@@ -25,15 +27,17 @@ async def insert_pay_queue(
     async with _queue_lock:
         request_id = str(uuid.uuid4())
 
-        # Spend currency
-        spend_result = await api_gate.queue_spend(
-            username=username,
-            duration_sec=duration_sec,
-            tier=tier,
-            request_id=request_id,
-        )
-        if not spend_result.get("success"):
-            return {"success": False, "error": spend_result.get("error", "Spend failed")}
+        # Spend currency (api-gate _unwrap strips the success envelope;
+        # raise_for_status propagates failures as httpx.HTTPStatusError)
+        try:
+            await api_gate.queue_spend(
+                username=username,
+                duration_sec=duration_sec,
+                tier=tier,
+                request_id=request_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
 
         # Find position: after last pay item, or prepend if none
         last_pay_uid = await db.get_last_pay_uid()
@@ -109,15 +113,17 @@ async def insert_pay_playnext(
     async with _queue_lock:
         request_id = str(uuid.uuid4())
 
-        # Spend currency
-        spend_result = await api_gate.queue_spend(
-            username=username,
-            duration_sec=duration_sec,
-            tier=tier,
-            request_id=request_id,
-        )
-        if not spend_result.get("success"):
-            return {"success": False, "error": spend_result.get("error", "Spend failed")}
+        # Spend currency (api-gate _unwrap strips the success envelope;
+        # raise_for_status propagates failures as httpx.HTTPStatusError)
+        try:
+            await api_gate.queue_spend(
+                username=username,
+                duration_sec=duration_sec,
+                tier=tier,
+                request_id=request_id,
+            )
+        except httpx.HTTPStatusError as exc:
+            return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
 
         # Add to CyTube playlist at prepend position
         add_result = await api_gate.playlist_add(

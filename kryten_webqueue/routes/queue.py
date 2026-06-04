@@ -36,16 +36,16 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
     if not item:
         raise HTTPException(404, "Item not found in catalog")
 
-    # Preview cost
+    # Preview cost (api-gate _unwrap strips the success envelope; raise_for_status
+    # handles non-2xx, so no success check needed here)
     preview = await api_gate.queue_preview(
         username=user["username"],
         duration_sec=item["duration_sec"],
         tier=tier,
     )
-    if not preview.get("success"):
-        raise HTTPException(400, preview.get("error", "Cost preview failed"))
-
-    z_cost = preview["cost"]
+    z_cost = preview.get("cost") or preview.get("z_cost")
+    if z_cost is None:
+        raise HTTPException(502, "Cost preview returned no cost value")
 
     result = await insert_pay_queue(
         api_gate=api_gate,
@@ -88,16 +88,16 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
     if not item:
         raise HTTPException(404, "Item not found in catalog")
 
-    # Preview cost
+    # Preview cost (api-gate _unwrap strips the success envelope; raise_for_status
+    # handles non-2xx, so no success check needed here)
     preview = await api_gate.queue_preview(
         username=user["username"],
         duration_sec=item["duration_sec"],
         tier=tier,
     )
-    if not preview.get("success"):
-        raise HTTPException(400, preview.get("error", "Cost preview failed"))
-
-    z_cost = preview["cost"]
+    z_cost = preview.get("cost") or preview.get("z_cost")
+    if z_cost is None:
+        raise HTTPException(502, "Cost preview returned no cost value")
 
     result = await insert_pay_playnext(
         api_gate=api_gate,
