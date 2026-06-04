@@ -43,7 +43,10 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
         duration_sec=item["duration_sec"],
         tier=tier,
     )
-    z_cost = preview.get("cost") or preview.get("z_cost")
+    if not preview.get("available", True):
+        error_code = preview.get("error_code") or "unavailable"
+        raise HTTPException(400, error_code)
+    z_cost = preview.get("cost_z")
     if z_cost is None:
         raise HTTPException(502, "Cost preview returned no cost value")
 
@@ -95,7 +98,10 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
         duration_sec=item["duration_sec"],
         tier=tier,
     )
-    z_cost = preview.get("cost") or preview.get("z_cost")
+    if not preview.get("available", True):
+        error_code = preview.get("error_code") or "unavailable"
+        raise HTTPException(400, error_code)
+    z_cost = preview.get("cost_z")
     if z_cost is None:
         raise HTTPException(502, "Cost preview returned no cost value")
 
