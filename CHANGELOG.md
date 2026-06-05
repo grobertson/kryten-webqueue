@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2] - 2026-06-05
+
+### Fixed
+
+- **Queue items now land in the correct playlist position** — Positioning is computed relative to the currently-playing item and the persistent pay-queue list (`queue_shadow` rows with `is_pay = 1`):
+  - **Play Next** — moved to immediately *after* the currently-playing item (previously `prepend`, which placed it before the active item). Existing pay items shift down one position.
+  - **Queue** — moved to immediately after the *last* item in the persistent pay-queue list, or after the currently-playing item when no pay items exist (previously left at the end of the playlist when the pay list was empty).
+  - **Queue as Admin** — same target as Queue, but the item is *not* added to the persistent pay list (`is_pay = 0`).
+  - All paths now add to CyTube with `position="end"` and then issue a single `move` to the resolved target UID, refunding (where applicable) and removing the orphaned item if the move fails.
+
+[0.5.2]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.5.2
+
 ## [0.5.1] - 2026-06-05
 
 ### Added

@@ -50,6 +50,39 @@ async def _announce_queued(api_gate, shadow, *, uid: int, title: str, username: 
         logger.warning("Failed to send queue announcement", exc_info=True)
 
 
+async def _now_playing_uid(api_gate, shadow) -> int | None:
+    """UID of the currently-playing item, preferring fresh state over the cache."""
+    np = None
+    try:
+        np = await api_gate.get_now_playing()
+    except Exception:
+        np = None
+    if not np:
+        np = shadow.now_playing
+    if not np:
+        return None
+    uid = np.get("uid")
+    try:
+        return int(uid) if uid is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _shadow_index_after_uid(shadow, target_uid: int | None) -> int:
+    """Shadow list index immediately after target_uid (end of list if not found)."""
+    if target_uid is not None:
+        for idx, it in enumerate(shadow.items):
+            if it.get("uid") == target_uid:
+                return idx + 1
+    return len(shadow.items)
+
+
+async def _move_after(api_gate, *, uid: int, target_uid: int | None) -> None:
+    """Move uid to immediately after target_uid. No-op when target is None."""
+    if target_uid is not None:
+        await api_gate.playlist_move(uid, target_uid)
+
+
 async def insert_pay_queue(
     *,
     api_gate,
@@ -80,16 +113,17 @@ async def insert_pay_queue(
         except httpx.HTTPStatusError as exc:
             return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
 
-        # Find position: after last pay item, or prepend if none
+        # Target position: immediately after the LAST item in the persistent
+        # pay-queue list, or after the currently-playing item when none exist.
         last_pay_uid = await db.get_last_pay_uid()
-        position = "end" if not last_pay_uid else str(last_pay_uid)
+        target_uid = last_pay_uid if last_pay_uid else await _now_playing_uid(api_gate, shadow)
 
-        # Add to CyTube playlist
+        # Add to CyTube playlist (always appended; repositioned below)
         try:
             add_result = await api_gate.playlist_add(
                 media_type=media_type,
                 media_id=media_id,
-                position=position,
+                position="end",
             )
         except httpx.HTTPStatusError as exc:
             try:
@@ -107,20 +141,19 @@ async def insert_pay_queue(
 
         uid = add_result["uid"]
 
-        # Move after last pay UID if needed; refund + remove if positioning fails
-        if last_pay_uid:
+        # Move after the target UID; refund + remove if positioning fails
+        try:
+            await _move_after(api_gate, uid=uid, target_uid=target_uid)
+        except httpx.HTTPStatusError:
             try:
-                await api_gate.playlist_move(uid, last_pay_uid)
-            except httpx.HTTPStatusError:
-                try:
-                    await api_gate.queue_refund(username=username, request_id=request_id, reason="move_failed")
-                except Exception:
-                    pass
-                try:
-                    await api_gate.playlist_delete(uid)
-                except Exception:
-                    pass
-                return {"success": False, "error": "Failed to position item in queue"}
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="move_failed")
+            except Exception:
+                pass
+            try:
+                await api_gate.playlist_delete(uid)
+            except Exception:
+                pass
+            return {"success": False, "error": "Failed to position item in queue"}
 
         # Record spend
         _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
@@ -143,11 +176,8 @@ async def insert_pay_queue(
             "z_cost": z_cost,
             "schedule_id": None,
         }
-        # Position after last pay
-        if last_pay_uid:
-            pos = await db.get_shadow_position_after(last_pay_uid)
-        else:
-            pos = len(shadow.items)
+        # Position immediately after the target UID
+        pos = _shadow_index_after_uid(shadow, target_uid)
         await shadow.insert_at(item, pos)
 
         # Queue history
@@ -192,7 +222,10 @@ async def insert_pay_playnext(
         except httpx.HTTPStatusError as exc:
             return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
 
-        # Add to CyTube playlist at prepend position
+        # Target position: immediately after the currently-playing item.
+        target_uid = await _now_playing_uid(api_gate, shadow)
+
+        # Add to CyTube playlist (always appended; repositioned below)
         try:
             add_result = await api_gate.playlist_add(
                 media_type=media_type,
@@ -214,9 +247,9 @@ async def insert_pay_playnext(
 
         uid = add_result["uid"]
 
-        # Move to front; refund + remove if positioning fails
+        # Move to immediately after the now-playing item; refund + remove on failure
         try:
-            await api_gate.playlist_move(uid, "prepend")
+            await _move_after(api_gate, uid=uid, target_uid=target_uid)
         except httpx.HTTPStatusError:
             try:
                 await api_gate.queue_refund(username=username, request_id=request_id, reason="move_failed")
@@ -236,7 +269,8 @@ async def insert_pay_playnext(
             tier=tier, z_cost=z_cost,
         )
 
-        # Update local shadow at position 0
+        # Update local shadow immediately after now-playing. Existing pay items
+        # shift down one position as insert_at re-indexes the list.
         item = {
             "uid": uid,
             "title": title,
@@ -249,7 +283,8 @@ async def insert_pay_playnext(
             "z_cost": z_cost,
             "schedule_id": None,
         }
-        await shadow.insert_at(item, 0)
+        pos = _shadow_index_after_uid(shadow, target_uid)
+        await shadow.insert_at(item, pos)
 
         await db.add_queue_history(
             username=username, friendly_token=_ft,
@@ -280,16 +315,18 @@ async def insert_admin_queue(
     immediately after the last paid item, i.e. at the top of the free section.
     """
     async with _queue_lock:
-        # First available non-pay slot is right after the last pay item.
+        # Target position: immediately after the LAST item in the persistent
+        # pay-queue list, or after the currently-playing item when none exist.
+        # The admin item itself is NOT added to the persistent pay list.
         last_pay_uid = await db.get_last_pay_uid()
-        position = "end" if not last_pay_uid else str(last_pay_uid)
+        target_uid = last_pay_uid if last_pay_uid else await _now_playing_uid(api_gate, shadow)
 
-        # Add to CyTube playlist
+        # Add to CyTube playlist (always appended; repositioned below)
         try:
             add_result = await api_gate.playlist_add(
                 media_type=media_type,
                 media_id=media_id,
-                position=position,
+                position="end",
             )
         except httpx.HTTPStatusError as exc:
             return {"success": False, "error": _add_failure_reason(None, exc)}
@@ -298,16 +335,15 @@ async def insert_admin_queue(
 
         uid = add_result["uid"]
 
-        # Move to the top of the free section if there are pay items above
-        if last_pay_uid:
+        # Move after the target UID; remove the orphan if positioning fails
+        try:
+            await _move_after(api_gate, uid=uid, target_uid=target_uid)
+        except httpx.HTTPStatusError:
             try:
-                await api_gate.playlist_move(uid, last_pay_uid)
-            except httpx.HTTPStatusError:
-                try:
-                    await api_gate.playlist_delete(uid)
-                except Exception:
-                    pass
-                return {"success": False, "error": "Failed to position item in queue"}
+                await api_gate.playlist_delete(uid)
+            except Exception:
+                pass
+            return {"success": False, "error": "Failed to position item in queue"}
 
         _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
 
@@ -324,10 +360,7 @@ async def insert_admin_queue(
             "z_cost": None,
             "schedule_id": None,
         }
-        if last_pay_uid:
-            pos = await db.get_shadow_position_after(last_pay_uid)
-        else:
-            pos = len(shadow.items)
+        pos = _shadow_index_after_uid(shadow, target_uid)
         await shadow.insert_at(item, pos)
 
         # Queue history (zero cost, admin tier)
