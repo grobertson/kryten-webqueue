@@ -84,6 +84,7 @@ function renderQueue(state) {
         const total = np.duration || 0;
         const remaining = Math.max(0, total - elapsed);
         npEl.innerHTML = `
+            <div class="np-cover">${coverHtml(np)}</div>
             <div class="np-info">
                 <h3>${escapeHtml(np.title || 'Unknown')}</h3>
                 <div class="np-meta">
@@ -108,12 +109,14 @@ function renderQueue(state) {
 
         qlEl.innerHTML = state.items.map((item, i) => `
             <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''}" data-uid="${item.uid}">
+                <span class="qi-drag" title="Drag to reorder">☰</span>
                 <span class="qi-pos">${i + 1}</span>
+                <div class="qi-cover">${coverHtml(item)}</div>
                 <div class="qi-info">
                     <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
                     <span class="qi-meta">
                         ${item.paid_by ? `<span class="qi-user">by ${escapeHtml(item.paid_by)}</span>` : ''}
-                        ${item.is_pay ? `<span class="qi-badge badge-paid">${item.tier}</span>` : ''}
+                        ${item.is_pay ? `<span class="qi-badge badge-paid">${escapeHtml(item.tier || '')}</span>` : ''}
                     </span>
                 </div>
                 <div class="qi-right">
@@ -135,6 +138,17 @@ function formatTime(sec) {
     const s = sec % 60;
     if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function coverHtml(item) {
+    if (item.cover_art_path) {
+        return `<img src="/images/${item.cover_art_path}/200.webp" alt="" loading="lazy">`;
+    }
+    if (item.thumbnail_url) {
+        return `<img src="${escapeHtml(item.thumbnail_url)}" alt="" loading="lazy">`;
+    }
+    const letter = (item.title || '?').trim().charAt(0) || '?';
+    return `<div class="cover-placeholder">${escapeHtml(letter)}</div>`;
 }
 
 function formatEta(isoStr) {

@@ -12,6 +12,7 @@ from .config import Config
 from .catalog.db import Database
 from .api_gate.client import ApiGateClient
 from .catalog.sync import CatalogSync
+from .jobs import JobManager
 from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
@@ -26,6 +27,7 @@ from .routes.user import router as user_router
 from .routes.admin_playlists import router as admin_playlists_router
 from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
+from .routes.admin_jobs import router as admin_jobs_router
 from .routes.pages import router as pages_router
 from .ws.handler import router as ws_router
 
@@ -64,6 +66,15 @@ async def lifespan(app: FastAPI):
     )
     app.state.catalog_sync = catalog_sync
 
+    # Generic background job runner (records run history to job_runs)
+    job_manager = JobManager(db)
+    job_manager.register(
+        "catalog_sync",
+        catalog_sync.sync,
+        label="Catalog Sync",
+    )
+    app.state.job_manager = job_manager
+
     # WebSocket manager
     ws_manager = WebSocketManager()
     app.state.ws_manager = ws_manager
@@ -78,6 +89,7 @@ async def lifespan(app: FastAPI):
         api_gate=api_gate,
         shadow=shadow,
         ws_manager=ws_manager,
+        db=db,
         interval=config.state_poll_interval_sec,
     )
     await poller.start()
@@ -171,6 +183,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_playlists_router)
     app.include_router(admin_schedules_router)
     app.include_router(admin_queue_router)
+    app.include_router(admin_jobs_router)
     app.include_router(ws_router)
 
     # Health check

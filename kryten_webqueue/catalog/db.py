@@ -169,6 +169,19 @@ MIGRATIONS = [
     """
     UPDATE catalog SET cover_art_path = NULL, cover_art_source = NULL;
     """,
+    # v4: Generic background job run history
+    """
+    CREATE TABLE IF NOT EXISTS job_runs (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_name    TEXT NOT NULL,
+        started_at  TIMESTAMP NOT NULL,
+        ended_at    TIMESTAMP,
+        status      TEXT NOT NULL DEFAULT 'running',
+        detail      TEXT,
+        triggered_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_runs_name ON job_runs(job_name, started_at);
+    """,
 ]
 
 
@@ -316,6 +329,29 @@ class Database:
     async def get_item_admin(self, friendly_token: str) -> dict | None:
         return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
 
+    async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
+        """Return a lookup of catalog metadata keyed by BOTH friendly_token and
+        manifest_url, for enriching queue-shadow items that may only carry one.
+        """
+        keys = [k for k in ({*tokens} | {*manifest_urls}) if k]
+        if not keys:
+            return {}
+        placeholders = ",".join("?" * len(keys))
+        rows = await self._fetch_all(
+            "SELECT friendly_token, manifest_url, title, duration_sec, "
+            "cover_art_path, thumbnail_url FROM catalog "
+            f"WHERE friendly_token IN ({placeholders}) OR manifest_url IN ({placeholders})",
+            keys + keys,
+        )
+        lookup: dict[str, dict] = {}
+        for row in rows:
+            data = dict(row)
+            if data.get("friendly_token"):
+                lookup[data["friendly_token"]] = data
+            if data.get("manifest_url"):
+                lookup[data["manifest_url"]] = data
+        return lookup
+
     async def is_restricted(self, friendly_token: str) -> bool:
         sql = """
             SELECT 1 FROM saved_playlist_items spi
@@ -391,6 +427,33 @@ class Database:
     async def get_sync_logs(self, limit: int = 10) -> list[dict]:
         return await self._fetch_all(
             "SELECT * FROM sync_log ORDER BY id DESC LIMIT ?", [limit]
+        )
+
+    # --- Generic job runs ---
+
+    async def start_job_run(self, job_name: str, triggered_by: str | None = None) -> int:
+        cursor = await self._db.execute(
+            "INSERT INTO job_runs (job_name, started_at, status, triggered_by) "
+            "VALUES (?, ?, 'running', ?)",
+            [job_name, datetime.now(UTC).isoformat(), triggered_by],
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def finish_job_run(self, run_id: int, status: str, detail: str | None = None):
+        await self._execute(
+            "UPDATE job_runs SET ended_at=?, status=?, detail=? WHERE id=?",
+            [datetime.now(UTC).isoformat(), status, detail, run_id],
+        )
+
+    async def get_job_runs(self, job_name: str | None = None, limit: int = 10) -> list[dict]:
+        if job_name:
+            return await self._fetch_all(
+                "SELECT * FROM job_runs WHERE job_name=? ORDER BY id DESC LIMIT ?",
+                [job_name, limit],
+            )
+        return await self._fetch_all(
+            "SELECT * FROM job_runs ORDER BY id DESC LIMIT ?", [limit]
         )
 
     # --- OTP ---

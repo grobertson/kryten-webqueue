@@ -8,11 +8,16 @@ router = APIRouter(prefix="/admin/queue", tags=["admin"])
 
 @router.post("/add")
 async def admin_add(request: Request, user: dict = Depends(require_admin)):
-    """Queue an item as admin: zero cost, first available non-pay slot."""
+    """Queue an item as admin: zero cost, position resolved by `mode`."""
     body = await request.json()
     friendly_token = body.get("friendly_token")
+    mode = body.get("mode", "after_purchased")
     if not friendly_token:
         raise HTTPException(400, "friendly_token required")
+    if mode not in ("after_purchased", "playnext_refund", "cancel"):
+        raise HTTPException(400, "invalid mode")
+    if mode == "cancel":
+        return {"success": False, "cancelled": True}
 
     db = request.app.state.db
     api_gate = request.app.state.api_gate
@@ -36,6 +41,7 @@ async def admin_add(request: Request, user: dict = Depends(require_admin)):
         friendly_token=friendly_token,
         title=item["title"],
         duration_sec=item["duration_sec"],
+        mode=mode,
     )
 
     if not result["success"]:

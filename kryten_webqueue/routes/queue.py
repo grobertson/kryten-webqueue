@@ -10,7 +10,8 @@ router = APIRouter(prefix="/queue", tags=["queue"])
 async def get_queue_state(request: Request, user: dict = Depends(get_current_user)):
     """Get current queue state."""
     shadow = request.app.state.shadow
-    return shadow.get_queue_state()
+    db = request.app.state.db
+    return await shadow.get_enriched_state(db)
 
 
 @router.post("/add")

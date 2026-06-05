@@ -7,10 +7,11 @@ logger = logging.getLogger(__name__)
 class StatePoller:
     """Polls api-gate at a fixed interval to keep QueueShadow in sync."""
 
-    def __init__(self, *, api_gate, shadow, ws_manager, interval: float = 3.0):
+    def __init__(self, *, api_gate, shadow, ws_manager, db=None, interval: float = 3.0):
         self._api_gate = api_gate
         self._shadow = shadow
         self._ws_manager = ws_manager
+        self._db = db
         self._interval = interval
         self._task: asyncio.Task | None = None
 
@@ -34,7 +35,10 @@ class StatePoller:
                 now_playing = await self._api_gate.get_now_playing()
                 await self._shadow.apply_poll_result(playlist, now_playing)
                 # Broadcast updated state
-                state = self._shadow.get_queue_state()
+                if self._db is not None:
+                    state = await self._shadow.get_enriched_state(self._db)
+                else:
+                    state = self._shadow.get_queue_state()
                 await self._ws_manager.broadcast({"type": "queue_state", "data": state})
             except asyncio.CancelledError:
                 raise

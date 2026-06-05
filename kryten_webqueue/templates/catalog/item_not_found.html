@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Not Found{% endblock %}
+
+{% block content %}
+<div class="empty-state">
+    <h1>Item not found</h1>
+    <p>This item is not available in the catalog.</p>
+    <a href="/catalog/browse" class="btn">Back to Browse</a>
+</div>
+{% endblock %}

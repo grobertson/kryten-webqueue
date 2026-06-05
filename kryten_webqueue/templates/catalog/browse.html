@@ -24,7 +24,7 @@
 <div class="catalog-grid">
     {% for item in items %}
     <div class="catalog-card" data-token="{{ item.friendly_token }}">
-        <div class="card-poster">
+        <a class="card-poster" href="/catalog/item/{{ item.friendly_token }}">
             {% if item.cover_art_path %}
                 <img src="/images/{{ item.cover_art_path }}/400.webp"
                      srcset="/images/{{ item.cover_art_path }}/200.webp 200w,
@@ -40,9 +40,11 @@
                     <span>{{ item.title[:1] }}</span>
                 </div>
             {% endif %}
-        </div>
+        </a>
         <div class="card-info">
-            <h3 class="card-title" title="{{ item.title }}">{{ item.title }}</h3>
+            <h3 class="card-title" title="{{ item.title }}">
+                <a href="/catalog/item/{{ item.friendly_token }}">{{ item.title }}</a>
+            </h3>
             <span class="card-duration">{{ (item.duration_sec // 60) }}m</span>
         </div>
         <div class="card-actions">
@@ -91,62 +93,6 @@ function filterCategory(slug) {
     const url = slug ? `/catalog/browse?category=${slug}` : '/catalog/browse';
     window.location.href = url;
 }
-
-async function queueItem(token) {
-    try {
-        const resp = await fetch('/queue/add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'same-origin',
-            body: JSON.stringify({friendly_token: token, tier: 'queue'})
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            showToast('Added to queue!');
-        } else {
-            showToast(data.detail || `Failed (${resp.status})`, 'error');
-        }
-    } catch (e) {
-        showToast(`Network error: ${e.message}`, 'error');
-    }
-}
-
-async function playNext(token) {
-    try {
-        const resp = await fetch('/queue/playnext', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'same-origin',
-            body: JSON.stringify({friendly_token: token})
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            showToast('Playing next!');
-        } else {
-            showToast(data.detail || `Failed (${resp.status})`, 'error');
-        }
-    } catch (e) {
-        showToast(`Network error: ${e.message}`, 'error');
-    }
-}
-
-async function queueAsAdmin(token) {
-    try {
-        const resp = await fetch('/admin/queue/add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            credentials: 'same-origin',
-            body: JSON.stringify({friendly_token: token})
-        });
-        const data = await resp.json();
-        if (resp.ok) {
-            showToast('Queued as admin!');
-        } else {
-            showToast(data.detail || `Failed (${resp.status})`, 'error');
-        }
-    } catch (e) {
-        showToast(`Network error: ${e.message}`, 'error');
-    }
-}
+// queueItem / playNext / queueAsAdmin are provided by /static/js/main.js
 </script>
 {% endblock %}

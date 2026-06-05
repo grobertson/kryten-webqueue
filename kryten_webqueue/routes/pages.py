@@ -91,6 +91,23 @@ async def queue_page(request: Request):
     return templates.TemplateResponse(request, "queue/index.html", {"user": user})
 
 
+@router.get("/catalog/item/{friendly_token}", response_class=HTMLResponse)
+async def catalog_item_page(request: Request, friendly_token: str):
+    user = _get_user_or_none(request)
+    if not user:
+        return RedirectResponse("/auth/login")
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        return templates.TemplateResponse(
+            request, "catalog/item_not_found.html", {"user": user}, status_code=404
+        )
+    return templates.TemplateResponse(request, "catalog/item_detail.html", {
+        "user": user,
+        "item": item,
+    })
+
+
 @router.get("/user/dashboard", response_class=HTMLResponse)
 async def user_dashboard_page(request: Request):
     user = _get_user_or_none(request)

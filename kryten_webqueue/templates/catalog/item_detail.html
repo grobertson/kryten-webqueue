@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block body_class %}item-detail-page{% endblock %}
+
+{% block content %}
+<div class="item-detail">
+    <a href="javascript:history.back()" class="btn btn-sm btn-back">&larr; Back</a>
+
+    <div class="item-detail-layout">
+        <div class="item-detail-poster">
+            {% if item.cover_art_path %}
+                <img src="/images/{{ item.cover_art_path }}/800.webp"
+                     srcset="/images/{{ item.cover_art_path }}/400.webp 400w,
+                             /images/{{ item.cover_art_path }}/800.webp 800w"
+                     sizes="(max-width: 600px) 100vw, 400px"
+                     alt="{{ item.title }}">
+            {% elif item.thumbnail_url %}
+                <img src="{{ item.thumbnail_url }}" alt="{{ item.title }}">
+            {% else %}
+                <div class="card-poster-placeholder"><span>{{ item.title[:1] }}</span></div>
+            {% endif %}
+        </div>
+
+        <div class="item-detail-info">
+            <h1 class="item-detail-title">{{ item.title }}</h1>
+            <div class="item-detail-meta">
+                {% if item.duration_sec %}
+                    <span class="item-duration">{{ (item.duration_sec // 60) }}m</span>
+                {% endif %}
+            </div>
+
+            {% if item.description %}
+                <p class="item-detail-description">{{ item.description }}</p>
+            {% else %}
+                <p class="item-detail-description empty-state">No description available.</p>
+            {% endif %}
+
+            <div class="card-actions item-detail-actions">
+                <button class="btn btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
+                <button class="btn btn-playnext" onclick="playNext('{{ item.friendly_token }}')">Play Next</button>
+                {% if user.rank >= 3 %}
+                <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

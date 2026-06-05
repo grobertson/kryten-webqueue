@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-05
+
+### Added
+
+- **Item detail page** — Clicking a tile's cover art or title now opens `/catalog/item/{friendly_token}`, a dedicated view showing the cover art, full MediaCMS description, duration, and the same action buttons as the tile (Queue, Play Next, and Queue as Admin for admins). Unknown tokens render a 404 "Item not found" page.
+- **Queue page metadata & reorder handle** — Up-next and now-playing items are now enriched with catalog metadata (cover-art thumbnail, correct title, duration) by matching on `friendly_token` or `manifest_url`. Each queue row gains a drag handle affordance, cover thumbnail, paid-by/tier badges, and a correct ETA. Enrichment is applied to both the `/queue/state` response and the WebSocket broadcast.
+- **Generic background job runner** — New `JobManager` runs registered async jobs as background tasks and records each run (start, end, status, detail) to a new `job_runs` table. The Admin page lists registered jobs with **Run** buttons and shows a recent-run history table styled like the catalog sync log. Catalog Sync is now wired through this framework.
+- **Admin job routes** — `GET /admin/jobs`, `GET /admin/jobs/runs`, and `POST /admin/jobs/{name}/run`.
+
+### Changed
+
+- **Top-bar rebrand to "Channel-Z"** — The navigation brand and page-title suffix now read "Channel-Z" instead of "DropSugar Queue"/"DropSugar".
+- **Footer credit links to GitHub** — "kryten-webqueue" in the footer now links to the project's GitHub repository.
+- **All admin time displays are human-readable and timezone-aware** — Sync-log and job-run timestamps are rendered in the browser's local timezone via shared `formatLocalDateTime`/`formatLocalTime` helpers.
+
+### Fixed
+
+- **Empty now-playing UID is handled safely** — When the robot KV is uninitialised and the now-playing UID is unavailable, Queue and Play Next purchases are cancelled and refunded instead of landing in an undefined position.
+- **Admin "Queue as Admin" position prompt** — Admins are now prompted to resolve the inserted item's position: *Play next & refund pending* (refunds money and removes pending paid items from the queue), *Play after all purchased items*, or *Cancel*.
+
+[0.6.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.0
+
 ## [0.5.2] - 2026-06-05
 
 ### Fixed

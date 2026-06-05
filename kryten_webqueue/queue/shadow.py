@@ -132,3 +132,57 @@ class QueueShadow:
             "now_playing": self._now_playing,
             "updated_at": datetime.now(UTC).isoformat(),
         }
+
+    async def get_enriched_state(self, db) -> dict:
+        """Queue state augmented with catalog metadata (cover art, etc.)."""
+        state = self.get_queue_state()
+        items = state.get("items") or []
+        now_playing = state.get("now_playing")
+
+        tokens, manifests = [], []
+        for it in items:
+            if it.get("friendly_token"):
+                tokens.append(it["friendly_token"])
+            if it.get("media_id"):
+                manifests.append(it["media_id"])
+        if now_playing:
+            if now_playing.get("friendly_token"):
+                tokens.append(now_playing["friendly_token"])
+            if now_playing.get("id"):
+                manifests.append(now_playing["id"])
+
+        try:
+            lookup = await db.get_catalog_brief(tokens, manifests)
+        except Exception:
+            logger.warning("Failed to enrich queue state with catalog metadata", exc_info=True)
+            return state
+
+        def _meta_for(obj: dict, id_key: str) -> dict | None:
+            return lookup.get(obj.get("friendly_token") or "") or lookup.get(obj.get(id_key) or "")
+
+        enriched_items = []
+        for it in items:
+            meta = _meta_for(it, "media_id")
+            merged = dict(it)
+            if meta:
+                merged.setdefault("cover_art_path", meta.get("cover_art_path"))
+                merged.setdefault("thumbnail_url", meta.get("thumbnail_url"))
+                if not merged.get("title") or merged.get("title") == "Unknown":
+                    merged["title"] = meta.get("title") or merged.get("title")
+                if not merged.get("friendly_token"):
+                    merged["friendly_token"] = meta.get("friendly_token")
+            enriched_items.append(merged)
+        state["items"] = enriched_items
+
+        if now_playing:
+            meta = _meta_for(now_playing, "id")
+            np = dict(now_playing)
+            if meta:
+                np.setdefault("cover_art_path", meta.get("cover_art_path"))
+                np.setdefault("thumbnail_url", meta.get("thumbnail_url"))
+                if not np.get("friendly_token"):
+                    np["friendly_token"] = meta.get("friendly_token")
+            state["now_playing"] = np
+
+        return state
+

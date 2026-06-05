@@ -116,7 +116,18 @@ async def insert_pay_queue(
         # Target position: immediately after the LAST item in the persistent
         # pay-queue list, or after the currently-playing item when none exist.
         last_pay_uid = await db.get_last_pay_uid()
-        target_uid = last_pay_uid if last_pay_uid else await _now_playing_uid(api_gate, shadow)
+        if last_pay_uid:
+            target_uid = last_pay_uid
+        else:
+            target_uid = await _now_playing_uid(api_gate, shadow)
+            if target_uid is None:
+                # No anchor to position against (robot KV not initialised).
+                # Cancel and refund rather than dumping the item at the end.
+                try:
+                    await api_gate.queue_refund(username=username, request_id=request_id, reason="no_now_playing")
+                except Exception:
+                    pass
+                return {"success": False, "error": "Queue position unavailable (now-playing unknown); refunded"}
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -167,6 +178,7 @@ async def insert_pay_queue(
         item = {
             "uid": uid,
             "title": title,
+            "friendly_token": _ft,
             "media_type": media_type,
             "media_id": media_id,
             "duration_sec": duration_sec,
@@ -224,6 +236,13 @@ async def insert_pay_playnext(
 
         # Target position: immediately after the currently-playing item.
         target_uid = await _now_playing_uid(api_gate, shadow)
+        if target_uid is None:
+            # Cannot place "play next" without knowing the active item.
+            try:
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="no_now_playing")
+            except Exception:
+                pass
+            return {"success": False, "error": "Play-next unavailable (now-playing unknown); refunded"}
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -274,6 +293,7 @@ async def insert_pay_playnext(
         item = {
             "uid": uid,
             "title": title,
+            "friendly_token": _ft,
             "media_type": media_type,
             "media_id": media_id,
             "duration_sec": duration_sec,
@@ -297,6 +317,35 @@ async def insert_pay_playnext(
         return {"success": True, "uid": uid, "request_id": request_id}
 
 
+async def _refund_and_remove_pending_pay(api_gate, shadow, db) -> int:
+    """Refund and remove every pending (up-next) paid item from the queue.
+
+    Returns the number of items removed. The currently-playing item is never
+    touched (it is not present in the pay shadow as an up-next item).
+    """
+    pending = await db.get_pay_items()
+    np_uid = await _now_playing_uid(api_gate, shadow)
+    removed = 0
+    for it in pending:
+        uid = it.get("uid")
+        if uid is None or uid == np_uid:
+            continue
+        try:
+            await refund_item(api_gate=api_gate, db=db, uid=uid, reason="admin_playnext_refund")
+        except Exception:
+            logger.warning("Refund failed for uid %s during admin override", uid, exc_info=True)
+        try:
+            await api_gate.playlist_delete(uid)
+        except Exception:
+            logger.warning("Delete failed for uid %s during admin override", uid, exc_info=True)
+        try:
+            await shadow.remove(uid)
+        except Exception:
+            pass
+        removed += 1
+    return removed
+
+
 async def insert_admin_queue(
     *,
     api_gate,
@@ -308,18 +357,39 @@ async def insert_admin_queue(
     friendly_token: str | None = None,
     title: str,
     duration_sec: int,
+    mode: str = "after_purchased",
 ) -> dict:
-    """Insert a zero-cost admin item in the first available non-pay slot.
+    """Insert a zero-cost admin item (no economy interaction).
 
-    Treated exactly like a non-paid item (no economy interaction). It is placed
-    immediately after the last paid item, i.e. at the top of the free section.
+    ``mode`` selects how the item is positioned:
+
+    - ``"after_purchased"`` (default): placed immediately after the last item in
+      the persistent pay-queue list, i.e. at the top of the free section.
+    - ``"playnext_refund"``: every pending (up-next) paid item is refunded and
+      removed, then the admin item is placed immediately after the now-playing
+      item.
+    - ``"cancel"``: no-op.
     """
+    if mode == "cancel":
+        return {"success": False, "error": "cancelled", "cancelled": True}
+
     async with _queue_lock:
-        # Target position: immediately after the LAST item in the persistent
-        # pay-queue list, or after the currently-playing item when none exist.
-        # The admin item itself is NOT added to the persistent pay list.
-        last_pay_uid = await db.get_last_pay_uid()
-        target_uid = last_pay_uid if last_pay_uid else await _now_playing_uid(api_gate, shadow)
+        if mode == "playnext_refund":
+            removed = await _refund_and_remove_pending_pay(api_gate, shadow, db)
+            target_uid = await _now_playing_uid(api_gate, shadow)
+            if target_uid is None:
+                return {"success": False, "error": "Play-next unavailable (now-playing unknown)"}
+        else:
+            # after_purchased: immediately after the LAST persistent pay item,
+            # or after the currently-playing item when none exist.
+            removed = 0
+            last_pay_uid = await db.get_last_pay_uid()
+            if last_pay_uid:
+                target_uid = last_pay_uid
+            else:
+                target_uid = await _now_playing_uid(api_gate, shadow)
+                if target_uid is None:
+                    return {"success": False, "error": "Queue position unavailable (now-playing unknown)"}
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -351,6 +421,7 @@ async def insert_admin_queue(
         item = {
             "uid": uid,
             "title": title,
+            "friendly_token": _ft,
             "media_type": media_type,
             "media_id": media_id,
             "duration_sec": duration_sec,
@@ -372,7 +443,8 @@ async def insert_admin_queue(
         # Announce placement to the channel
         await _announce_queued(api_gate, shadow, uid=uid, title=title, username=username)
 
-        return {"success": True, "uid": uid}
+        return {"success": True, "uid": uid, "refunded": removed}
+
 
 
 async def refund_item(*, api_gate, db, uid: int, reason: str) -> bool:

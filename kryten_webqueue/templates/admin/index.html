@@ -27,6 +27,13 @@
     </div>
 
     <div class="admin-section">
+        <h2>Jobs</h2>
+        <div id="jobs-list" class="jobs-list">Loading...</div>
+        <h3>Recent Job Runs</h3>
+        <div id="job-runs">Loading...</div>
+    </div>
+
+    <div class="admin-section">
         <h2>Sync Logs</h2>
         <div id="sync-logs">Loading...</div>
     </div>
@@ -43,13 +50,64 @@ async function clearQueue() {
 }
 
 async function triggerSync() {
-    const resp = await fetch('/admin/queue/sync-now', {method: 'POST'});
-    showToast(resp.ok ? 'Sync started' : 'Failed', resp.ok ? 'success' : 'error');
+    await runJob('catalog_sync');
+}
+
+async function runJob(name) {
+    const resp = await fetch(`/admin/jobs/${name}/run`, {method: 'POST'});
+    if (resp.ok) {
+        showToast('Job started', 'success');
+    } else if (resp.status === 409) {
+        showToast('Job already running', 'error');
+    } else {
+        showToast('Failed to start job', 'error');
+    }
+    loadJobs();
 }
 
 async function clearActiveSchedule() {
     const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
     showToast(resp.ok ? 'Active schedule cleared' : 'Failed', resp.ok ? 'success' : 'error');
+}
+
+async function loadJobs() {
+    // Registered jobs with run buttons
+    const jResp = await fetch('/admin/jobs');
+    if (jResp.ok) {
+        const jobs = await jResp.json();
+        const el = document.getElementById('jobs-list');
+        el.innerHTML = jobs.length
+            ? jobs.map(j => `
+                <div class="job-row">
+                    <span class="job-label">${escapeHtml(j.label)}</span>
+                    <button class="btn btn-sm" onclick="runJob('${j.name}')" ${j.running ? 'disabled' : ''}>
+                        ${j.running ? 'Running…' : 'Run'}
+                    </button>
+                </div>`).join('')
+            : '<p>No jobs registered</p>';
+    }
+
+    // Recent job-run history
+    const rResp = await fetch('/admin/jobs/runs?limit=10');
+    if (rResp.ok) {
+        const runs = await rResp.json();
+        const el = document.getElementById('job-runs');
+        if (runs.length > 0) {
+            el.innerHTML = `<table class="admin-table">
+                <tr><th>Job</th><th>Started</th><th>Ended</th><th>Status</th></tr>
+                ${runs.map(r => `
+                    <tr>
+                        <td>${escapeHtml(r.job_name || '')}</td>
+                        <td>${formatLocalDateTime(r.started_at)}</td>
+                        <td>${r.ended_at ? formatLocalDateTime(r.ended_at) : '—'}</td>
+                        <td><span class="job-status job-status-${escapeHtml(r.status || '')}">${escapeHtml(r.status || '')}</span></td>
+                    </tr>
+                `).join('')}
+            </table>`;
+        } else {
+            el.innerHTML = '<p>No job runs yet</p>';
+        }
+    }
 }
 
 async function loadAdminData() {
@@ -73,7 +131,7 @@ async function loadAdminData() {
                 <tr><th>Started</th><th>Status</th><th>New</th><th>Updated</th><th>Errors</th></tr>
                 ${logs.slice(0, 5).map(l => `
                     <tr>
-                        <td>${l.started_at || ''}</td>
+                        <td>${formatLocalDateTime(l.started_at)}</td>
                         <td>${l.status || ''}</td>
                         <td>${l.items_new || 0}</td>
                         <td>${l.items_updated || 0}</td>
@@ -94,5 +152,6 @@ function escapeHtml(str) {
 }
 
 loadAdminData();
+loadJobs();
 </script>
 {% endblock %}
