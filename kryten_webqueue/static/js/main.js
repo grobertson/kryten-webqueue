@@ -46,34 +46,136 @@ function formatLocalTime(iso) {
 
 // --- Shared queue actions (used by catalog browse and item detail) ---
 
-async function queueItem(token) {
+function formatZ(amount) {
+    if (amount == null) return '—';
+    return Number(amount).toLocaleString() + ' Z';
+}
+
+// Queue / Play Next now open a receipt-style confirmation modal first.
+function queueItem(token) {
+    showReceiptModal(token, 'queue');
+}
+
+function playNext(token) {
+    showReceiptModal(token, 'playnext');
+}
+
+async function showReceiptModal(token, tier) {
+    closeReceiptModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'receipt-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box receipt-box" role="dialog" aria-modal="true">
+            <h3>${tier === 'playnext' ? 'Play Next' : 'Add to Queue'}</h3>
+            <div class="receipt-body"><p class="receipt-loading">Calculating cost…</p></div>
+        </div>`;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeReceiptModal();
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') closeReceiptModal();
+        if (action === 'confirm') confirmQueueAction(token, tier);
+    });
+    document.body.appendChild(overlay);
+
     try {
-        const resp = await fetch('/queue/add', {
+        const resp = await fetch(
+            `/queue/preview?friendly_token=${encodeURIComponent(token)}&tier=${encodeURIComponent(tier)}`,
+            { credentials: 'same-origin' }
+        );
+        const data = await resp.json();
+        if (!resp.ok) {
+            renderReceiptError(data.detail || `Could not load cost (${resp.status})`);
+            return;
+        }
+        renderReceipt(data, tier);
+    } catch (e) {
+        renderReceiptError(`Network error: ${e.message}`);
+    }
+}
+
+function renderReceipt(data, tier) {
+    const body = document.querySelector('#receipt-modal .receipt-body');
+    if (!body) return;
+
+    const unavailable = data.available === false;
+    const discount = data.discount_amount || 0;
+    const discountPct = data.discount_pct || 0;
+    const insufficient = data.balance != null && data.cost_z != null && data.balance < data.cost_z;
+
+    let warning = '';
+    if (unavailable) {
+        warning = `<p class="receipt-warning">${escapeHtml(receiptErrorText(data.error_code))}</p>`;
+    }
+
+    body.innerHTML = `
+        <table class="receipt-table">
+            <tr><th>Item</th><td>${escapeHtml(data.title || 'Unknown')}</td></tr>
+            <tr><th>Price</th><td>${formatZ(data.base_cost)}</td></tr>
+            ${discount > 0 ? `<tr class="receipt-discount"><th>Discount${discountPct ? ` (${discountPct}%)` : ''}</th><td>-${formatZ(discount)}</td></tr>` : ''}
+            <tr class="receipt-total"><th>Total</th><td>${formatZ(data.cost_z)}</td></tr>
+            <tr><th>Balance</th><td>${formatZ(data.balance)}</td></tr>
+            <tr class="${insufficient ? 'receipt-negative' : ''}"><th>Balance after</th><td>${formatZ(data.balance_after)}</td></tr>
+        </table>
+        ${warning}
+        <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+            <button class="btn btn-primary" data-action="confirm" ${unavailable ? 'disabled' : ''}>
+                ${tier === 'playnext' ? 'Confirm Play Next' : 'Confirm Queue'}
+            </button>
+        </div>`;
+}
+
+function renderReceiptError(message) {
+    const body = document.querySelector('#receipt-modal .receipt-body');
+    if (!body) return;
+    body.innerHTML = `
+        <p class="receipt-warning">${escapeHtml(message)}</p>
+        <div class="modal-actions">
+            <button class="btn btn-secondary" data-action="cancel">Close</button>
+        </div>`;
+}
+
+function receiptErrorText(code) {
+    switch (code) {
+        case 'insufficient_balance': return 'You do not have enough Z for this.';
+        case 'cooldown_active': return 'You are on cooldown. Try again shortly.';
+        case 'daily_limit_reached': return 'You have reached your daily queue limit.';
+        case 'blackout_active': return 'Queuing is temporarily disabled.';
+        default: return code ? `Unavailable: ${code}` : 'This item is currently unavailable.';
+    }
+}
+
+function closeReceiptModal() {
+    const existing = document.getElementById('receipt-modal');
+    if (existing) existing.remove();
+}
+
+async function confirmQueueAction(token, tier) {
+    closeReceiptModal();
+    const url = tier === 'playnext' ? '/queue/playnext' : '/queue/add';
+    const payload = tier === 'playnext'
+        ? { friendly_token: token }
+        : { friendly_token: token, tier: 'queue' };
+    try {
+        const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
-            body: JSON.stringify({ friendly_token: token, tier: 'queue' })
+            body: JSON.stringify(payload)
         });
         const data = await resp.json();
-        showToast(resp.ok ? 'Added to queue!' : (data.detail || `Failed (${resp.status})`), resp.ok ? 'success' : 'error');
+        const okMsg = tier === 'playnext' ? 'Playing next!' : 'Added to queue!';
+        showToast(resp.ok ? okMsg : (data.detail || `Failed (${resp.status})`), resp.ok ? 'success' : 'error');
     } catch (e) {
         showToast(`Network error: ${e.message}`, 'error');
     }
 }
 
-async function playNext(token) {
-    try {
-        const resp = await fetch('/queue/playnext', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ friendly_token: token })
-        });
-        const data = await resp.json();
-        showToast(resp.ok ? 'Playing next!' : (data.detail || `Failed (${resp.status})`), resp.ok ? 'success' : 'error');
-    } catch (e) {
-        showToast(`Network error: ${e.message}`, 'error');
-    }
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : str;
+    return div.innerHTML;
 }
 
 // Admin queue: prompt for how to resolve position, then submit the chosen mode.

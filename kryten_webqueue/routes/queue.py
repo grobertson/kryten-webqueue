@@ -129,7 +129,12 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
 @router.get("/preview")
 async def cost_preview(request: Request, friendly_token: str, tier: str = "queue",
                        user: dict = Depends(get_current_user)):
-    """Preview cost for queuing an item."""
+    """Preview the cost of queuing an item as a confirmation receipt.
+
+    Returns the catalog title, pricing breakdown (base cost, discount, total)
+    and the user's balance before/after the transaction so the UI can show a
+    receipt before the user confirms.
+    """
     db = request.app.state.db
     api_gate = request.app.state.api_gate
 
@@ -142,7 +147,38 @@ async def cost_preview(request: Request, friendly_token: str, tier: str = "queue
         duration_sec=item["duration_sec"],
         tier=tier,
     )
-    return preview
+
+    cost_z = preview.get("cost_z")
+    discount_pct = preview.get("discount_pct", 0) or 0
+    # base_cost is provided by newer economy builds; derive it as a fallback.
+    base_cost = preview.get("base_cost")
+    if base_cost is None and cost_z is not None:
+        if discount_pct and discount_pct < 100:
+            base_cost = round(cost_z / (1 - discount_pct / 100))
+        else:
+            base_cost = cost_z
+    discount_amount = (base_cost - cost_z) if (base_cost is not None and cost_z is not None) else 0
+
+    balance = None
+    try:
+        bal = await api_gate.get_balance(user["username"])
+        balance = bal.get("balance")
+    except Exception:
+        balance = None
+
+    balance_after = (balance - cost_z) if (balance is not None and cost_z is not None) else None
+
+    return {
+        **preview,
+        "friendly_token": friendly_token,
+        "title": item["title"],
+        "duration_sec": item["duration_sec"],
+        "tier": tier,
+        "base_cost": base_cost,
+        "discount_amount": discount_amount,
+        "balance": balance,
+        "balance_after": balance_after,
+    }
 
 
 @router.get("/history")

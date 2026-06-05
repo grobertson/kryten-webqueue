@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-06-05
+
+### Added
+
+- **Receipt confirmation modal for Queue & Play Next** — Clicking **Queue** or **Play Next** now opens a receipt-style modal before spending. It calls `/queue/preview` and shows the item title, price, any rank discount, total cost, current balance, and balance after the transaction, then asks the user to confirm. Unavailable purchases (insufficient balance, cooldown, daily limit, blackout) disable the confirm button with an explanatory message.
+- **Enriched `/queue/preview` receipt data** — The preview endpoint now returns the catalog `title`, `base_cost`, `discount_amount`, current `balance`, and `balance_after` in addition to the existing cost/discount fields. `base_cost` comes from the economy service when available and is otherwise derived from the discount percentage.
+- **Shared modal styling** — Added CSS for `.modal-overlay`/`.modal-box`/`.modal-actions` (also styling the existing admin queue modal) plus a dedicated receipt table layout.
+
+[0.6.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.1
+
 ## [0.6.0] - 2026-06-05
 
 ### Added
