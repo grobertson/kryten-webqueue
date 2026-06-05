@@ -18,6 +18,7 @@ async def insert_pay_queue(
     username: str,
     media_type: str,
     media_id: str,
+    friendly_token: str | None = None,
     title: str,
     duration_sec: int,
     tier: str,
@@ -71,9 +72,10 @@ async def insert_pay_queue(
             await api_gate.playlist_move(uid, last_pay_uid)
 
         # Record spend
+        _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
         await db.save_spend_request(
             request_id, username=username, uid=uid,
-            friendly_token=media_id if media_type == "cm" else None,
+            friendly_token=_ft,
             tier=tier, z_cost=z_cost,
         )
 
@@ -99,7 +101,7 @@ async def insert_pay_queue(
 
         # Queue history
         await db.add_queue_history(
-            username=username, friendly_token=media_id if media_type == "cm" else None,
+            username=username, friendly_token=_ft,
             title=title, tier=tier, z_cost=z_cost,
         )
 
@@ -114,6 +116,7 @@ async def insert_pay_playnext(
     username: str,
     media_type: str,
     media_id: str,
+    friendly_token: str | None = None,
     title: str,
     duration_sec: int,
     tier: str,
@@ -161,9 +164,10 @@ async def insert_pay_playnext(
         await api_gate.playlist_move(uid, "prepend")
 
         # Record spend
+        _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
         await db.save_spend_request(
             request_id, username=username, uid=uid,
-            friendly_token=media_id if media_type == "cm" else None,
+            friendly_token=_ft,
             tier=tier, z_cost=z_cost,
         )
 
@@ -183,7 +187,7 @@ async def insert_pay_playnext(
         await shadow.insert_at(item, 0)
 
         await db.add_queue_history(
-            username=username, friendly_token=media_id if media_type == "cm" else None,
+            username=username, friendly_token=_ft,
             title=title, tier=tier, z_cost=z_cost,
         )
 

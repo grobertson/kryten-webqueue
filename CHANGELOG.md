@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.6] - 2026-06-04
+
+### Fixed
+
+- **Wrong media ID sent to CyTube** — `/queue/add` and `/queue/playnext` were passing `friendly_token` (the MediaCMS slug, e.g. `"my-movie-2024"`) as the `id` field for CyTube custom media type `"cm"`. CyTube requires the manifest URL as the ID; the slug was silently rejected, the `queue` confirmation event never fired, the Robot waited 8 seconds, and kryten-py's matching 8-second timeout fired first giving a 504. Fixed by passing `item["manifest_url"]` as `media_id` to CyTube and threading `friendly_token` separately through `insert_pay_queue` / `insert_pay_playnext` for spend/history records
+
+[0.4.6]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.4.6
+
 ## [0.4.5] - 2026-06-04
 
 ### Fixed
