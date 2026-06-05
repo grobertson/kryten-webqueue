@@ -44,14 +44,24 @@ async def insert_pay_queue(
         position = "end" if not last_pay_uid else str(last_pay_uid)
 
         # Add to CyTube playlist
-        add_result = await api_gate.playlist_add(
-            media_type=media_type,
-            media_id=media_id,
-            position=position,
-        )
+        try:
+            add_result = await api_gate.playlist_add(
+                media_type=media_type,
+                media_id=media_id,
+                position=position,
+            )
+        except httpx.HTTPStatusError:
+            try:
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="playlist_add_failed")
+            except Exception:
+                pass
+            return {"success": False, "error": "Failed to add to playlist"}
         if not add_result.get("success"):
             # Refund on failure
-            await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+            try:
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+            except Exception:
+                pass
             return {"success": False, "error": "Failed to add to playlist"}
 
         uid = add_result["uid"]
@@ -126,13 +136,23 @@ async def insert_pay_playnext(
             return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
 
         # Add to CyTube playlist at prepend position
-        add_result = await api_gate.playlist_add(
-            media_type=media_type,
-            media_id=media_id,
-            position="end",
-        )
+        try:
+            add_result = await api_gate.playlist_add(
+                media_type=media_type,
+                media_id=media_id,
+                position="end",
+            )
+        except httpx.HTTPStatusError:
+            try:
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="playlist_add_failed")
+            except Exception:
+                pass
+            return {"success": False, "error": "Failed to add to playlist"}
         if not add_result.get("success"):
-            await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+            try:
+                await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+            except Exception:
+                pass
             return {"success": False, "error": "Failed to add to playlist"}
 
         uid = add_result["uid"]

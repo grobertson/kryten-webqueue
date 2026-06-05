@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-06-04
+
+### Fixed
+
+- **Unhandled `HTTPStatusError` from `playlist_add`** — Both `insert_pay_queue` and `insert_pay_playnext` now catch `httpx.HTTPStatusError` thrown when the api-gate returns a non-2xx response for `/playlist/add`. On failure the spend is refunded (best-effort) and a `{success: False, error: "Failed to add to playlist"}` dict is returned so the route can surface a 400 to the browser instead of crashing with an unhandled 500
+
+[0.4.5]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.4.5
+
 ## [0.4.4] - 2026-06-04
 
 ### Fixed
