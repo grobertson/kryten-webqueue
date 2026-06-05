@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 
+from . import __version__
 from .config import Config
 from .catalog.db import Database
 from .api_gate.client import ApiGateClient
@@ -137,7 +138,7 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_immutability_expiry_loop()),
     ]
 
-    logger.info(f"kryten-webqueue started on {config.host}:{config.port}")
+    logger.info(f"kryten-webqueue v{__version__} started on {config.host}:{config.port}")
 
     yield
 
@@ -156,7 +157,7 @@ async def lifespan(app: FastAPI):
 def create_app(config: Config) -> FastAPI:
     app = FastAPI(
         title="kryten-webqueue",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
     app.state.config = config
