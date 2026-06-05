@@ -73,6 +73,9 @@ class ApiGateClient:
 
     # --- Chat ---
 
+    async def send_chat(self, message: str) -> dict:
+        return await self.post("/chat/send", json={"message": message})
+
     async def send_pm(self, username: str, message: str) -> dict:
         return await self.post("/chat/pm", json={"username": username, "message": message})
 

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-04
+
+### Added
+
+- **Queue as Admin** — Admin users (rank ≥ 3) now see a "Queue as Admin" button on catalog cards. It queues the item at zero cost in the first available non-pay slot (top of the free section, below any paid items), treating it exactly like a non-paid item and skipping all economy interaction. New route `POST /admin/queue/add` and `insert_admin_queue()` ordering helper
+- **Channel announcement on successful queue** — After an item is successfully queued and positioned, the channel chat receives `"<title> has been queued in position <N> by <user>"`, where position counts from the currently-playing item (position 0), so position 1 is the next item to play. Added `ApiGateClient.send_chat()`
+
+### Fixed
+
+- **Wrong manifest URL stored during catalog sync** — `_build_manifest_url()` was producing the MediaCMS watch/detail page URL (`/view?m=TOKEN`, which returns HTTP 302) instead of the real CyTube manifest (`/api/v1/media/cytube/TOKEN.json?format=json`). CyTube rejected the 302 with "Expected HTTP 200 OK, not 302 Found", causing every queue attempt to fail. Existing rows are corrected on the next startup sync
+- **queueFail now surfaced from the command response** — Instead of relying on a timeout, the Robot's `addvideo` command response now carries the CyTube `queueFail` reason. The api-gate returns it as HTTP 422 and webqueue refunds the spend and reports the actual reason. webqueue no longer needs to subscribe to the `kryten.events.cytube.channel-z.queuefail` events channel
+- **Refund when an item cannot be positioned** — If `playlist_move` fails after a successful add, the spend is now refunded and the mis-placed item is removed, rather than leaving a paid item in the wrong slot
+
+[0.5.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.5.0
+
 ## [0.4.6] - 2026-06-04
 
 ### Fixed

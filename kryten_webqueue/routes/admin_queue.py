@@ -1,9 +1,46 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 
 from ..auth.session import require_admin
-from ..queue.ordering import refund_item
+from ..queue.ordering import refund_item, insert_admin_queue
 
 router = APIRouter(prefix="/admin/queue", tags=["admin"])
+
+
+@router.post("/add")
+async def admin_add(request: Request, user: dict = Depends(require_admin)):
+    """Queue an item as admin: zero cost, first available non-pay slot."""
+    body = await request.json()
+    friendly_token = body.get("friendly_token")
+    if not friendly_token:
+        raise HTTPException(400, "friendly_token required")
+
+    db = request.app.state.db
+    api_gate = request.app.state.api_gate
+    shadow = request.app.state.shadow
+
+    # Check pre-fire lock
+    if await db.is_pre_fire_lock_active():
+        raise HTTPException(423, "Queue is locked: scheduled playlist firing soon")
+
+    item = await db.get_item(friendly_token)
+    if not item:
+        raise HTTPException(404, "Item not found in catalog")
+
+    result = await insert_admin_queue(
+        api_gate=api_gate,
+        shadow=shadow,
+        db=db,
+        username=user["username"],
+        media_type="cm",
+        media_id=item["manifest_url"],
+        friendly_token=friendly_token,
+        title=item["title"],
+        duration_sec=item["duration_sec"],
+    )
+
+    if not result["success"]:
+        raise HTTPException(400, result.get("error", "Admin queue add failed"))
+    return result
 
 
 @router.post("/clear")

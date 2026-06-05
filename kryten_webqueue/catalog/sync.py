@@ -138,6 +138,12 @@ class CatalogSync:
             await asyncio.sleep(0.25)
 
     def _build_manifest_url(self, media: dict) -> str:
-        # Use the MediaCMS watch page URL (e.g. https://www.dropsugar.co/view?m=TOKEN)
+        # CyTube custom media ("cm") requires the manifest JSON URL, NOT the
+        # human watch page (/view?m=TOKEN). MediaCMS exposes a CyTube manifest at
+        # /api/v1/media/cytube/<token>.json?format=json
+        token = media.get("friendly_token")
+        if token:
+            return f"{self._url}/api/v1/media/cytube/{token}.json?format=json"
+        # Fallback: derive token from the watch URL if friendly_token is missing
         url = media.get("url", "")
         return url if url.startswith("http") else f"{self._url}{url}"
