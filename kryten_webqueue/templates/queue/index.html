@@ -110,8 +110,10 @@ function renderQueue(state) {
         const totalDuration = state.items.reduce((sum, i) => sum + (i.duration_sec || 0), 0);
         sumEl.innerHTML = `<span>${state.items.length} items · ${formatTime(totalDuration)} total</span>`;
 
+        const nowUid = state.now_playing && state.now_playing.uid != null
+            ? String(state.now_playing.uid) : null;
         qlEl.innerHTML = state.items.map((item, i) => `
-            <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''}" data-uid="${item.uid}">
+            <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''} ${nowUid != null && String(item.uid) === nowUid ? 'queue-item-now-playing' : ''}" data-uid="${item.uid}">
                 <span class="qi-drag" title="Drag to reorder">☰</span>
                 <span class="qi-pos">${i + 1}</span>
                 <div class="qi-cover">${coverHtml(item)}</div>
@@ -166,7 +168,15 @@ function coverHtml(item) {
 }
 
 function formatEta(isoStr) {
-    const d = new Date(isoStr);
+    // Server emits UTC ISO timestamps. If a value arrives without an explicit
+    // timezone designator, treat it as UTC so the browser converts it to the
+    // viewer's local timezone rather than misreading it as local time.
+    let s = String(isoStr);
+    if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
+        s += 'Z';
+    }
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 }
 

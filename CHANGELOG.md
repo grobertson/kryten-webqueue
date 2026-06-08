@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.6] - 2026-06-08
+
+### Changed
+
+- **Queue view polish.** Three refinements to the Queue page: (1) **Predicted start times** now render reliably in the viewer's local timezone — the frontend defensively treats timezone-less timestamps as UTC before converting, so ETAs no longer risk being misread as server time. (2) **Now Playing card** is larger and easier to read — bigger cover art (128px), a larger title that wraps cleanly, and the elapsed/remaining times no longer wrap. (3) **The currently-playing item is now highlighted** in the queue list with an accent tint and ring. The now-playing playlist `uid` is resolved server-side (matching media id/type against the shadow playlist when CyTube's `changeMedia` payload omits it) so the matching queue item is identified reliably.
+
 ## [0.6.5] - 2026-06-08
 
 ### Changed

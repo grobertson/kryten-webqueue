@@ -203,6 +203,20 @@ class QueueShadow:
                 np.setdefault("thumbnail_url", meta.get("thumbnail_url"))
                 if not np.get("friendly_token"):
                     np["friendly_token"] = meta.get("friendly_token")
+            # Ensure now-playing carries a playlist uid so the frontend can
+            # highlight the matching queue item. CyTube's changeMedia payload
+            # lacks a uid; recover it by matching media id/type against the
+            # shadow playlist (whose items do carry uids).
+            if np.get("uid") is None:
+                np_id = np.get("id")
+                np_type = np.get("type")
+                if np_id is not None:
+                    for it in enriched_items:
+                        if it.get("media_id") == np_id and (
+                            np_type is None or it.get("media_type") == np_type
+                        ):
+                            np["uid"] = it.get("uid")
+                            break
             state["now_playing"] = np
 
         return state
