@@ -238,7 +238,8 @@ class Database:
 
     async def browse(self, *, category: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
         query = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url,
+                   (SELECT COUNT(*) FROM queue_history qh WHERE qh.friendly_token = c.friendly_token) AS play_count
             FROM catalog c
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
@@ -256,7 +257,22 @@ class Database:
                 )
             """
             params.append(category)
-        query += " ORDER BY c.title ASC LIMIT ? OFFSET ?"
+        # Quality-weighted ordering so the landing page leads with presentable
+        # items instead of alphabetical junk. No curation required — every signal
+        # is derived from existing data:
+        #   1. Items with box art (cover or thumbnail) first.
+        #   2. Then by real popularity (times queued).
+        #   3. Titles beginning with a letter before number/symbol-prefixed
+        #      "02 - Episode" style entries.
+        #   4. Finally alphabetical for a stable, predictable tail.
+        query += """
+            ORDER BY
+                (c.cover_art_path IS NOT NULL OR c.thumbnail_url IS NOT NULL) DESC,
+                play_count DESC,
+                (CASE WHEN c.title GLOB '[A-Za-z]*' THEN 0 ELSE 1 END) ASC,
+                c.title ASC
+            LIMIT ? OFFSET ?
+        """
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 

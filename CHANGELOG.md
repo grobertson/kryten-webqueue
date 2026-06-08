@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.4] - 2026-06-08
+
+### Changed
+
+- **Quality-weighted catalog browse ordering** — The catalog landing no longer leads with alphabetical junk (art-less, number-prefixed "02 - Episode" entries). Browse results are now ranked by signals derived entirely from existing data — no curation or featured-item maintenance required: (1) items with box art (cover or thumbnail) first, (2) then by real popularity (times queued, from `queue_history`), (3) titles beginning with a letter before number/symbol-prefixed titles, (4) then alphabetical for a stable tail. Applies to both the unfiltered landing and category-filtered browse; search continues to use full-text relevance.
+
+[0.6.4]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.4
+
 ## [0.6.3] - 2026-06-08
 
 ### Fixed
