@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-06-07
+
+### Fixed
+
+- **Queue position resolution when something is playing** — CyTube's now-playing payload (`changeMedia`) carries the media `{id, type, title, seconds}` but no playlist `uid`, so `_now_playing_uid()` always returned `None`, causing Queue / Play Next / Queue-as-Admin to fail with "Queue position unavailable (now-playing unknown)" (HTTP 400) even while a video was clearly playing. The now-playing uid is now recovered by matching the media `id`/`type` against the shadow playlist (which does carry uids). Fixes all queue insertion paths.
+
+[0.6.2]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.2
+
 ## [0.6.1] - 2026-06-05
 
 ### Added

@@ -51,7 +51,13 @@ async def _announce_queued(api_gate, shadow, *, uid: int, title: str, username: 
 
 
 async def _now_playing_uid(api_gate, shadow) -> int | None:
-    """UID of the currently-playing item, preferring fresh state over the cache."""
+    """UID of the currently-playing item, preferring fresh state over the cache.
+
+    CyTube's now-playing payload (``changeMedia``) carries the media
+    ``{id, type, title, seconds}`` but no playlist ``uid``. When the uid is
+    absent we recover it by matching the now-playing media id/type against the
+    shadow playlist (whose items do carry uids).
+    """
     np = None
     try:
         np = await api_gate.get_now_playing()
@@ -62,10 +68,25 @@ async def _now_playing_uid(api_gate, shadow) -> int | None:
     if not np:
         return None
     uid = np.get("uid")
-    try:
-        return int(uid) if uid is not None else None
-    except (TypeError, ValueError):
-        return None
+    if uid is not None:
+        try:
+            return int(uid)
+        except (TypeError, ValueError):
+            pass
+    # Fall back to matching the now-playing media against the shadow playlist.
+    np_id = np.get("id")
+    np_type = np.get("type")
+    if np_id is not None:
+        for it in shadow.items:
+            if it.get("media_id") == np_id and (
+                np_type is None or it.get("media_type") == np_type
+            ):
+                it_uid = it.get("uid")
+                try:
+                    return int(it_uid) if it_uid is not None else None
+                except (TypeError, ValueError):
+                    return None
+    return None
 
 
 def _shadow_index_after_uid(shadow, target_uid: int | None) -> int:
