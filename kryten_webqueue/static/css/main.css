@@ -15,12 +15,18 @@
     --border: #33334a;
     --radius: 8px;
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --nav-height: 4rem;
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+html {
+    /* Keep anchored/scrolled-to content clear of the sticky navbar. */
+    scroll-padding-top: calc(var(--nav-height) + 1rem);
 }
 
 body {
@@ -228,6 +234,18 @@ a:hover {
     }
 }
 
+/* Keep the now-playing card pinned while scrolling a long queue. */
+.now-playing-section {
+    position: sticky;
+    top: calc(var(--nav-height) + 1rem);
+    align-self: start;
+}
+@media (max-width: 900px) {
+    .now-playing-section {
+        position: static;
+    }
+}
+
 .now-playing-card {
     background: var(--bg-card);
     border-radius: var(--radius);
@@ -235,6 +253,9 @@ a:hover {
     display: flex;
     gap: 1rem;
     align-items: flex-start;
+    /* Highlight the currently-playing item: subtle accent ring + glow. */
+    border: 1px solid var(--accent);
+    box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.25), 0 6px 18px rgba(108, 92, 231, 0.18);
 }
 .np-info {
     flex: 1;
@@ -431,6 +452,25 @@ a:hover {
 }
 .otp-sent-msg {
     color: var(--success);
+}
+.auth-hint {
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    background: rgba(253, 203, 110, 0.1);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius);
+    text-align: left;
+}
+.auth-hint strong {
+    color: var(--warning);
+}
+.auth-hint code {
+    background: var(--bg-secondary);
+    padding: 0.05rem 0.3rem;
+    border-radius: 4px;
+    font-size: 0.85em;
 }
 
 /* User Dashboard */

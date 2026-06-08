@@ -6,9 +6,10 @@
 <div class="auth-container">
     <h1>Login</h1>
     <p>Enter your CyTube username to receive a one-time code via PM.</p>
+    <p class="auth-hint"><strong>Username is case-sensitive</strong> &mdash; it must match your CyTube username exactly. For example, <code>TacoBelmont</code> is not the same as <code>tacobelmont</code>.</p>
 
     <div id="otp-request" class="auth-form">
-        <input type="text" id="username" placeholder="CyTube username" autocomplete="username" maxlength="50">
+        <input type="text" id="username" placeholder="CyTube username (case-sensitive)" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="50">
         <button id="request-otp-btn" class="btn btn-primary">Send Code</button>
     </div>
 

@@ -58,6 +58,7 @@ function connectWebSocket() {
         const msg = JSON.parse(event.data);
         if (msg.type === 'queue_state' || msg.type === 'queue_update') {
             renderQueue(msg.data);
+            maybeInitialScroll(msg.data);
         } else if (msg.type === 'pong') {
             // keepalive ack
         } else if (msg.type === 'schedule_fired') {
@@ -80,8 +81,10 @@ function renderQueue(state) {
 
     if (state.now_playing) {
         const np = state.now_playing;
-        const elapsed = np.currentTime || 0;
-        const total = np.duration || 0;
+        const elapsed = Number(np.currentTime) || 0;
+        // CyTube's now-playing payload uses numeric `seconds` for the total
+        // runtime (`duration` is a preformatted "HH:MM:SS" string).
+        const total = Number(np.seconds ?? np.duration_sec ?? 0) || 0;
         const remaining = Math.max(0, total - elapsed);
         npEl.innerHTML = `
             <div class="np-cover">${coverHtml(np)}</div>
@@ -131,6 +134,17 @@ function renderQueue(state) {
     }
 }
 
+// On first render with live data, bring the now-playing card into view.
+let didInitialScroll = false;
+function maybeInitialScroll(state) {
+    if (didInitialScroll || !state || !state.now_playing) return;
+    didInitialScroll = true;
+    const sec = document.querySelector('.now-playing-section');
+    if (sec) {
+        setTimeout(() => sec.scrollIntoView({behavior: 'smooth', block: 'start'}), 150);
+    }
+}
+
 function formatTime(sec) {
     sec = Math.floor(sec);
     const h = Math.floor(sec / 3600);
@@ -169,6 +183,7 @@ async function initialLoad() {
         if (resp.ok) {
             const state = await resp.json();
             renderQueue(state);
+            maybeInitialScroll(state);
         }
     } catch (e) { /* WS will take over */ }
 }

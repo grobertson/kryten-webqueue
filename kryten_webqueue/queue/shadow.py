@@ -63,20 +63,40 @@ class QueueShadow:
 
             for pos, polled in enumerate(playlist_items):
                 uid = polled["uid"]
+                # CyTube playlist items nest the media metadata under a "media"
+                # key ({uid, temp, queueby, media: {id, title, seconds, type}}).
+                # Fall back to flat keys for forward/backward compatibility.
+                media = polled.get("media") if isinstance(polled.get("media"), dict) else polled
+                title = media.get("title") or polled.get("title") or ""
+                media_type = media.get("type") or polled.get("type") or "unknown"
+                media_id = media.get("id") or polled.get("id") or ""
+                duration_sec = _to_seconds(media.get("seconds", media.get("duration")))
+                queueby = polled.get("queueby") or None
+
                 if uid in local_map:
-                    # Preserve local metadata, update position
-                    merged = {**local_map[uid], **polled, "position": pos}
+                    # Preserve local metadata, update position; backfill any
+                    # fields we never captured locally (e.g. title/duration for
+                    # items first added by an external client or a prior run).
+                    merged = {**local_map[uid], "position": pos}
+                    if not merged.get("title"):
+                        merged["title"] = title
+                    if not merged.get("duration_sec"):
+                        merged["duration_sec"] = duration_sec
+                    if not merged.get("media_id"):
+                        merged["media_id"] = media_id
+                    if not merged.get("media_type") or merged.get("media_type") == "unknown":
+                        merged["media_type"] = media_type
                 else:
                     # New item from external source
                     merged = {
                         "uid": uid,
                         "position": pos,
-                        "title": polled.get("title", ""),
-                        "media_type": polled.get("type", "unknown"),
-                        "media_id": polled.get("id", ""),
-                        "duration_sec": _to_seconds(polled.get("duration")),
+                        "title": title,
+                        "media_type": media_type,
+                        "media_id": media_id,
+                        "duration_sec": duration_sec,
                         "is_pay": False,
-                        "paid_by": None,
+                        "paid_by": queueby,
                         "tier": None,
                         "z_cost": None,
                         "schedule_id": None,
@@ -97,7 +117,8 @@ class QueueShadow:
         # Start from now-playing elapsed or now
         start_cursor = datetime.now(UTC)
         if self._now_playing:
-            remaining = _to_seconds(self._now_playing.get("duration")) - _to_seconds(self._now_playing.get("currentTime"))
+            np_total = _to_seconds(self._now_playing.get("seconds", self._now_playing.get("duration")))
+            remaining = np_total - _to_seconds(self._now_playing.get("currentTime"))
             start_cursor += timedelta(seconds=max(0, remaining))
 
         for item in self._items:

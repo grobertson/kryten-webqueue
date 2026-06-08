@@ -4,7 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.3] - 2026-06-08
 
+### Fixed
+
+- **Queue items missing title/duration for externally-queued media** — CyTube playlist items nest their metadata under a `media` key (`{uid, temp, queueby, media: {id, title, seconds, type}}`), but the shadow reconciler read flat fields, so any item not added by the running webqueue instance showed "Unknown" with a `0:00` duration. The reconciler now reads the nested `media` object (with a flat-key fallback) and backfills title/duration/media-id onto known items. Externally-queued items now also show their CyTube `queueby` as the requester.
+- **Now Playing runtime showing `NaN:NaN`** — The now-playing total used the preformatted `duration` string instead of the numeric `seconds`, producing `NaN:NaN` for the total and remaining time. It now uses `seconds` (with a numeric fallback).
+- **Estimated start times** — Now derived from the numeric now-playing `seconds`/`currentTime`, so the queue ETAs are correct now that item durations are read properly.
+
+### Added
+
+- **Sticky, highlighted Now Playing card** — The Now Playing card is pinned below the navbar while scrolling a long queue, is highlighted with a subtle accent ring/glow, and the page auto-scrolls it into view on load.
+- **Case-sensitivity notice on login** — The OTP login view now warns that the CyTube username is case-sensitive and must match exactly (e.g. `TacoBelmont` ≠ `tacobelmont`); the username field no longer auto-capitalizes or autocorrects.
+
+### Changed
+
+- **Sticky navbar hardening** — Added `scroll-padding-top` (via a `--nav-height` variable) so scrolled-to content clears the sticky header.
+
+[0.6.3]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.3
 ## [0.6.2] - 2026-06-07
 
 ### Fixed
