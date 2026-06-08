@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.6.5] - 2026-06-08
+
+### Changed
+
+- **Refined catalog browse ordering** — Tightened the quality-weighted sort introduced in 0.6.4 based on feedback. (1) Dropped the popularity (times-queued) tier, which discouraged discovery. (2) Replaced the weak "has cover art" test with a real-poster signal: items are led by `cover_art_source IN ('tmdb', 'omdb')` rather than mere presence of a `cover_art_path`/`thumbnail_url` — nearly every item carries a MediaCMS thumbnail, and the resolver also caches that thumbnail as a last-resort cover (`cover_art_source = 'thumbnail'`), so the old test was almost always true. A genuine TMDB/OMDB poster match also implies a well-formed, matchable title. Letter-first-then-alphabetical ordering (which correctly sinks `"02 - Episode"` style entries) is retained.
+
+[0.6.5]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.6.5
+
 ## [0.6.4] - 2026-06-08
 
 ### Changed
