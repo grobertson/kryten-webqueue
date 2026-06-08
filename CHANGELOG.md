@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.7.0] - 2026-06-08
+
+### Added
+
+- **Category & tag search facets on the catalog listing.** The category dropdown is now populated with the distinct MediaCMS categories that actually have items, and a new **Tags** dropdown sits beside it. Selecting either narrows the listing; both are preserved across pagination. Catalog sync now fetches per-item `categories_info`/`tags_info` from the MediaCMS media-detail endpoint (the bulk `manage_media` list omits them) and maintains the `categories`/`tags` join tables. Facet dropdowns only surface categories/tags with at least one item, and tags are ordered by usage.
+- **"Hide Previous" toggle on the Queue page** — a switch in the Up Next header hides every item before the currently-playing one, for a cleaner view of what's still to come.
+
+### Fixed
+
+- **Queue page no longer overflows the viewport width.** The three-column queue grid now uses `minmax(0, …)` tracks (and `min-width: 0` on its columns) so long titles or the no-wrap Now Playing times can't blow the layout past 100% width. The queue column was also slimmed slightly.
+
 ## [0.6.6] - 2026-06-08
 
 ### Changed

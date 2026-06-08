@@ -139,12 +139,18 @@ a:hover {
     color: var(--text-primary);
     width: 300px;
 }
+.category-filter {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
 .category-filter select {
     padding: 0.5rem;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--bg-secondary);
     color: var(--text-primary);
+    max-width: 220px;
 }
 
 .catalog-grid {
@@ -225,13 +231,75 @@ a:hover {
 /* Queue Page */
 .queue-layout {
     display: grid;
-    grid-template-columns: 1fr 2fr 250px;
+    /* minmax(0, …) lets grid tracks shrink below their content's intrinsic
+       width, which prevents a long title or nowrap row from blowing the grid
+       (and the page) past 100% viewport width. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) 220px;
     gap: 2rem;
+}
+/* Allow each column's flex/overflow children to shrink instead of overflowing. */
+.now-playing-section,
+.queue-section,
+.queue-info-sidebar {
+    min-width: 0;
 }
 @media (max-width: 900px) {
     .queue-layout {
         grid-template-columns: 1fr;
     }
+}
+
+/* Up Next header with the Hide Previous toggle */
+.queue-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+.toggle-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: relative;
+    width: 38px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    transition: background 0.15s ease;
+    flex-shrink: 0;
+}
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.15s ease;
+}
+.toggle-switch input:checked + .toggle-slider {
+    background: var(--accent);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(18px);
+}
+.toggle-switch input:focus-visible + .toggle-slider {
+    box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.5);
 }
 
 /* Keep the now-playing card pinned while scrolling a long queue. */

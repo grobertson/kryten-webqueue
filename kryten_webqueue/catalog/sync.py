@@ -129,6 +129,13 @@ class CatalogSync:
             await self._db.insert_catalog(row)
             stats["new"] += 1
 
+        # Categories & tags require a per-item detail fetch — the manage_media
+        # list serializer omits them. Best-effort; never fail the item over this.
+        try:
+            await self._sync_item_facets(token)
+        except Exception as e:
+            logger.debug(f"Facet sync failed for {token}: {e}")
+
         # Fetch TMDB/OMDB cover art if not already cached
         if self._cover_art and not (existing and existing.get("cover_art_path")):
             try:
@@ -136,6 +143,34 @@ class CatalogSync:
             except Exception as e:
                 logger.debug(f"Cover art resolve failed for {token}: {e}")
             await asyncio.sleep(0.25)
+
+    async def _sync_item_facets(self, token: str):
+        """Populate category/tag memberships from the media detail endpoint.
+
+        The list (manage_media) serializer omits categories/tags, so we fetch
+        the per-item detail (``/api/v1/media/{token}``) which exposes
+        ``categories_info`` and ``tags_info``.
+        """
+        resp = await self._client.get(f"{self._url}/api/v1/media/{token}")
+        if resp.status_code != 200:
+            return
+        data = resp.json()
+
+        cat_names = [
+            c.get("title")
+            for c in (data.get("categories_info") or [])
+            if isinstance(c, dict) and c.get("title")
+        ]
+        tag_names = []
+        for t in (data.get("tags_info") or []):
+            name = t.get("title") if isinstance(t, dict) else t
+            if name:
+                tag_names.append(name)
+
+        cat_ids = [await self._db.upsert_category(n) for n in cat_names]
+        tag_ids = [await self._db.upsert_tag(n) for n in tag_names]
+        await self._db.set_catalog_categories(token, cat_ids)
+        await self._db.set_catalog_tags(token, tag_ids)
 
     def _build_manifest_url(self, media: dict) -> str:
         # CyTube custom media ("cm") requires the manifest JSON URL, NOT the

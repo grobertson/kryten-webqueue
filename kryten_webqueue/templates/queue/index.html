@@ -12,7 +12,14 @@
     </div>
 
     <div class="queue-section">
-        <h2>Up Next</h2>
+        <div class="queue-section-header">
+            <h2>Up Next</h2>
+            <label class="toggle-switch" title="Hide items before the currently playing one">
+                <input type="checkbox" id="hide-previous-toggle" onchange="toggleHidePrevious(this.checked)">
+                <span class="toggle-slider"></span>
+                <span>Hide Previous</span>
+            </label>
+        </div>
         <div id="queue-list" class="queue-list">
             <p class="empty-state">Connecting...</p>
         </div>
@@ -36,6 +43,13 @@
 <script>
 let ws = null;
 let reconnectTimer = null;
+let hidePrevious = false;
+let lastState = null;
+
+function toggleHidePrevious(checked) {
+    hidePrevious = checked;
+    if (lastState) renderQueue(lastState);
+}
 
 function connectWebSocket() {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -75,6 +89,7 @@ function connectWebSocket() {
 }
 
 function renderQueue(state) {
+    lastState = state;
     const npEl = document.getElementById('now-playing');
     const qlEl = document.getElementById('queue-list');
     const sumEl = document.getElementById('queue-summary');
@@ -112,7 +127,12 @@ function renderQueue(state) {
 
         const nowUid = state.now_playing && state.now_playing.uid != null
             ? String(state.now_playing.uid) : null;
-        qlEl.innerHTML = state.items.map((item, i) => `
+        const nowIndex = nowUid != null
+            ? state.items.findIndex(it => String(it.uid) === nowUid) : -1;
+        qlEl.innerHTML = state.items
+            .map((item, i) => ({ item, i }))
+            .filter(({ i }) => !(hidePrevious && nowIndex >= 0 && i < nowIndex))
+            .map(({ item, i }) => `
             <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''} ${nowUid != null && String(item.uid) === nowUid ? 'queue-item-now-playing' : ''}" data-uid="${item.uid}">
                 <span class="qi-drag" title="Drag to reorder">☰</span>
                 <span class="qi-pos">${i + 1}</span>

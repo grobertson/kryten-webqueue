@@ -6,13 +6,14 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 
 @router.get("/browse")
-async def browse(request: Request, category: str | None = None, page: int = 1,
-                 user: dict = Depends(get_current_user)):
-    """Browse catalog with optional category filter."""
+async def browse(request: Request, category: str | None = None, tag: str | None = None,
+                 page: int = 1, user: dict = Depends(get_current_user)):
+    """Browse catalog with optional category/tag filter."""
     db = request.app.state.db
-    items = await db.browse(category=category, page=page)
+    items = await db.browse(category=category, tag=tag, page=page)
     categories = await db.get_categories()
-    return {"items": items, "categories": categories, "page": page}
+    tags = await db.get_tags()
+    return {"items": items, "categories": categories, "tags": tags, "page": page}
 
 
 @router.get("/search")

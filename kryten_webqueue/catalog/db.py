@@ -1,6 +1,15 @@
 import aiosqlite
+import re
 from pathlib import Path
 from datetime import datetime, UTC
+
+
+def _slugify(text: str) -> str:
+    """Derive a URL-safe slug from a category title."""
+    s = (text or "").strip().lower()
+    s = re.sub(r"[^\w\s-]", "", s)
+    s = re.sub(r"[\s_-]+", "-", s)
+    return s.strip("-") or "untitled"
 
 
 MIGRATIONS = [
@@ -236,7 +245,7 @@ class Database:
 
     # --- Catalog ---
 
-    async def browse(self, *, category: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
+    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url
             FROM catalog c
@@ -256,6 +265,15 @@ class Database:
                 )
             """
             params.append(category)
+        if tag:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT ct.friendly_token FROM catalog_tags ct
+                    JOIN tags t ON ct.tag_id = t.id
+                    WHERE t.name = ?
+                )
+            """
+            params.append(tag)
         # Quality-weighted ordering so the landing page leads with presentable
         # items instead of alphabetical junk. No curation required — every signal
         # is derived from existing data:
@@ -278,7 +296,7 @@ class Database:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
-    async def browse_count(self, *, category: str | None = None) -> int:
+    async def browse_count(self, *, category: str | None = None, tag: str | None = None) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
             WHERE c.friendly_token NOT IN (
@@ -297,6 +315,15 @@ class Database:
                 )
             """
             params.append(category)
+        if tag:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT ct.friendly_token FROM catalog_tags ct
+                    JOIN tags t ON ct.tag_id = t.id
+                    WHERE t.name = ?
+                )
+            """
+            params.append(tag)
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
@@ -383,7 +410,79 @@ class Database:
         return row is not None
 
     async def get_categories(self) -> list[dict]:
-        return await self._fetch_all("SELECT id, name, slug FROM categories ORDER BY name")
+        """Distinct categories that have at least one catalog item, for facets."""
+        return await self._fetch_all(
+            """
+            SELECT c.id, c.name, c.slug, COUNT(cc.friendly_token) AS cnt
+            FROM categories c
+            JOIN catalog_categories cc ON cc.category_id = c.id
+            GROUP BY c.id, c.name, c.slug
+            ORDER BY c.name
+            """
+        )
+
+    async def get_tags(self, *, limit: int = 100) -> list[dict]:
+        """Most-used tags that have at least one catalog item, for facets."""
+        return await self._fetch_all(
+            """
+            SELECT t.id, t.name, COUNT(ct.friendly_token) AS cnt
+            FROM tags t
+            JOIN catalog_tags ct ON ct.tag_id = t.id
+            GROUP BY t.id, t.name
+            ORDER BY cnt DESC, t.name ASC
+            LIMIT ?
+            """,
+            [limit],
+        )
+
+    async def upsert_category(self, name: str) -> int:
+        """Insert a category by name (deriving a unique slug) and return its id."""
+        existing = await self._fetch_one("SELECT id FROM categories WHERE name = ?", [name])
+        if existing:
+            return existing["id"]
+        base = _slugify(name)
+        slug, n = base, 1
+        while await self._fetch_one("SELECT 1 FROM categories WHERE slug = ?", [slug]):
+            n += 1
+            slug = f"{base}-{n}"
+        cursor = await self._db.execute(
+            "INSERT INTO categories (name, slug) VALUES (?, ?)", [name, slug]
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def upsert_tag(self, name: str) -> int:
+        """Insert a tag by name and return its id."""
+        existing = await self._fetch_one("SELECT id FROM tags WHERE name = ?", [name])
+        if existing:
+            return existing["id"]
+        cursor = await self._db.execute("INSERT INTO tags (name) VALUES (?)", [name])
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def set_catalog_categories(self, friendly_token: str, category_ids: list[int]):
+        """Replace the category memberships for a catalog item."""
+        await self._db.execute(
+            "DELETE FROM catalog_categories WHERE friendly_token = ?", [friendly_token]
+        )
+        for cid in category_ids:
+            await self._db.execute(
+                "INSERT OR IGNORE INTO catalog_categories (friendly_token, category_id) VALUES (?, ?)",
+                [friendly_token, cid],
+            )
+        await self._db.commit()
+
+    async def set_catalog_tags(self, friendly_token: str, tag_ids: list[int]):
+        """Replace the tag memberships for a catalog item."""
+        await self._db.execute(
+            "DELETE FROM catalog_tags WHERE friendly_token = ?", [friendly_token]
+        )
+        for tid in tag_ids:
+            await self._db.execute(
+                "INSERT OR IGNORE INTO catalog_tags (friendly_token, tag_id) VALUES (?, ?)",
+                [friendly_token, tid],
+            )
+        await self._db.commit()
 
     async def insert_catalog(self, row: dict):
         sql = """

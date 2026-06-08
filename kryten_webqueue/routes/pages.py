@@ -40,22 +40,26 @@ async def login_page(request: Request):
 
 
 @router.get("/catalog/browse", response_class=HTMLResponse)
-async def catalog_browse_page(request: Request, category: str | None = None, page: int = 1):
+async def catalog_browse_page(request: Request, category: str | None = None,
+                              tag: str | None = None, page: int = 1):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
     db = request.app.state.db
-    items = await db.browse(category=category, page=page)
-    total = await db.browse_count(category=category)
+    items = await db.browse(category=category, tag=tag, page=page)
+    total = await db.browse_count(category=category, tag=tag)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories()
+    tags = await db.get_tags()
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
         "categories": categories,
+        "tags": tags,
         "page": page,
         "total_pages": total_pages,
         "active_category": category,
+        "active_tag": tag,
         "query": None,
     })
 
@@ -72,13 +76,16 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1):
     total = await db.search_count(q)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories()
+    tags = await db.get_tags()
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
         "categories": categories,
+        "tags": tags,
         "page": page,
         "total_pages": total_pages,
         "active_category": None,
+        "active_tag": None,
         "query": q,
     })
 

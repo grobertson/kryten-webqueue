@@ -11,10 +11,16 @@
             <button type="submit" class="btn btn-sm">Search</button>
         </form>
         <div class="category-filter">
-            <select id="category-select" onchange="filterCategory(this.value)">
+            <select id="category-select" onchange="applyFacets()">
                 <option value="">All Categories</option>
                 {% for cat in categories %}
                     <option value="{{ cat.slug }}" {% if active_category == cat.slug %}selected{% endif %}>{{ cat.name }}</option>
+                {% endfor %}
+            </select>
+            <select id="tag-select" onchange="applyFacets()">
+                <option value="">All Tags</option>
+                {% for tag in tags %}
+                    <option value="{{ tag.name }}" {% if active_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -66,7 +72,7 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">&larr; Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -75,23 +81,28 @@
         {% if p == page %}
             <span class="page-num page-current">{{ p }}</span>
         {% else %}
-            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm btn-page">{{ p }}</a>
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm btn-page">{{ p }}</a>
         {% endif %}
     {% endfor %}
 
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="btn btn-sm">Next &rarr;</a>
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-function filterCategory(slug) {
-    const url = slug ? `/catalog/browse?category=${slug}` : '/catalog/browse';
-    window.location.href = url;
+function applyFacets() {
+    const cat = document.getElementById('category-select').value;
+    const tag = document.getElementById('tag-select').value;
+    const params = new URLSearchParams();
+    if (cat) params.set('category', cat);
+    if (tag) params.set('tag', tag);
+    const qs = params.toString();
+    window.location.href = '/catalog/browse' + (qs ? '?' + qs : '');
 }
 // queueItem / playNext / queueAsAdmin are provided by /static/js/main.js
 </script>
