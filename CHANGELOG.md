@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.7.1] - 2026-06-08
+
+### Changed
+
+- **Now Playing box redesign.** The title now spans the full card width, the cover renders as a 2:3 poster, the elapsed/total time and progress bar are stacked with **Remaining** shown as its own line under the bar, and a details section beneath the poster shows the item description plus category and tag chips. The now-playing payload is enriched with `description`, `categories`, and `tags` from the catalog.
+- **"Hide Previous" now defaults to ON** on the Queue page, so the view opens focused on what's still to come.
+
 ## [0.7.0] - 2026-06-08
 
 ### Added

@@ -317,30 +317,42 @@ a:hover {
 .now-playing-card {
     background: var(--bg-card);
     border-radius: var(--radius);
-    padding: 2rem;
+    padding: 1.5rem;
     display: flex;
-    gap: 1.5rem;
-    align-items: center;
+    flex-direction: column;
+    gap: 1rem;
     /* Highlight the currently-playing item: subtle accent ring + glow. */
     border: 1px solid var(--accent);
     box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.25), 0 6px 18px rgba(108, 92, 231, 0.18);
 }
-.np-info {
-    flex: 1;
-    min-width: 0;
-}
-.np-info h3 {
-    margin-bottom: 0.5rem;
+/* Title spans the full card width. */
+.np-title {
+    margin: 0;
     font-size: 1.4rem;
     line-height: 1.25;
     overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+}
+/* Poster (2:3) on the left, playback info on the right. */
+.np-body {
+    display: flex;
+    gap: 1.25rem;
+    align-items: stretch;
+}
+.np-playback {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0.5rem;
 }
 .np-progress {
     height: 6px;
     background: var(--border);
     border-radius: 3px;
     overflow: hidden;
-    margin: 0.75rem 0;
 }
 .progress-bar {
     height: 100%;
@@ -348,8 +360,43 @@ a:hover {
     transition: width 1s linear;
 }
 .np-time {
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+/* Details below the poster/time row: category + tag chips, then description. */
+.np-details {
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+.np-facets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.np-chip {
+    font-size: 0.7rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.np-chip-cat {
+    background: var(--accent);
+    color: #fff;
+}
+.np-chip-tag {
+    background: var(--bg-elevated, #2a2a38);
     color: var(--text-secondary);
+    border: 1px solid var(--border);
+}
+.np-description {
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0;
+    overflow-wrap: anywhere;
 }
 
 .queue-list {
@@ -412,8 +459,8 @@ a:hover {
     display: block;
 }
 .np-cover {
-    width: 128px;
-    height: 128px;
+    width: 120px;
+    aspect-ratio: 2 / 3;
     flex-shrink: 0;
     border-radius: 8px;
     overflow: hidden;
@@ -482,15 +529,13 @@ a:hover {
     margin: 0.25rem 0;
 }
 .np-times {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
     font-size: 0.9rem;
-    margin-top: 0.5rem;
     white-space: nowrap;
 }
 .np-remaining {
+    font-size: 0.85rem;
     color: var(--text-secondary);
+    margin-top: 0.1rem;
 }
 
 /* WebSocket status */

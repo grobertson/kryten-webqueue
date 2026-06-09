@@ -374,6 +374,31 @@ class Database:
     async def get_item_admin(self, friendly_token: str) -> dict | None:
         return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
 
+    async def get_item_facets(self, friendly_token: str) -> dict:
+        """Return category and tag names for a single catalog item."""
+        cats = await self._fetch_all(
+            """
+            SELECT cat.name FROM catalog_categories cc
+            JOIN categories cat ON cc.category_id = cat.id
+            WHERE cc.friendly_token = ?
+            ORDER BY cat.name
+            """,
+            [friendly_token],
+        )
+        tags = await self._fetch_all(
+            """
+            SELECT t.name FROM catalog_tags ct
+            JOIN tags t ON ct.tag_id = t.id
+            WHERE ct.friendly_token = ?
+            ORDER BY t.name
+            """,
+            [friendly_token],
+        )
+        return {
+            "categories": [c["name"] for c in cats],
+            "tags": [t["name"] for t in tags],
+        }
+
     async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
         """Return a lookup of catalog metadata keyed by BOTH friendly_token and
         manifest_url, for enriching queue-shadow items that may only carry one.
@@ -383,7 +408,7 @@ class Database:
             return {}
         placeholders = ",".join("?" * len(keys))
         rows = await self._fetch_all(
-            "SELECT friendly_token, manifest_url, title, duration_sec, "
+            "SELECT friendly_token, manifest_url, title, description, duration_sec, "
             "cover_art_path, thumbnail_url FROM catalog "
             f"WHERE friendly_token IN ({placeholders}) OR manifest_url IN ({placeholders})",
             keys + keys,

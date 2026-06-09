@@ -15,7 +15,7 @@
         <div class="queue-section-header">
             <h2>Up Next</h2>
             <label class="toggle-switch" title="Hide items before the currently playing one">
-                <input type="checkbox" id="hide-previous-toggle" onchange="toggleHidePrevious(this.checked)">
+                <input type="checkbox" id="hide-previous-toggle" checked onchange="toggleHidePrevious(this.checked)">
                 <span class="toggle-slider"></span>
                 <span>Hide Previous</span>
             </label>
@@ -43,7 +43,7 @@
 <script>
 let ws = null;
 let reconnectTimer = null;
-let hidePrevious = false;
+let hidePrevious = true;
 let lastState = null;
 
 function toggleHidePrevious(checked) {
@@ -101,21 +101,34 @@ function renderQueue(state) {
         // runtime (`duration` is a preformatted "HH:MM:SS" string).
         const total = Number(np.seconds ?? np.duration_sec ?? 0) || 0;
         const remaining = Math.max(0, total - elapsed);
+        const pct = total > 0 ? (elapsed / total * 100) : 0;
+        const cats = Array.isArray(np.categories) ? np.categories : [];
+        const tags = Array.isArray(np.tags) ? np.tags : [];
+        const facetHtml = [
+            ...cats.map(c => `<span class="np-chip np-chip-cat">${escapeHtml(c)}</span>`),
+            ...tags.map(t => `<span class="np-chip np-chip-tag">${escapeHtml(t)}</span>`),
+        ].join('');
+        const desc = (np.description || '').trim();
         npEl.innerHTML = `
-            <div class="np-cover">${coverHtml(np)}</div>
-            <div class="np-info">
-                <h3>${escapeHtml(np.title || 'Unknown')}</h3>
-                <div class="np-meta">
-                    ${np.paid_by ? `<span class="np-user">Queued by ${escapeHtml(np.paid_by)}</span>` : ''}
-                </div>
-                <div class="np-progress">
-                    <div class="progress-bar" style="width: ${total > 0 ? (elapsed / total * 100) : 0}%"></div>
-                </div>
-                <div class="np-times">
-                    <span class="np-time">${formatTime(elapsed)} / ${formatTime(total)}</span>
-                    <span class="np-remaining">${formatTime(remaining)} remaining</span>
+            <h3 class="np-title">${escapeHtml(np.title || 'Unknown')}</h3>
+            ${np.paid_by ? `<div class="np-meta"><span class="np-user">Queued by ${escapeHtml(np.paid_by)}</span></div>` : ''}
+            <div class="np-body">
+                <div class="np-cover">${coverHtml(np)}</div>
+                <div class="np-playback">
+                    <div class="np-times">
+                        <span class="np-time">${formatTime(elapsed)} / ${formatTime(total)}</span>
+                    </div>
+                    <div class="np-progress">
+                        <div class="progress-bar" style="width: ${pct}%"></div>
+                    </div>
+                    <div class="np-remaining">${formatTime(remaining)} remaining</div>
                 </div>
             </div>
+            ${(desc || facetHtml) ? `
+            <div class="np-details">
+                ${facetHtml ? `<div class="np-facets">${facetHtml}</div>` : ''}
+                ${desc ? `<p class="np-description">${escapeHtml(desc)}</p>` : ''}
+            </div>` : ''}
         `;
     } else {
         npEl.innerHTML = '<p class="empty-state">Nothing playing</p>';
