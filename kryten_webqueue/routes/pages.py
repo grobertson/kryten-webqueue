@@ -2,12 +2,40 @@ from fastapi import APIRouter, Request, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
+import random
 
 from ..auth.session import get_current_user
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 router = APIRouter(tags=["pages"])
+
+# Sort keys exposed in the browse/search UI. Order defines the dropdown order.
+SORT_OPTIONS = [
+    ("default", "Default"),
+    ("title_asc", "Title A–Z"),
+    ("title_desc", "Title Z–A"),
+    ("newest", "Newest first"),
+    ("oldest", "Oldest first"),
+]
+_VALID_SORTS = {key for key, _ in SORT_OPTIONS}
+
+
+def _decorate_placeholder_art(request: Request, items: list[dict]) -> None:
+    """Assign a random branded placeholder URL to tiles lacking real poster art.
+
+    A genuine poster match (cover_art_source in tmdb/omdb) is left untouched;
+    everything else gets a stable-per-render random placeholder, with the real
+    MediaCMS thumbnail revealed on hover. Mutates each item dict in place.
+    """
+    cover_art = getattr(request.app.state, "cover_art", None)
+    urls = cover_art.list_placeholder_urls() if cover_art else []
+    if not urls:
+        return
+    for item in items:
+        if item.get("cover_art_source") not in ("tmdb", "omdb"):
+            item["placeholder_art"] = random.choice(urls)
+
 
 
 def _get_user_or_none(request: Request) -> dict | None:
@@ -42,18 +70,20 @@ async def login_page(request: Request):
 @router.get("/catalog/browse", response_class=HTMLResponse)
 async def catalog_browse_page(request: Request, category: str | None = None,
                               tag: str | None = None, page: int = 1,
-                              show_hidden: int = 0):
+                              show_hidden: int = 0, sort: str = "default"):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
     db = request.app.state.db
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
-    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden)
+    sort = sort if sort in _VALID_SORTS else "default"
+    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort)
     total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
+    _decorate_placeholder_art(request, items)
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
@@ -66,12 +96,14 @@ async def catalog_browse_page(request: Request, category: str | None = None,
         "query": None,
         "is_admin": is_admin,
         "show_hidden": show_hidden,
+        "sort": sort,
+        "sort_options": SORT_OPTIONS,
     })
 
 
 @router.get("/catalog/search", response_class=HTMLResponse)
 async def catalog_search_page(request: Request, q: str = "", page: int = 1,
-                             show_hidden: int = 0):
+                             show_hidden: int = 0, sort: str = "default"):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
@@ -80,11 +112,13 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
     db = request.app.state.db
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
-    items = await db.search(q, page=page, show_hidden=show_hidden)
+    sort = sort if sort in _VALID_SORTS else "default"
+    items = await db.search(q, page=page, show_hidden=show_hidden, sort=sort)
     total = await db.search_count(q, show_hidden=show_hidden)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
+    _decorate_placeholder_art(request, items)
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
@@ -97,6 +131,8 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
         "query": q,
         "is_admin": is_admin,
         "show_hidden": show_hidden,
+        "sort": sort,
+        "sort_options": SORT_OPTIONS,
     })
 
 

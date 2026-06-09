@@ -3,6 +3,12 @@ from pydantic import BaseModel
 import json
 
 
+class FetchUrlsConfig(BaseModel):
+    """Settings for the fetchurls job (v1 = local file only, OQ-1)."""
+
+    workbook_path: str = ""  # absolute path to a synced Channel Z Playlist .xlsx
+
+
 class Config(BaseModel):
     """Application configuration loaded from JSON file."""
 
@@ -24,6 +30,10 @@ class Config(BaseModel):
     # Cover art APIs
     tmdb_api_key: str = ""
     omdb_api_key: str = ""
+
+    # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
+    fetch_cookies_path: str = ""          # optional yt-dlp cookies for gated sources
+    fetchurls: FetchUrlsConfig = FetchUrlsConfig()
 
     # Database
     db_path: str = "/var/lib/kryten-webqueue/webqueue.db"

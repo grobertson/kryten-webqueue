@@ -118,6 +118,9 @@ class CatalogSync:
             "duration_sec": media.get("duration") or 0,
             "manifest_url": self._build_manifest_url(media),
             "thumbnail_url": media.get("thumbnail_url", ""),
+            # True MediaCMS publish time so "Newest first" browse ordering is
+            # accurate; falls back to now when the field is absent.
+            "added_at": media.get("add_date") or now,
             "synced_at": now,
         }
 

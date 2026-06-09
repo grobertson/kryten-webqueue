@@ -23,6 +23,11 @@
                     <option value="{{ tag.name }}" {% if active_tag == tag.name %}selected{% endif %}>{{ tag.name }}</option>
                 {% endfor %}
             </select>
+            <select id="sort-select" onchange="applyFacets()" title="Sort order">
+                {% for key, label in sort_options %}
+                    <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
     </div>
     {% if is_admin %}
@@ -41,12 +46,29 @@
     {% for item in items %}
     <div class="catalog-card" data-token="{{ item.friendly_token }}">
         <a class="card-poster" href="/catalog/item/{{ item.friendly_token }}">
-            {% if item.cover_art_path %}
+            {% if item.cover_art_source in ('tmdb', 'omdb') and item.cover_art_path %}
                 <img src="/images/{{ item.cover_art_path }}/400.webp"
                      srcset="/images/{{ item.cover_art_path }}/200.webp 200w,
                              /images/{{ item.cover_art_path }}/400.webp 400w,
                              /images/{{ item.cover_art_path }}/800.webp 800w"
                      sizes="(max-width: 600px) 200px, 400px"
+                     alt="{{ item.title }}" loading="lazy">
+            {% elif item.placeholder_art %}
+                {# Branded placeholder up front; reveal the real (often poor)
+                   thumbnail on hover via CSS crossfade. #}
+                <div class="card-poster-art">
+                    <img class="poster-branded" src="{{ item.placeholder_art }}"
+                         alt="{{ item.title }}" loading="lazy">
+                    {% if item.thumbnail_url %}
+                    <img class="poster-real" src="{{ item.thumbnail_url }}"
+                         alt="" loading="lazy" aria-hidden="true">
+                    {% elif item.cover_art_path %}
+                    <img class="poster-real" src="/images/{{ item.cover_art_path }}/400.webp"
+                         alt="" loading="lazy" aria-hidden="true">
+                    {% endif %}
+                </div>
+            {% elif item.cover_art_path %}
+                <img src="/images/{{ item.cover_art_path }}/400.webp"
                      alt="{{ item.title }}" loading="lazy">
             {% elif item.thumbnail_url %}
                 <img src="{{ item.thumbnail_url }}"
@@ -67,6 +89,9 @@
             <button class="btn btn-sm btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
             {% if user.rank >= 3 %}
             <button class="btn btn-sm btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
+            <button class="btn btn-sm" onclick="addToPlaylist('{{ item.friendly_token }}')">Add to playlist</button>
+            <button class="btn btn-sm" onclick="addToRecentPlaylist('{{ item.friendly_token }}')">+ Recent</button>
+            <button class="btn btn-sm btn-danger" onclick="hideItem('{{ item.friendly_token }}')">Hide</button>
             {% endif %}
         </div>
     </div>
@@ -79,9 +104,10 @@
 </div>
 {% endif %}
 
+{% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm">&larr; Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -90,29 +116,160 @@
         {% if p == page %}
             <span class="page-num page-current">{{ p }}</span>
         {% else %}
-            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm btn-page">{{ p }}</a>
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm btn-page">{{ p }}</a>
         {% endif %}
     {% endfor %}
 
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}" class="btn btn-sm">Next &rarr;</a>
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+const CURRENT_QUERY = {{ (query | tojson) if query else 'null' }};
+
 function applyFacets() {
     const cat = document.getElementById('category-select').value;
     const tag = document.getElementById('tag-select').value;
+    const sort = document.getElementById('sort-select').value;
+    try { localStorage.setItem('browse_sort', sort); } catch (e) { /* ignore */ }
     const params = new URLSearchParams();
-    if (cat) params.set('category', cat);
-    if (tag) params.set('tag', tag);
+    // On a search results page, preserve the query and stay on /catalog/search.
+    if (CURRENT_QUERY) {
+        params.set('q', CURRENT_QUERY);
+    } else {
+        if (cat) params.set('category', cat);
+        if (tag) params.set('tag', tag);
+    }
+    if (sort && sort !== 'default') params.set('sort', sort);
+    const base = CURRENT_QUERY ? '/catalog/search' : '/catalog/browse';
     const qs = params.toString();
-    window.location.href = '/catalog/browse' + (qs ? '?' + qs : '');
+    window.location.href = base + (qs ? '?' + qs : '');
 }
-// queueItem / playNext / queueAsAdmin are provided by /static/js/main.js
+
+// Restore the persisted sort preference when arriving without an explicit sort.
+(function restoreSortPreference() {
+    const sel = document.getElementById('sort-select');
+    if (!sel) return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('sort')) return;
+    let saved = null;
+    try { saved = localStorage.getItem('browse_sort'); } catch (e) { /* ignore */ }
+    if (saved && saved !== 'default' && sel.value === 'default'
+        && [...sel.options].some(o => o.value === saved)) {
+        sel.value = saved;
+        applyFacets();
+    }
+})();
+
+// --- Admin tile actions (rank >= 3) ---
+
+async function addToPlaylist(token) {
+    let playlists = [];
+    try {
+        const resp = await fetch('/admin/playlists/', { credentials: 'same-origin' });
+        if (resp.ok) playlists = await resp.json();
+    } catch (e) { /* handled below */ }
+    if (!playlists.length) {
+        showToast('No playlists yet — create one first', 'error');
+        return;
+    }
+    showPlaylistPickerModal(token, playlists);
+}
+
+function showPlaylistPickerModal(token, playlists) {
+    closePlaylistPickerModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'playlist-picker-modal';
+    overlay.className = 'modal-overlay';
+    const opts = playlists.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>Add to playlist</h3>
+            <div class="field">
+                <label for="playlist-picker-select">Playlist</label>
+                <select id="playlist-picker-select">${opts}</select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                <button class="btn btn-primary" data-action="add">Add</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closePlaylistPickerModal();
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') closePlaylistPickerModal();
+        if (action === 'add') {
+            const pid = document.getElementById('playlist-picker-select').value;
+            closePlaylistPickerModal();
+            submitAddToPlaylist(pid, token);
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+function closePlaylistPickerModal() {
+    const existing = document.getElementById('playlist-picker-modal');
+    if (existing) existing.remove();
+}
+
+async function submitAddToPlaylist(playlistId, token) {
+    try {
+        const resp = await fetch(`/admin/playlists/${playlistId}/append`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ friendly_token: token })
+        });
+        const data = await resp.json();
+        showToast(resp.ok ? `Added (${data.count} items)` : (data.detail || `Failed (${resp.status})`),
+            resp.ok ? 'success' : 'error');
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+
+async function addToRecentPlaylist(token) {
+    try {
+        const resp = await fetch('/admin/playlists/recent/append', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ friendly_token: token })
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            showToast(`Added to "${data.name}" (${data.count})`);
+        } else {
+            showToast(data.detail || `Failed (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+
+async function hideItem(token) {
+    if (!confirm('Hide this item from the catalog? It will be tagged `kryten-hidden` in MediaCMS.')) return;
+    try {
+        const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}/hide`, {
+            method: 'POST', credentials: 'same-origin'
+        });
+        if (resp.ok) {
+            const card = document.querySelector(`.catalog-card[data-token="${token}"]`);
+            if (card) card.remove();
+            showToast('Item hidden');
+        } else {
+            const data = await resp.json().catch(() => ({}));
+            showToast(data.detail || `Failed (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+// queueItem / playNext / queueAsAdmin / showToast / escapeHtml are provided by /static/js/main.js
 </script>
 {% endblock %}

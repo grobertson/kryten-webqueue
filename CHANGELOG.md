@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased]
+
+### Added
+
+- **Reimplemented content jobs (vendored).** Five tools are vendored into `kryten_webqueue/integrations/` and driven in-process as parameterized jobs, replacing the Windows-script workflow:
+  - `enrichtitles`, `enrichmeta`, `enrichtv` — clean titles / enrich movie & TV metadata via TMDb/OMDb, pushing to MediaCMS. Params: `dry_run`, `limit`, `days` (+ tool-specific `tubi_upgrade`, `min_score`, `min_duration`, `max_duration`, `delay`).
+  - `fetch` — download a yt-dlp-supported URL (single or playlist) to MediaCMS with `quality` (`best`/`good`/`medium`) and an optional **Add to playlist** that appends the uploaded item(s) to a saved playlist.
+  - `fetchurls` — read the upcoming **weekend's** Channel Z workbook from a local `.xlsx` (file-only, no SharePoint/Graph in v1), resolve off-site URLs via the in-process downloader, and import each section as a saved playlist named `{sheet}-{section}` (idempotent re-runs replace items). The target sheet is always the imminent Fri/Sat (Friday → today; Sat/Sun → next Friday).
+  Each blocking tool runs off the event loop via `asyncio.to_thread`, bridging progress back to the `job_runs` row. Jobs whose optional dependencies are missing register normally but fail the run fast with a clear "dependency not installed" message. New optional extra `jobs` (`yt-dlp`, `openpyxl`, `requests`, `pyyaml`); `fetch` additionally needs `ffmpeg` on the host. New config: `fetch_cookies_path`, `fetchurls.workbook_path`.
+- **Parameterized background jobs.** The job framework now supports declarative parameter schemas: `JobManager.register(name, func, *, label, schema)` and `run(name, *, triggered_by, params)`. Job functions receive `(params, ctx)` where `ctx` exposes `db`, `api_gate`, `config`, `triggered_by`, and an async `progress(detail)` callback that writes live progress to the run's `job_runs` row. Submitted params are validated/coerced against the schema (required, defaults, `string`/`int`/`float`/`bool`/`enum`/`playlist` types) and persisted to the new `job_runs.params` column. The admin **Run** button opens a schema-driven modal for jobs that declare parameters (and runs immediately for those that don't); each job also shows a last-run summary. New endpoint `GET /admin/jobs/{name}/schema`; `GET /admin/jobs` now includes each job's `schema` + `last_run`; `POST /admin/jobs/{name}/run` accepts a JSON `{params}` body (400 on invalid params).
+- **Browse sort control.** Browse and search now offer a *Sort by* dropdown — `Default` (quality-weighted), `Title A–Z`, `Title Z–A`, `Newest first`, `Oldest first` — available to everyone. The choice carries through pagination and the facet form and is remembered per-browser via `localStorage`. `Newest`/`Oldest` order by the catalog `added_at`, which is now populated from the MediaCMS `add_date` on sync (and backfilled from `synced_at` for existing rows).
+- **Branded placeholder art with hover-to-thumbnail.** Tiles without a real poster match (no TMDB/OMDB art) now show a random branded placeholder from `placeholder_dir` instead of the raw MediaCMS thumbnail; hovering reveals the real thumbnail via a CSS crossfade. The placeholder list is cached in memory and rescanned periodically.
+- **Admin tile actions.** Catalog tiles now offer admins (rank ≥ 3) *Add to playlist* (picker modal), *+ Recent* (append to the admin's most recently created playlist, no modal), and *Hide* (tags the item `kryten-hidden` in MediaCMS and hides it locally immediately). New endpoints: `POST /admin/playlists/{id}/append`, `POST /admin/playlists/recent/append`, `POST /admin/catalog/{token}/hide`, and `POST /admin/catalog/{token}/unhide`.
+
+### Changed
+
+- **Tile action buttons stack vertically**, full-width, for clearer affordance at narrow tile widths.
+
+### Fixed
+
+- **Job-run history no longer shows phantom `running` rows.** A job's running flag lived only in memory, so a restart or killed worker mid-run left the `job_runs` row stuck at `running` forever. On startup such orphans are now reconciled to a new `interrupted` status (styled in the admin dashboard).
+
+### Removed
+
+- **Live queue page no longer shows the order number or a drag handle.** The `qi-pos` index and the non-functional `qi-drag` (☰) affordance were removed; reordering lives in the playlist editor, not the live queue.
+
 ## [0.8.2] - 2026-06-08
 
 ### Fixed

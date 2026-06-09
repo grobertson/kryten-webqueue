@@ -28,6 +28,7 @@ from .routes.admin_playlists import router as admin_playlists_router
 from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
+from .routes.admin_catalog import router as admin_catalog_router
 from .routes.pages import router as pages_router
 from .ws.handler import router as ws_router
 
@@ -42,6 +43,11 @@ async def lifespan(app: FastAPI):
     db = Database(config.db_path)
     await db.connect()
     await db.run_migrations()
+    # Any job run still marked 'running' is an orphan from a prior crash/restart
+    # (the running flag is in-memory only). Reconcile before registering jobs.
+    orphaned = await db.reconcile_orphaned_job_runs()
+    if orphaned:
+        logger.warning("Reconciled %d orphaned job run(s) to 'interrupted'", orphaned)
     app.state.db = db
 
     # API Gate client
@@ -67,12 +73,38 @@ async def lifespan(app: FastAPI):
     app.state.catalog_sync = catalog_sync
 
     # Generic background job runner (records run history to job_runs)
-    job_manager = JobManager(db)
+    job_manager = JobManager(db, api_gate=api_gate, config=config)
+
+    async def _catalog_sync_job(params, ctx):
+        # catalog_sync registers with no schema; params/ctx are ignored. The
+        # adapter keeps the zero-arg sync compatible with the params/ctx job API.
+        return await catalog_sync.sync()
+
     job_manager.register(
         "catalog_sync",
-        catalog_sync.sync,
+        _catalog_sync_job,
         label="Catalog Sync",
     )
+
+    # Reimplemented cmsutils enrichment jobs (vendored, run off-loop). These
+    # register regardless of optional deps; a missing dep fails the run fast
+    # with a clear message rather than crashing startup.
+    from .jobs.tasks import (
+        enrichtitles_job, enrichmeta_job, enrichtv_job,
+        fetch_job, fetchurls_job,
+        ENRICHTITLES_SCHEMA, ENRICHMETA_SCHEMA, ENRICHTV_SCHEMA,
+        FETCH_SCHEMA, FETCHURLS_SCHEMA,
+    )
+    job_manager.register("enrichtitles", enrichtitles_job,
+                         label="Enrich Titles", schema=ENRICHTITLES_SCHEMA)
+    job_manager.register("enrichmeta", enrichmeta_job,
+                         label="Enrich Movie Metadata", schema=ENRICHMETA_SCHEMA)
+    job_manager.register("enrichtv", enrichtv_job,
+                         label="Enrich TV Metadata", schema=ENRICHTV_SCHEMA)
+    job_manager.register("fetch", fetch_job,
+                         label="Fetch (download → MediaCMS)", schema=FETCH_SCHEMA)
+    job_manager.register("fetchurls", fetchurls_job,
+                         label="Fetch URLs (weekend workbook)", schema=FETCHURLS_SCHEMA)
     app.state.job_manager = job_manager
 
     # WebSocket manager
@@ -184,6 +216,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_schedules_router)
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
+    app.include_router(admin_catalog_router)
     app.include_router(ws_router)
 
     # Health check

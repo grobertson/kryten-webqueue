@@ -7,26 +7,27 @@ router = APIRouter(prefix="/catalog", tags=["catalog"])
 
 @router.get("/browse")
 async def browse(request: Request, category: str | None = None, tag: str | None = None,
-                 page: int = 1, show_hidden: int = 0, user: dict = Depends(get_current_user)):
+                 page: int = 1, show_hidden: int = 0, sort: str = "default",
+                 user: dict = Depends(get_current_user)):
     """Browse catalog with optional category/tag filter."""
     db = request.app.state.db
     show_hidden = bool(show_hidden) and (user.get("rank") or 0) >= 3
-    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden)
+    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
-    return {"items": items, "categories": categories, "tags": tags, "page": page}
+    return {"items": items, "categories": categories, "tags": tags, "page": page, "sort": sort}
 
 
 @router.get("/search")
 async def search(request: Request, q: str = "", page: int = 1, show_hidden: int = 0,
-                 user: dict = Depends(get_current_user)):
+                 sort: str = "default", user: dict = Depends(get_current_user)):
     """Full-text search of catalog."""
     if not q.strip():
         raise HTTPException(400, "Query required")
     db = request.app.state.db
     show_hidden = bool(show_hidden) and (user.get("rank") or 0) >= 3
-    items = await db.search(q, page=page, show_hidden=show_hidden)
-    return {"items": items, "query": q, "page": page}
+    items = await db.search(q, page=page, show_hidden=show_hidden, sort=sort)
+    return {"items": items, "query": q, "page": page, "sort": sort}
 
 
 @router.get("/item/{friendly_token}")

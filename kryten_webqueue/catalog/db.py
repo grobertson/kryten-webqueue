@@ -27,7 +27,13 @@ HIDDEN_TAG_NAMES = [
     "grindhousetrailer",
     "publicaccess",
     "religioustv",
+    "kryten-hidden",
 ]
+
+# Tag applied by the admin "Hide Item" action. Source of truth is MediaCMS;
+# this is mirrored into the local catalog_tags join so the hidden-tag filter
+# applies immediately (before the next sync confirms it).
+HIDDEN_ITEM_TAG = "kryten-hidden"
 
 
 def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
@@ -51,6 +57,29 @@ def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
             )
     """
     return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
+
+
+# Default quality-weighted ordering (see browse() for rationale).
+_DEFAULT_ORDER = """
+    ORDER BY
+        (c.cover_art_source IN ('tmdb', 'omdb')) DESC,
+        (CASE WHEN c.title GLOB '[A-Za-z]*' THEN 0 ELSE 1 END) ASC,
+        c.title ASC
+"""
+
+# Map a user-facing sort key to an ORDER BY clause referencing the catalog row
+# under alias ``c``. Unknown keys fall back to the default quality ordering.
+_SORT_CLAUSES = {
+    "default": _DEFAULT_ORDER,
+    "title_asc": " ORDER BY c.title ASC ",
+    "title_desc": " ORDER BY c.title DESC ",
+    "newest": " ORDER BY c.added_at DESC, c.synced_at DESC ",
+    "oldest": " ORDER BY c.added_at ASC, c.synced_at ASC ",
+}
+
+
+def _browse_order_clause(sort: str | None) -> str:
+    return _SORT_CLAUSES.get(sort or "default", _DEFAULT_ORDER)
 
 
 MIGRATIONS = [
@@ -232,6 +261,16 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_job_runs_name ON job_runs(job_name, started_at);
     """,
+    # v5: Record the parameters a job run was started with.
+    """
+    ALTER TABLE job_runs ADD COLUMN params TEXT;
+    """,
+    # v6: Stopgap backfill of catalog.added_at (previously never populated on
+    # insert). Lets "Newest first" browse ordering work before the next full
+    # sync overwrites these with the true MediaCMS add_date.
+    """
+    UPDATE catalog SET added_at = synced_at WHERE added_at IS NULL;
+    """,
 ]
 
 
@@ -286,9 +325,9 @@ class Database:
 
     # --- Catalog ---
 
-    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False) -> list[dict]:
+    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
         query = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
             FROM catalog c
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
@@ -331,13 +370,8 @@ class Database:
         #   2. Titles beginning with a letter before number/symbol-prefixed
         #      "02 - Episode" style entries.
         #   3. Finally alphabetical for a stable, predictable tail.
-        query += """
-            ORDER BY
-                (c.cover_art_source IN ('tmdb', 'omdb')) DESC,
-                (CASE WHEN c.title GLOB '[A-Za-z]*' THEN 0 ELSE 1 END) ASC,
-                c.title ASC
-            LIMIT ? OFFSET ?
-        """
+        query += _browse_order_clause(sort)
+        query += " LIMIT ? OFFSET ?"
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
@@ -376,9 +410,9 @@ class Database:
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
-    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24, show_hidden: bool = False) -> list[dict]:
+    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
         sql = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url,
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid
@@ -394,10 +428,10 @@ class Database:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
-        sql += """
-            ORDER BY rank
-            LIMIT ? OFFSET ?
-        """
+        # Relevance is the natural default for a text query; other sort keys let
+        # the user reorder the matched set explicitly.
+        sql += " ORDER BY rank " if (sort or "default") == "default" else _browse_order_clause(sort)
+        sql += " LIMIT ? OFFSET ? "
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(sql, params)
 
@@ -587,13 +621,32 @@ class Database:
             )
         await self._db.commit()
 
+    async def add_catalog_tag(self, friendly_token: str, tag_name: str):
+        """Add a single tag to a catalog item (idempotent), creating it if new."""
+        tag_id = await self.upsert_tag(tag_name)
+        await self._db.execute(
+            "INSERT OR IGNORE INTO catalog_tags (friendly_token, tag_id) VALUES (?, ?)",
+            [friendly_token, tag_id],
+        )
+        await self._db.commit()
+
+    async def remove_catalog_tag(self, friendly_token: str, tag_name: str):
+        """Remove a single tag from a catalog item (no-op if absent)."""
+        await self._db.execute(
+            "DELETE FROM catalog_tags WHERE friendly_token = ? AND tag_id IN "
+            "(SELECT id FROM tags WHERE name = ?)",
+            [friendly_token, tag_name],
+        )
+        await self._db.commit()
+
     async def insert_catalog(self, row: dict):
         sql = """
             INSERT INTO catalog (friendly_token, title, description, duration_sec,
-                                 manifest_url, thumbnail_url, synced_at)
+                                 manifest_url, thumbnail_url, added_at, synced_at)
             VALUES (:friendly_token, :title, :description, :duration_sec,
-                    :manifest_url, :thumbnail_url, :synced_at)
+                    :manifest_url, :thumbnail_url, :added_at, :synced_at)
         """
+        row = {"added_at": row.get("synced_at"), **row}
         await self._db.execute(sql, row)
         # Update FTS index
         await self._db.execute(
@@ -607,9 +660,12 @@ class Database:
         sql = """
             UPDATE catalog SET title=:title, description=:description,
                    duration_sec=:duration_sec, manifest_url=:manifest_url,
-                   thumbnail_url=:thumbnail_url, synced_at=:synced_at, updated_at=:synced_at
+                   thumbnail_url=:thumbnail_url,
+                   added_at=COALESCE(:added_at, added_at),
+                   synced_at=:synced_at, updated_at=:synced_at
             WHERE friendly_token=:friendly_token
         """
+        row = {"added_at": None, **row}
         await self._db.execute(sql, row)
         # Rebuild FTS for this row
         await self._db.execute(
@@ -651,11 +707,12 @@ class Database:
 
     # --- Generic job runs ---
 
-    async def start_job_run(self, job_name: str, triggered_by: str | None = None) -> int:
+    async def start_job_run(self, job_name: str, triggered_by: str | None = None,
+                            params: str | None = None) -> int:
         cursor = await self._db.execute(
-            "INSERT INTO job_runs (job_name, started_at, status, triggered_by) "
-            "VALUES (?, ?, 'running', ?)",
-            [job_name, datetime.now(UTC).isoformat(), triggered_by],
+            "INSERT INTO job_runs (job_name, started_at, status, triggered_by, params) "
+            "VALUES (?, ?, 'running', ?, ?)",
+            [job_name, datetime.now(UTC).isoformat(), triggered_by, params],
         )
         await self._db.commit()
         return cursor.lastrowid
@@ -664,6 +721,12 @@ class Database:
         await self._execute(
             "UPDATE job_runs SET ended_at=?, status=?, detail=? WHERE id=?",
             [datetime.now(UTC).isoformat(), status, detail, run_id],
+        )
+
+    async def update_job_run_detail(self, run_id: int, detail: str | None):
+        """Update only a running job's detail column (used for live progress)."""
+        await self._execute(
+            "UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id]
         )
 
     async def get_job_runs(self, job_name: str | None = None, limit: int = 10) -> list[dict]:
@@ -675,6 +738,22 @@ class Database:
         return await self._fetch_all(
             "SELECT * FROM job_runs ORDER BY id DESC LIMIT ?", [limit]
         )
+
+    async def reconcile_orphaned_job_runs(self) -> int:
+        """Mark any job run still flagged ``running`` as ``interrupted``.
+
+        The ``running`` flag lives only in memory on the JobManager, so a
+        service restart (or a killed worker) mid-run leaves the row stuck at
+        ``running`` forever. Called once on startup to clean up such orphans.
+        Returns the number of rows reconciled.
+        """
+        cursor = await self._db.execute(
+            "UPDATE job_runs SET status='interrupted', "
+            "ended_at = COALESCE(ended_at, ?) WHERE status='running'",
+            [datetime.now(UTC).isoformat()],
+        )
+        await self._db.commit()
+        return cursor.rowcount or 0
 
     # --- OTP ---
 
@@ -819,6 +898,44 @@ class Database:
                 [playlist_id, i, item["media_type"], item["media_id"], item.get("title"), item.get("duration_sec")],
             )
         await self._db.commit()
+
+    async def append_playlist_item(self, playlist_id: int, item: dict) -> int:
+        """Append a single item to the end of a playlist. Returns new item count."""
+        row = await self._fetch_one(
+            "SELECT COALESCE(MAX(position), -1) AS pos, COUNT(*) AS cnt "
+            "FROM saved_playlist_items WHERE playlist_id=?",
+            [playlist_id],
+        )
+        next_pos = (row["pos"] + 1) if row else 0
+        count = (row["cnt"] if row else 0) + 1
+        await self._db.execute(
+            "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            [playlist_id, next_pos, item["media_type"], item["media_id"], item.get("title"), item.get("duration_sec")],
+        )
+        await self._db.execute(
+            "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?", [playlist_id]
+        )
+        await self._db.commit()
+        return count
+
+    async def get_most_recent_playlist(self, created_by: str) -> dict | None:
+        """The given admin's most recently *created* saved playlist, if any."""
+        return await self._fetch_one(
+            "SELECT * FROM saved_playlists WHERE created_by=? ORDER BY created_at DESC, id DESC LIMIT 1",
+            [created_by],
+        )
+
+    async def get_playlist_by_name(self, name: str, created_by: str) -> dict | None:
+        """Match an existing saved playlist by exact name + creator.
+
+        Used for idempotent re-imports (e.g. the fetchurls job replacing a
+        section playlist's items rather than creating a duplicate).
+        """
+        return await self._fetch_one(
+            "SELECT * FROM saved_playlists WHERE name=? AND created_by=? ORDER BY id LIMIT 1",
+            [name, created_by],
+        )
 
     # --- Schedules ---
 

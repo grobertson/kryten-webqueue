@@ -143,8 +143,6 @@ function renderQueue(state) {
             .filter(({ i }) => !(hidePrevious && nowIndex >= 0 && i < nowIndex))
             .map(({ item, i }) => `
             <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''} ${nowUid != null && String(item.uid) === nowUid ? 'queue-item-now-playing' : ''}" data-uid="${item.uid}">
-                <span class="qi-drag" title="Drag to reorder">☰</span>
-                <span class="qi-pos">${i + 1}</span>
                 <div class="qi-cover">${coverHtml(item)}</div>
                 <div class="qi-info">
                     <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
