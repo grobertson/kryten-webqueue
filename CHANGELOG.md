@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.8.1] - 2026-06-08
+
+### Added
+
+- **True RRULE-based recurring schedules.** Recurring schedules now auto-re-arm: after an automatic timed fire, the scheduler computes the next occurrence from the schedule's `rrule` (anchored on its fire time), advances `fire_at`, clears `fired_at`, and registers the next job — no manual re-arming needed. On startup, recurring schedules whose fire time elapsed while the service was down are advanced to their next future occurrence. Manual "Fire Now" intentionally does **not** advance the recurrence; the originally scheduled occurrence stays armed. Unparseable or exhausted rules are logged and left inert. Adds an explicit `python-dateutil` dependency for RRULE parsing.
+
 ## [0.8.0] - 2026-06-08
 
 ### Added
