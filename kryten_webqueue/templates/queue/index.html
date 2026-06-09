@@ -155,7 +155,7 @@ function renderQueue(state) {
                 </div>
                 <div class="qi-right">
                     <span class="qi-duration">${formatTime(item.duration_sec || 0)}</span>
-                    ${item.estimated_start_at ? `<span class="qi-eta">~${formatEta(item.estimated_start_at)}</span>` : ''}
+                    ${(item.estimated_start_in_sec != null || item.estimated_start_at) ? `<span class="qi-eta">~${formatEta(item)}</span>` : ''}
                 </div>
             </div>
         `).join('');
@@ -196,15 +196,21 @@ function coverHtml(item) {
     return `<div class="cover-placeholder">${escapeHtml(letter)}</div>`;
 }
 
-function formatEta(isoStr) {
-    // Server emits UTC ISO timestamps. If a value arrives without an explicit
-    // timezone designator, treat it as UTC so the browser converts it to the
-    // viewer's local timezone rather than misreading it as local time.
-    let s = String(isoStr);
-    if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) {
-        s += 'Z';
+function formatEta(item) {
+    // Prefer the clock-independent relative offset: the server tells us how many
+    // seconds from now the item plays, and we compute the wall-clock time from
+    // THIS browser's clock. This is immune to server clock skew / timezone
+    // misconfiguration (the usual cause of ETAs shifted by a whole UTC offset).
+    let d;
+    if (item && item.estimated_start_in_sec != null) {
+        d = new Date(Date.now() + Number(item.estimated_start_in_sec) * 1000);
+    } else {
+        // Fallback: absolute UTC ISO timestamp. Append 'Z' if no tz designator
+        // so it's parsed as UTC, then rendered in the viewer's local zone.
+        let s = String(item && item.estimated_start_at ? item.estimated_start_at : item);
+        if (!/[zZ]|[+-]\d{2}:?\d{2}$/.test(s)) s += 'Z';
+        d = new Date(s);
     }
-    const d = new Date(s);
     if (isNaN(d.getTime())) return '';
     return d.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
 }

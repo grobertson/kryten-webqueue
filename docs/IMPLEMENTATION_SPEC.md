@@ -1,4 +1,4 @@
-# kryten-webqueue — Implementation Specification
+                        # kryten-webqueue — Implementation Specification
 
 **Version:** 1.0  
 **Date:** 2026-05-29  

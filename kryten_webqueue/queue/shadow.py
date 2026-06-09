@@ -110,21 +110,34 @@ class QueueShadow:
             await self._recalculate_estimated_starts()
 
     async def _recalculate_estimated_starts(self):
-        """Recalculate estimated start times based on position and now-playing."""
+        """Recalculate estimated start times based on position and now-playing.
+
+        Emits BOTH an absolute UTC timestamp (``estimated_start_at``, kept for
+        compatibility) and a clock-independent relative offset
+        (``estimated_start_in_sec``) = seconds from "now" until the item plays.
+
+        The relative offset is the authoritative value the UI should use: it is
+        immune to server clock skew / timezone misconfiguration, which is the
+        usual cause of ETAs appearing shifted by a whole UTC offset. The browser
+        computes the wall-clock time from its own clock (Date.now() + offset).
+        """
         if not self._items:
             return
 
-        # Start from now-playing elapsed or now
-        start_cursor = datetime.now(UTC)
+        # Offset (seconds from now) until the head of the queue starts playing.
+        offset = 0.0
         if self._now_playing:
             np_total = _to_seconds(self._now_playing.get("seconds", self._now_playing.get("duration")))
             remaining = np_total - _to_seconds(self._now_playing.get("currentTime"))
-            start_cursor += timedelta(seconds=max(0, remaining))
+            offset = max(0.0, remaining)
 
+        now = datetime.now(UTC)
         for item in self._items:
-            item["estimated_start_at"] = start_cursor.isoformat()
-            duration = _to_seconds(item.get("duration_sec"))
-            start_cursor += timedelta(seconds=duration)
+            item["estimated_start_in_sec"] = round(offset)
+            # Absolute timestamp retained for compatibility; relative offset is
+            # what the UI renders.
+            item["estimated_start_at"] = (now + timedelta(seconds=offset)).isoformat()
+            offset += _to_seconds(item.get("duration_sec"))
 
     async def insert_at(self, item: dict, position: int):
         """Insert a new item at given position in local shadow."""
