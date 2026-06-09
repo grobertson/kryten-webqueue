@@ -53,16 +53,125 @@ async function triggerSync() {
     await runJob('catalog_sync');
 }
 
-async function runJob(name) {
-    const resp = await fetch(`/admin/jobs/${name}/run`, {method: 'POST'});
+// Cache of the most recent /admin/jobs payload so the Run buttons know each
+// job's parameter schema without an extra round-trip.
+let JOBS_CACHE = [];
+
+async function runJob(name, params) {
+    const resp = await fetch(`/admin/jobs/${name}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params ? { params } : {})
+    });
     if (resp.ok) {
         showToast('Job started', 'success');
     } else if (resp.status === 409) {
         showToast('Job already running', 'error');
+    } else if (resp.status === 400) {
+        const data = await resp.json().catch(() => ({}));
+        showToast(data.detail || 'Invalid parameters', 'error');
     } else {
         showToast('Failed to start job', 'error');
     }
     loadJobs();
+}
+
+// Entry point for a Run button: jobs with a schema open a parameter modal,
+// jobs without one run immediately.
+function startJob(name) {
+    const job = JOBS_CACHE.find(j => j.name === name);
+    if (job && Array.isArray(job.schema) && job.schema.length) {
+        openJobRunnerModal(job);
+    } else {
+        runJob(name);
+    }
+}
+
+function _jobFieldHtml(f) {
+    const id = `jobparam-${f.name}`;
+    const label = escapeHtml(f.label || f.name);
+    const def = f.default;
+    if (f.type === 'bool') {
+        return `<label class="field field-inline">
+            <input type="checkbox" id="${id}" ${def ? 'checked' : ''}>
+            <span>${label}</span>
+        </label>`;
+    }
+    if (f.type === 'enum') {
+        const opts = (f.options || []).map(o => {
+            const val = (o && typeof o === 'object') ? o.value : o;
+            const txt = (o && typeof o === 'object') ? (o.label || o.value) : o;
+            const sel = (val === def) ? 'selected' : '';
+            return `<option value="${escapeHtml(String(val))}" ${sel}>${escapeHtml(String(txt))}</option>`;
+        }).join('');
+        return `<label class="field"><span>${label}</span>
+            <select id="${id}">${opts}</select></label>`;
+    }
+    if (f.type === 'playlist') {
+        return `<label class="field"><span>${label}</span>
+            <select id="${id}" data-playlist-picker="1"><option value="">—</option></select></label>`;
+    }
+    const inputType = (f.type === 'int' || f.type === 'float') ? 'number' : 'text';
+    const step = f.type === 'float' ? ' step="any"' : '';
+    const val = (def === null || def === undefined) ? '' : escapeHtml(String(def));
+    return `<label class="field"><span>${label}${f.required ? ' *' : ''}</span>
+        <input type="${inputType}"${step} id="${id}" value="${val}"></label>`;
+}
+
+async function openJobRunnerModal(job) {
+    closeJobRunnerModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'job-runner-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>Run: ${escapeHtml(job.label)}</h3>
+            <div class="job-params">${job.schema.map(_jobFieldHtml).join('')}</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                <button class="btn btn-primary" data-action="run">Run</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closeJobRunnerModal();
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') closeJobRunnerModal();
+        if (action === 'run') submitJobRunner(job);
+    });
+    document.body.appendChild(overlay);
+
+    // Populate any playlist pickers.
+    const pickers = overlay.querySelectorAll('[data-playlist-picker]');
+    if (pickers.length) {
+        try {
+            const r = await fetch('/admin/playlists/', { credentials: 'same-origin' });
+            if (r.ok) {
+                const playlists = await r.json();
+                const opts = playlists.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+                pickers.forEach(sel => { sel.innerHTML = '<option value="">—</option>' + opts; });
+            }
+        } catch (e) { /* leave empty */ }
+    }
+}
+
+function submitJobRunner(job) {
+    const params = {};
+    for (const f of job.schema) {
+        const el = document.getElementById(`jobparam-${f.name}`);
+        if (!el) continue;
+        if (f.type === 'bool') {
+            params[f.name] = el.checked;
+        } else if (el.value !== '') {
+            params[f.name] = el.value;
+        }
+    }
+    closeJobRunnerModal();
+    runJob(job.name, params);
+}
+
+function closeJobRunnerModal() {
+    const existing = document.getElementById('job-runner-modal');
+    if (existing) existing.remove();
 }
 
 async function clearActiveSchedule() {
@@ -75,15 +184,24 @@ async function loadJobs() {
     const jResp = await fetch('/admin/jobs');
     if (jResp.ok) {
         const jobs = await jResp.json();
+        JOBS_CACHE = jobs;
         const el = document.getElementById('jobs-list');
         el.innerHTML = jobs.length
-            ? jobs.map(j => `
+            ? jobs.map(j => {
+                const hasParams = Array.isArray(j.schema) && j.schema.length;
+                const lr = j.last_run;
+                const summary = lr
+                    ? `<span class="job-last-run">last: <span class="job-status job-status-${escapeHtml(lr.status || '')}">${escapeHtml(lr.status || '')}</span> ${formatLocalDateTime(lr.started_at)}</span>`
+                    : '<span class="job-last-run muted">never run</span>';
+                return `
                 <div class="job-row">
-                    <span class="job-label">${escapeHtml(j.label)}</span>
-                    <button class="btn btn-sm" onclick="runJob('${j.name}')" ${j.running ? 'disabled' : ''}>
-                        ${j.running ? 'Running…' : 'Run'}
+                    <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}</span>
+                    ${summary}
+                    <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>
+                        ${j.running ? 'Running…' : (hasParams ? 'Run…' : 'Run')}
                     </button>
-                </div>`).join('')
+                </div>`;
+            }).join('')
             : '<p>No jobs registered</p>';
     }
 

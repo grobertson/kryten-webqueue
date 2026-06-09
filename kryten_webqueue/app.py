@@ -73,10 +73,16 @@ async def lifespan(app: FastAPI):
     app.state.catalog_sync = catalog_sync
 
     # Generic background job runner (records run history to job_runs)
-    job_manager = JobManager(db)
+    job_manager = JobManager(db, api_gate=api_gate, config=config)
+
+    async def _catalog_sync_job(params, ctx):
+        # catalog_sync registers with no schema; params/ctx are ignored. The
+        # adapter keeps the zero-arg sync compatible with the params/ctx job API.
+        return await catalog_sync.sync()
+
     job_manager.register(
         "catalog_sync",
-        catalog_sync.sync,
+        _catalog_sync_job,
         label="Catalog Sync",
     )
     app.state.job_manager = job_manager

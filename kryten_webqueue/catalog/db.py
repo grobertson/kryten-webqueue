@@ -707,11 +707,12 @@ class Database:
 
     # --- Generic job runs ---
 
-    async def start_job_run(self, job_name: str, triggered_by: str | None = None) -> int:
+    async def start_job_run(self, job_name: str, triggered_by: str | None = None,
+                            params: str | None = None) -> int:
         cursor = await self._db.execute(
-            "INSERT INTO job_runs (job_name, started_at, status, triggered_by) "
-            "VALUES (?, ?, 'running', ?)",
-            [job_name, datetime.now(UTC).isoformat(), triggered_by],
+            "INSERT INTO job_runs (job_name, started_at, status, triggered_by, params) "
+            "VALUES (?, ?, 'running', ?, ?)",
+            [job_name, datetime.now(UTC).isoformat(), triggered_by, params],
         )
         await self._db.commit()
         return cursor.lastrowid
@@ -720,6 +721,12 @@ class Database:
         await self._execute(
             "UPDATE job_runs SET ended_at=?, status=?, detail=? WHERE id=?",
             [datetime.now(UTC).isoformat(), status, detail, run_id],
+        )
+
+    async def update_job_run_detail(self, run_id: int, detail: str | None):
+        """Update only a running job's detail column (used for live progress)."""
+        await self._execute(
+            "UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id]
         )
 
     async def get_job_runs(self, job_name: str | None = None, limit: int = 10) -> list[dict]:
