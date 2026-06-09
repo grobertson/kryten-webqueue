@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.7.5] - 2026-06-08
+
+### Added
+
+- **Hidden categories/tags with an admin reveal toggle.** Items in the categories `Z Channel Promos`, `Z Event Movies`, `Weekday Z Promos` and the tags `grindhousebumper`, `commercialsforbumpers`, `bumpers`, `channelz`, `grindhousetrailer`, `publicaccess`, `religioustv` are now excluded from the catalog browse/search results and from the category/tag facet dropdowns. Admins (rank ≥ 3) see a notice — "Certain items are hidden from results. Show hidden items?" — that toggles them back into view via `?show_hidden=1` (ignored for non-admins).
+- **Modern, readability-focused typography.** The UI now loads Inter (body/controls) and Sora (headings) from Google Fonts, with antialiasing and `optimizeLegibility` enabled.
+
+### Removed
+
+- **"Play Next" buttons** are no longer shown on the catalog browse cards or the item detail page (the underlying play-next queue mechanism is unchanged).
+
 ## [0.7.4] - 2026-06-08
 
 ### Changed

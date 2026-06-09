@@ -41,16 +41,19 @@ async def login_page(request: Request):
 
 @router.get("/catalog/browse", response_class=HTMLResponse)
 async def catalog_browse_page(request: Request, category: str | None = None,
-                              tag: str | None = None, page: int = 1):
+                              tag: str | None = None, page: int = 1,
+                              show_hidden: int = 0):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
     db = request.app.state.db
-    items = await db.browse(category=category, tag=tag, page=page)
-    total = await db.browse_count(category=category, tag=tag)
+    is_admin = (user.get("rank") or 0) >= 3
+    show_hidden = bool(show_hidden) and is_admin
+    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden)
+    total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden)
     total_pages = max(1, (total + 23) // 24)
-    categories = await db.get_categories()
-    tags = await db.get_tags()
+    categories = await db.get_categories(show_hidden=show_hidden)
+    tags = await db.get_tags(show_hidden=show_hidden)
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
@@ -61,22 +64,27 @@ async def catalog_browse_page(request: Request, category: str | None = None,
         "active_category": category,
         "active_tag": tag,
         "query": None,
+        "is_admin": is_admin,
+        "show_hidden": show_hidden,
     })
 
 
 @router.get("/catalog/search", response_class=HTMLResponse)
-async def catalog_search_page(request: Request, q: str = "", page: int = 1):
+async def catalog_search_page(request: Request, q: str = "", page: int = 1,
+                             show_hidden: int = 0):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
     if not q.strip():
         return RedirectResponse("/catalog/browse")
     db = request.app.state.db
-    items = await db.search(q, page=page)
-    total = await db.search_count(q)
+    is_admin = (user.get("rank") or 0) >= 3
+    show_hidden = bool(show_hidden) and is_admin
+    items = await db.search(q, page=page, show_hidden=show_hidden)
+    total = await db.search_count(q, show_hidden=show_hidden)
     total_pages = max(1, (total + 23) // 24)
-    categories = await db.get_categories()
-    tags = await db.get_tags()
+    categories = await db.get_categories(show_hidden=show_hidden)
+    tags = await db.get_tags(show_hidden=show_hidden)
     return templates.TemplateResponse(request, "catalog/browse.html", {
         "user": user,
         "items": items,
@@ -87,6 +95,8 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1):
         "active_category": None,
         "active_tag": None,
         "query": q,
+        "is_admin": is_admin,
+        "show_hidden": show_hidden,
     })
 
 

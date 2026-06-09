@@ -12,6 +12,47 @@ def _slugify(text: str) -> str:
     return s.strip("-") or "untitled"
 
 
+# Categories and tags whose items are hidden from the public catalog (dropdowns
+# and search results). Admins can opt to reveal them. Matched by exact name.
+HIDDEN_CATEGORY_NAMES = [
+    "Z Channel Promos",
+    "Z Event Movies",
+    "Weekday Z Promos",
+]
+HIDDEN_TAG_NAMES = [
+    "grindhousebumper",
+    "commercialsforbumpers",
+    "bumpers",
+    "channelz",
+    "grindhousetrailer",
+    "publicaccess",
+    "religioustv",
+]
+
+
+def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
+    """SQL fragment (+ params) excluding items in hidden categories/tags.
+
+    The fragment is prefixed with ``AND`` so it can be appended to an existing
+    WHERE clause that references the catalog row under ``alias``.
+    """
+    cat_ph = ",".join("?" * len(HIDDEN_CATEGORY_NAMES))
+    tag_ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
+    sql = f"""
+            AND {alias}.friendly_token NOT IN (
+                SELECT cc.friendly_token FROM catalog_categories cc
+                JOIN categories cat ON cc.category_id = cat.id
+                WHERE cat.name IN ({cat_ph})
+            )
+            AND {alias}.friendly_token NOT IN (
+                SELECT ct.friendly_token FROM catalog_tags ct
+                JOIN tags t ON ct.tag_id = t.id
+                WHERE t.name IN ({tag_ph})
+            )
+    """
+    return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
+
+
 MIGRATIONS = [
     # v1: Migration tracking table
     """
@@ -245,7 +286,7 @@ class Database:
 
     # --- Catalog ---
 
-    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24) -> list[dict]:
+    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url
             FROM catalog c
@@ -256,6 +297,10 @@ class Database:
             )
         """
         params: list = []
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            query += excl_sql
+            params.extend(excl_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -296,7 +341,7 @@ class Database:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
-    async def browse_count(self, *, category: str | None = None, tag: str | None = None) -> int:
+    async def browse_count(self, *, category: str | None = None, tag: str | None = None, show_hidden: bool = False) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
             WHERE c.friendly_token NOT IN (
@@ -306,6 +351,10 @@ class Database:
             )
         """
         params: list = []
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            query += excl_sql
+            params.extend(excl_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -327,7 +376,7 @@ class Database:
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
-    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24) -> list[dict]:
+    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24, show_hidden: bool = False) -> list[dict]:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
@@ -339,12 +388,20 @@ class Database:
                   JOIN saved_playlists sp ON spi.playlist_id = sp.id
                   WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
               )
+        """
+        params: list = [query_text]
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            sql += excl_sql
+            params.extend(excl_params)
+        sql += """
             ORDER BY rank
             LIMIT ? OFFSET ?
         """
-        return await self._fetch_all(sql, [query_text, per_page, (page - 1) * per_page])
+        params.extend([per_page, (page - 1) * per_page])
+        return await self._fetch_all(sql, params)
 
-    async def search_count(self, query_text: str) -> int:
+    async def search_count(self, query_text: str, *, show_hidden: bool = False) -> int:
         sql = """
             SELECT COUNT(*) as cnt
             FROM catalog_fts fts
@@ -356,7 +413,12 @@ class Database:
                   WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
               )
         """
-        row = await self._fetch_one(sql, [query_text])
+        params: list = [query_text]
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            sql += excl_sql
+            params.extend(excl_params)
+        row = await self._fetch_one(sql, params)
         return row["cnt"] if row else 0
 
     async def get_item(self, friendly_token: str) -> dict | None:
@@ -438,31 +500,43 @@ class Database:
         row = await self._fetch_one(sql, [friendly_token])
         return row is not None
 
-    async def get_categories(self) -> list[dict]:
+    async def get_categories(self, *, show_hidden: bool = False) -> list[dict]:
         """Distinct categories that have at least one catalog item, for facets."""
-        return await self._fetch_all(
-            """
+        sql = """
             SELECT c.id, c.name, c.slug, COUNT(cc.friendly_token) AS cnt
             FROM categories c
             JOIN catalog_categories cc ON cc.category_id = c.id
+        """
+        params: list = []
+        if not show_hidden:
+            ph = ",".join("?" * len(HIDDEN_CATEGORY_NAMES))
+            sql += f" WHERE c.name NOT IN ({ph})"
+            params.extend(HIDDEN_CATEGORY_NAMES)
+        sql += """
             GROUP BY c.id, c.name, c.slug
             ORDER BY c.name
-            """
-        )
+        """
+        return await self._fetch_all(sql, params)
 
-    async def get_tags(self, *, limit: int = 100) -> list[dict]:
+    async def get_tags(self, *, limit: int = 100, show_hidden: bool = False) -> list[dict]:
         """Most-used tags that have at least one catalog item, for facets."""
-        return await self._fetch_all(
-            """
+        sql = """
             SELECT t.id, t.name, COUNT(ct.friendly_token) AS cnt
             FROM tags t
             JOIN catalog_tags ct ON ct.tag_id = t.id
+        """
+        params: list = []
+        if not show_hidden:
+            ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
+            sql += f" WHERE t.name NOT IN ({ph})"
+            params.extend(HIDDEN_TAG_NAMES)
+        sql += """
             GROUP BY t.id, t.name
             ORDER BY cnt DESC, t.name ASC
             LIMIT ?
-            """,
-            [limit],
-        )
+        """
+        params.append(limit)
+        return await self._fetch_all(sql, params)
 
     async def upsert_category(self, name: str) -> int:
         """Insert a category by name (deriving a unique slug) and return its id."""

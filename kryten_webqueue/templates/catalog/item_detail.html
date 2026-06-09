@@ -22,7 +22,6 @@
 
             <div class="card-actions item-detail-actions">
                 <button class="btn btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
-                <button class="btn btn-playnext" onclick="playNext('{{ item.friendly_token }}')">Play Next</button>
                 {% if user.rank >= 3 %}
                 <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
                 {% endif %}
