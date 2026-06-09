@@ -201,8 +201,6 @@ class QueueShadow:
             if meta:
                 np.setdefault("cover_art_path", meta.get("cover_art_path"))
                 np.setdefault("thumbnail_url", meta.get("thumbnail_url"))
-                if not np.get("description"):
-                    np["description"] = meta.get("description")
                 if not np.get("friendly_token"):
                     np["friendly_token"] = meta.get("friendly_token")
             # Ensure now-playing carries a playlist uid so the frontend can
@@ -219,15 +217,15 @@ class QueueShadow:
                         ):
                             np["uid"] = it.get("uid")
                             break
-            # Attach category/tag facets for the now-playing detail panel.
-            ft = np.get("friendly_token")
-            if ft:
+            # Attach description + category/tag names for the now-playing card.
+            if np.get("friendly_token"):
                 try:
-                    facets = await db.get_item_facets(ft)
+                    facets = await db.get_item_facets(np["friendly_token"])
+                    np.setdefault("description", facets.get("description"))
                     np["categories"] = facets.get("categories") or []
                     np["tags"] = facets.get("tags") or []
                 except Exception:
-                    logger.debug("Failed to load now-playing facets", exc_info=True)
+                    logger.debug("Failed to enrich now-playing facets", exc_info=True)
             state["now_playing"] = np
 
         return state
