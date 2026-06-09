@@ -7,8 +7,173 @@
     <h1>Schedules</h1>
     <p><a href="/admin">&larr; Back to Admin</a></p>
 
+    <div id="active-banner" class="schedule-info hidden" style="margin-bottom:1.5rem;"></div>
+
     <div class="admin-section">
-        <p class="empty-state">Schedule management coming soon.</p>
+        <div class="section-head">
+            <h2>Scheduled Fires</h2>
+            <button class="btn btn-primary" onclick="showScheduleModal()">+ New Schedule</button>
+        </div>
+        <div id="schedules-list">Loading…</div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let playlistMap = {};
+
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
+
+async function loadPlaylistsForSelect() {
+    const resp = await fetch('/admin/playlists/');
+    if (!resp.ok) return [];
+    const rows = await resp.json();
+    playlistMap = {};
+    rows.forEach(p => playlistMap[p.id] = p.name);
+    return rows;
+}
+
+async function loadActive() {
+    const banner = document.getElementById('active-banner');
+    const resp = await fetch('/admin/schedules/active');
+    if (!resp.ok) { banner.classList.add('hidden'); return; }
+    const a = await resp.json();
+    if (!a || !a.schedule_id) { banner.classList.add('hidden'); return; }
+    const name = playlistMap[a.playlist_id] || `Playlist #${a.playlist_id}`;
+    banner.classList.remove('hidden');
+    banner.innerHTML = `
+        <strong>Active schedule running:</strong> ${escapeHtml(name)}
+        ${a.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : ''}
+        ${a.estimated_end_at ? `<div class="muted">Ends ~${formatLocalDateTime(a.estimated_end_at)}</div>` : ''}
+        <div style="margin-top:0.5rem;"><button class="btn btn-sm btn-danger" onclick="clearActive()">Clear Active</button></div>`;
+}
+
+async function clearActive() {
+    if (!confirm('Clear the active schedule and return to free mode?')) return;
+    const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
+    showToast(resp.ok ? 'Cleared' : 'Failed', resp.ok ? 'success' : 'error');
+    loadActive();
+}
+
+async function loadSchedules() {
+    await loadPlaylistsForSelect();
+    await loadActive();
+    const resp = await fetch('/admin/schedules/');
+    const el = document.getElementById('schedules-list');
+    if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load.</p>'; return; }
+    const rows = await resp.json();
+    if (!rows.length) { el.innerHTML = '<p class="empty-state">No schedules yet.</p>'; return; }
+    const now = Date.now();
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>Label</th><th>Playlist</th><th>Fires</th><th>Lock</th><th>Status</th><th></th></tr>
+        ${rows.map(s => {
+            const fired = s.fired_at ? 'fired' : (new Date(s.fire_at).getTime() < now ? 'past' : 'pending');
+            return `<tr>
+                <td>${escapeHtml(s.label)}${s.is_recurring ? ' <span class="badge">↻</span>' : ''}</td>
+                <td>${escapeHtml(playlistMap[s.playlist_id] || ('#' + s.playlist_id))}</td>
+                <td>${formatLocalDateTime(s.fire_at)}</td>
+                <td>${s.pre_fire_lock_minutes ?? 15}m</td>
+                <td><span class="job-status job-status-${fired === 'pending' ? 'running' : (fired === 'fired' ? 'completed' : 'cancelled')}">${s.is_active ? fired : 'disabled'}</span></td>
+                <td class="row-actions">
+                    <button class="btn btn-sm" onclick="fireNow(${s.id}, '${escapeHtml(s.label)}')">Fire Now</button>
+                    <button class="btn btn-sm" onclick="editSchedule(${s.id})">Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id}, '${escapeHtml(s.label)}')">Delete</button>
+                </td>
+            </tr>`;
+        }).join('')}
+    </table>`;
+}
+
+function scheduleForm(s) {
+    s = s || {};
+    const opts = Object.entries(playlistMap).map(([id, name]) =>
+        `<option value="${id}" ${s.playlist_id == id ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+    // fire_at → datetime-local value (local tz)
+    let dtLocal = '';
+    if (s.fire_at) {
+        const d = new Date(s.fire_at);
+        if (!isNaN(d)) dtLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    return `
+        <h3>${s.id ? 'Edit' : 'New'} Schedule</h3>
+        <label class="field"><span>Label</span><input type="text" id="s-label" value="${escapeHtml(s.label || '')}"></label>
+        <label class="field"><span>Playlist</span><select id="s-playlist">${opts}</select></label>
+        <label class="field"><span>Fire at</span><input type="datetime-local" id="s-fireat" value="${dtLocal}"></label>
+        <label class="field"><span>Pre-fire lock (min)</span><input type="number" id="s-lock" min="0" value="${s.pre_fire_lock_minutes ?? 15}"></label>
+        <label class="check"><input type="checkbox" id="s-recur" ${s.is_recurring ? 'checked' : ''}> Recurring</label>
+        <label class="field"><span>RRULE (optional)</span><input type="text" id="s-rrule" value="${escapeHtml(s.rrule || '')}" placeholder="FREQ=WEEKLY;BYDAY=FR"></label>
+        ${s.id ? `<label class="check"><input type="checkbox" id="s-active" ${s.is_active ? 'checked' : ''}> Active</label>` : ''}
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveSchedule(${s.id || 'null'})">Save</button>
+        </div>`;
+}
+
+function showScheduleModal() {
+    if (!Object.keys(playlistMap).length) { showToast('Create a playlist first', 'error'); return; }
+    showModal(scheduleForm(null));
+}
+
+async function editSchedule(id) {
+    const resp = await fetch(`/admin/schedules/${id}`);
+    if (!resp.ok) { showToast('Load failed', 'error'); return; }
+    showModal(scheduleForm(await resp.json()));
+}
+
+function collectSchedule() {
+    const label = document.getElementById('s-label').value.trim();
+    const playlist_id = parseInt(document.getElementById('s-playlist').value, 10);
+    const fireLocal = document.getElementById('s-fireat').value;
+    if (!label || !playlist_id || !fireLocal) { showToast('Label, playlist and fire time required', 'error'); return null; }
+    const body = {
+        label,
+        playlist_id,
+        fire_at: new Date(fireLocal).toISOString(),
+        pre_fire_lock_minutes: parseInt(document.getElementById('s-lock').value, 10) || 0,
+        is_recurring: document.getElementById('s-recur').checked,
+        rrule: document.getElementById('s-rrule').value.trim() || null,
+    };
+    const active = document.getElementById('s-active');
+    if (active) body.is_active = active.checked;
+    return body;
+}
+
+async function saveSchedule(id) {
+    const body = collectSchedule();
+    if (!body) return;
+    const url = id ? `/admin/schedules/${id}` : '/admin/schedules/';
+    const method = id ? 'PUT' : 'POST';
+    const resp = await fetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    closeModal();
+    showToast(resp.ok ? 'Saved' : 'Save failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+async function fireNow(id, label) {
+    if (!confirm(`Fire "${label}" now? This clears the queue and refunds pending pay items.`)) return;
+    const resp = await fetch(`/admin/schedules/${id}/fire`, {method: 'POST'});
+    showToast(resp.ok ? 'Fired' : 'Fire failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+async function deleteSchedule(id, label) {
+    if (!confirm(`Delete schedule "${label}"?`)) return;
+    const resp = await fetch(`/admin/schedules/${id}`, {method: 'DELETE'});
+    showToast(resp.ok ? 'Deleted' : 'Delete failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+function showModal(html) {
+    closeModal();
+    const o = document.createElement('div');
+    o.className = 'modal-overlay'; o.id = 'admin-modal';
+    o.innerHTML = `<div class="modal-box">${html}</div>`;
+    o.addEventListener('click', e => { if (e.target === o) closeModal(); });
+    document.body.appendChild(o);
+}
+function closeModal() { const m = document.getElementById('admin-modal'); if (m) m.remove(); }
+
+loadSchedules();
+</script>
 {% endblock %}

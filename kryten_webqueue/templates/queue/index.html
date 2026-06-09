@@ -31,6 +31,7 @@
             <h3>Scheduled Playlist</h3>
             <p id="schedule-label"></p>
             <p id="schedule-time"></p>
+            <p id="schedule-countdown" class="muted"></p>
         </div>
         <div class="queue-stats">
             <p>Status: <span id="ws-status" class="ws-disconnected">● Disconnected</span></p>
@@ -77,6 +78,7 @@ function connectWebSocket() {
             // keepalive ack
         } else if (msg.type === 'schedule_fired') {
             showToast(`Scheduled playlist loaded: ${msg.data.playlist_name}`);
+            if (typeof loadNextSchedule === 'function') loadNextSchedule();
         }
     };
 
@@ -227,5 +229,43 @@ async function initialLoad() {
 
 initialLoad();
 connectWebSocket();
+
+// ---- Upcoming scheduled playlist announcement ----
+let nextSchedule = null;
+
+async function loadNextSchedule() {
+    try {
+        const resp = await fetch('/queue/next-schedule', {credentials: 'same-origin'});
+        if (!resp.ok) return;
+        const s = await resp.json();
+        nextSchedule = (s && s.fire_at) ? s : null;
+        renderScheduleBanner();
+    } catch (e) { /* ignore */ }
+}
+
+function renderScheduleBanner() {
+    const box = document.getElementById('schedule-info');
+    if (!nextSchedule) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    document.getElementById('schedule-label').textContent = nextSchedule.label || 'Scheduled playlist';
+    document.getElementById('schedule-time').textContent =
+        'Fires ' + (typeof formatLocalDateTime === 'function'
+            ? formatLocalDateTime(nextSchedule.fire_at) : nextSchedule.fire_at);
+    const cd = document.getElementById('schedule-countdown');
+    const fireMs = new Date(nextSchedule.fire_at).getTime();
+    const diff = fireMs - Date.now();
+    if (isNaN(fireMs)) { cd.textContent = ''; return; }
+    if (diff <= 0) { cd.textContent = 'Starting…'; return; }
+    const mins = Math.floor(diff / 60000), hrs = Math.floor(mins / 60);
+    const rem = mins % 60;
+    const human = hrs > 0 ? `${hrs}h ${rem}m` : `${mins}m`;
+    cd.textContent = nextSchedule.lock_active
+        ? `Pay-to-play is closed — starts in ${human}`
+        : `Starts in ${human}`;
+}
+
+loadNextSchedule();
+setInterval(renderScheduleBanner, 30000);   // refresh countdown
+setInterval(loadNextSchedule, 120000);      // re-fetch schedule periodically
 </script>
 {% endblock %}

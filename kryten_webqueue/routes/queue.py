@@ -1,9 +1,29 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
+from datetime import datetime, UTC
 
 from ..auth.session import get_current_user
 from ..queue.ordering import insert_pay_queue, insert_pay_playnext
 
 router = APIRouter(prefix="/queue", tags=["queue"])
+
+
+async def _pre_fire_lock_detail(db) -> str:
+    """Build a specific 'pay-to-play closes before [event]' message.
+
+    Falls back to a generic message if the locking schedule can't be read.
+    """
+    lock = await db.get_active_pre_fire_lock()
+    if not lock:
+        return "Queue is locked: a scheduled playlist is firing soon."
+    label = lock.get("label") or "a scheduled event"
+    try:
+        fire_at = datetime.fromisoformat(lock["fire_at"])
+        if fire_at.tzinfo is None:
+            fire_at = fire_at.replace(tzinfo=UTC)
+        minutes = max(0, round((fire_at - datetime.now(UTC)).total_seconds() / 60))
+        return f'Pay-to-play is closed: "{label}" starts in {minutes} min. Try again after the event.'
+    except Exception:
+        return f'Pay-to-play is closed ahead of "{label}". Try again after the event.'
 
 
 @router.get("/state")
@@ -30,7 +50,7 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
 
     # Check pre-fire lock
     if await db.is_pre_fire_lock_active():
-        raise HTTPException(423, "Queue is locked: scheduled playlist firing soon")
+        raise HTTPException(423, await _pre_fire_lock_detail(db))
 
     # Look up catalog item
     item = await db.get_item(friendly_token)
@@ -86,7 +106,7 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
 
     # Check pre-fire lock
     if await db.is_pre_fire_lock_active():
-        raise HTTPException(423, "Queue is locked: scheduled playlist firing soon")
+        raise HTTPException(423, await _pre_fire_lock_detail(db))
 
     # Look up catalog item
     item = await db.get_item(friendly_token)
@@ -187,3 +207,21 @@ async def queue_history(request: Request, user: dict = Depends(get_current_user)
     db = request.app.state.db
     history = await db.get_user_queue_history(user["username"])
     return {"items": history}
+
+
+@router.get("/next-schedule")
+async def next_schedule(request: Request, user: dict = Depends(get_current_user)):
+    """Public-facing info about the next scheduled playlist (for the queue page
+    announcement banner). Returns {} when nothing is scheduled.
+    """
+    db = request.app.state.db
+    sched = await db.get_next_schedule()
+    if not sched:
+        return {}
+    lock_active = await db.is_pre_fire_lock_active()
+    return {
+        "label": sched.get("label"),
+        "fire_at": sched.get("fire_at"),
+        "pre_fire_lock_minutes": sched.get("pre_fire_lock_minutes"),
+        "lock_active": lock_active,
+    }

@@ -881,6 +881,21 @@ class Database:
         """)
         return row is not None
 
+    async def get_active_pre_fire_lock(self) -> dict | None:
+        """Return the schedule whose pre-fire lock window is currently active.
+
+        Used to give users a specific "pay-to-play closes before [event]"
+        message instead of a generic locked error.
+        """
+        return await self._fetch_one("""
+            SELECT * FROM playlist_schedules
+            WHERE is_active = 1
+              AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
+              AND fire_at > datetime('now')
+            ORDER BY fire_at
+            LIMIT 1
+        """)
+
     async def get_next_schedule(self) -> dict | None:
         return await self._fetch_one(
             "SELECT * FROM playlist_schedules WHERE is_active=1 AND fire_at > datetime('now') ORDER BY fire_at LIMIT 1"

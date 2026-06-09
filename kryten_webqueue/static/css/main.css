@@ -61,7 +61,7 @@ a:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.75rem 2rem;
+    padding: 0.35rem 2rem;
     background: var(--bg-secondary);
     border-bottom: 1px solid var(--border);
     position: sticky;
@@ -351,10 +351,10 @@ a:hover {
 /* Title spans the full width of the card. */
 .np-title {
     margin: 0;
-    font-size: 1.4rem;
-    line-height: 1.25;
+    font-size: 1rem;
+    line-height: 1.1;
     overflow-wrap: anywhere;
-    padding-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--border);
 }
 /* Image + time display sit side by side. */
@@ -522,10 +522,10 @@ a:hover {
 }
 /* Description + category/tag chips sit below the image / time row. */
 .np-description {
-    font-size: 0.9rem;
-    line-height: 1.5;
+    font-size: 0.7rem;
+    line-height: 1.1;
     color: var(--text-secondary);
-    padding-top: 0.75rem;
+    padding-top: 0.5rem;
     border-top: 1px solid var(--border);
     white-space: pre-line;
     overflow-wrap: anywhere;
@@ -981,4 +981,135 @@ a.np-chip {
     color: var(--danger);
     font-size: 0.85rem;
 }
+
+/* ===== Admin management UIs (playlists / schedules / queue) ===== */
+.section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+}
+.section-head h2 { margin-bottom: 0; }
+.btn-group {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.btn-xs {
+    padding: 0.15rem 0.45rem;
+    font-size: 0.72rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.btn-xs:hover { background: var(--bg-hover); }
+.btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+.row-actions {
+    display: flex;
+    gap: 0.4rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+.muted { color: var(--text-secondary); font-size: 0.85rem; }
+
+/* Badges */
+.badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+}
+.badge-warn { background: rgba(253, 203, 110, 0.15); border-color: var(--warning); color: var(--warning); }
+.badge-accent { background: rgba(108, 92, 231, 0.2); border-color: var(--accent); color: var(--text-primary); }
+
+/* Modal form fields */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    margin-bottom: 0.85rem;
+}
+.field > span { font-size: 0.8rem; color: var(--text-secondary); }
+.field input, .field select, .field textarea {
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    width: 100%;
+}
+.check {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    margin-bottom: 0.85rem;
+    cursor: pointer;
+}
+
+/* Playlist editor */
+.editor-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: 2rem;
+}
+@media (max-width: 800px) { .editor-grid { grid-template-columns: 1fr; } }
+.editor-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0;
+}
+.editor-row {
+    display: grid;
+    grid-template-columns: 1.2rem 1.6rem minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.45rem 0.6rem;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+}
+.editor-row:hover { border-color: var(--border); }
+.drag-handle { cursor: grab; color: var(--text-secondary); user-select: none; }
+.editor-row .pos { color: var(--text-secondary); font-size: 0.8rem; }
+.ed-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ed-type, .ed-dur { font-size: 0.78rem; color: var(--text-secondary); }
+.ed-move { display: flex; gap: 0.25rem; }
+
+/* Catalog add results */
+.cat-results { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.6rem; max-height: 340px; overflow-y: auto; }
+.cat-result {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.4rem 0.6rem;
+    background: var(--bg-card);
+    border-radius: var(--radius);
+}
+.import-text {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: monospace;
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    resize: vertical;
+}
+.import-errors { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; }
+.import-errors code { color: var(--warning); }
 

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.8.0] - 2026-06-08
+
+### Added
+
+- **Admin Playlists UI.** The placeholder is replaced with a full management page: list/create/delete saved playlists, a two-column item editor (catalog search-to-add, drag-and-drop plus up/down reorder, per-item remove), bulk text import (`cm:`/`type:id`/bare-token, with unresolved-line reporting), rename + immutable toggle, and "Import to Live" to load a playlist into the CyTube queue. A new stateless `POST /admin/playlists/parse-text` endpoint exposes the existing text parser so parsed items merge into the editor and persist via the existing `PUT /{id}/items`.
+- **Admin Schedules UI.** List of scheduled fires with playlist names, local fire times, lock window and status; create/edit/delete with `fire_at` (datetime-local → UTC), `pre_fire_lock_minutes`, `is_recurring`/`rrule`, and active toggle; "Fire Now"; and an active-schedule banner with "Clear Active".
+- **Admin Queue Management UI.** Live `queue_shadow` table (auto-refreshing) with pay/scheduled metadata, ETA, paid-by and Z cost; remove (auto-refund), jump, an admin add-item modal (catalog search + placement mode), and the catalog sync log with a "Sync Now" trigger.
+- **Upcoming-schedule announcement on the Queue page.** A public `GET /queue/next-schedule` feeds a banner with the next scheduled playlist, its fire time, and a live countdown (noting when pay-to-play is closed).
+- Shared admin CSS for section headers, forms, modals, badges, the playlist editor list, drag-reorder, and catalog-add results.
+
+### Changed
+
+- **Specific pre-fire-lock messaging.** Submitting during a lock window now returns `Pay-to-play is closed: "[event]" starts in N min.` instead of a generic locked error (surfaced in the existing toast).
+
 ## [0.7.5] - 2026-06-08
 
 ### Added

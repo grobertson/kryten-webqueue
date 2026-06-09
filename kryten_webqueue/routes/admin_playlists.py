@@ -96,3 +96,18 @@ async def import_to_live(request: Request, playlist_id: int, user: dict = Depend
     )
     result = await importer.import_playlist(playlist_id)
     return result
+
+
+@router.post("/parse-text")
+async def parse_text(request: Request, user: dict = Depends(require_admin)):
+    """Parse the plain-text playlist import format into resolved items.
+
+    Stateless: returns {items, errors} for the editor to merge into its working
+    list. Persistence happens via PUT /{id}/items when the admin saves.
+    """
+    from ..playlists.importer import import_playlist_text
+
+    body = await request.json()
+    text = body.get("text", "")
+    db = request.app.state.db
+    return await import_playlist_text(db, text)
