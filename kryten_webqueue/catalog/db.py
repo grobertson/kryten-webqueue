@@ -926,6 +926,17 @@ class Database:
             [created_by],
         )
 
+    async def get_playlist_by_name(self, name: str, created_by: str) -> dict | None:
+        """Match an existing saved playlist by exact name + creator.
+
+        Used for idempotent re-imports (e.g. the fetchurls job replacing a
+        section playlist's items rather than creating a duplicate).
+        """
+        return await self._fetch_one(
+            "SELECT * FROM saved_playlists WHERE name=? AND created_by=? ORDER BY id LIMIT 1",
+            [name, created_by],
+        )
+
     # --- Schedules ---
 
     async def get_schedules(self) -> list[dict]:

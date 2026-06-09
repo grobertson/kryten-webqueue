@@ -14,6 +14,11 @@
   "tmdb_api_key": "",
   "omdb_api_key": "",
 
+  "fetch_cookies_path": "",
+  "fetchurls": {
+    "workbook_path": ""
+  },
+
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",
 
   "image_dir": "/var/lib/kryten-webqueue/images",

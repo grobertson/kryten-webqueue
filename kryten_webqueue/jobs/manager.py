@@ -103,11 +103,12 @@ class JobContext:
     can show live status for long-running jobs.
     """
 
-    def __init__(self, *, db, api_gate, config, run_id: int):
+    def __init__(self, *, db, api_gate, config, run_id: int, triggered_by: str | None = None):
         self.db = db
         self.api_gate = api_gate
         self.config = config
         self.run_id = run_id
+        self.triggered_by = triggered_by
 
     async def progress(self, detail: dict) -> None:
         try:
@@ -166,14 +167,15 @@ class JobManager:
 
         params_json = json.dumps(validated) if validated else None
         run_id = await self._db.start_job_run(name, triggered_by=triggered_by, params=params_json)
-        task = asyncio.create_task(self._execute(name, run_id, validated))
+        task = asyncio.create_task(self._execute(name, run_id, validated, triggered_by))
         self._running[name] = task
         return {"started": True, "run_id": run_id}
 
-    async def _execute(self, name: str, run_id: int, params: dict):
+    async def _execute(self, name: str, run_id: int, params: dict, triggered_by: str | None = None):
         func = self._jobs[name]["func"]
         ctx = JobContext(
-            db=self._db, api_gate=self._api_gate, config=self._config, run_id=run_id
+            db=self._db, api_gate=self._api_gate, config=self._config,
+            run_id=run_id, triggered_by=triggered_by,
         )
         try:
             result = await func(params, ctx)
