@@ -121,7 +121,7 @@ function renderQueue(state) {
                     <div class="np-remaining">${formatTime(remaining)} remaining</div>
                 </div>
             </div>
-            ${np.description ? `<div class="np-description">${escapeHtml(np.description)}</div>` : ''}
+            ${np.description ? `<div class="np-description">${escapeHtml(String(np.description).replace(/\r\n?/g, '\n'))}</div>` : ''}
             ${chips ? `<div class="np-chips">${chips}</div>` : ''}
         `;
     } else {

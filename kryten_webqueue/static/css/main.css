@@ -507,6 +507,13 @@ a:hover {
     white-space: pre-line;
     overflow-wrap: anywhere;
 }
+/* MediaCMS descriptions are newline-delimited plain text; preserve the line
+   breaks (Synopsis / Tagline / Cast & Crew sections) instead of collapsing them. */
+.item-detail-description {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    line-height: 1.6;
+}
 .np-chips {
     display: flex;
     flex-wrap: wrap;

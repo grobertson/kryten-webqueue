@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.7.3] - 2026-06-08
+
+### Fixed
+
+- **Description line breaks now render.** MediaCMS stores descriptions as newline-delimited plain text (`Synopsis:` / `Tagline:` / `Cast & Crew:` sections separated by `\n`), but the catalog item-detail page collapsed those newlines into a single run-on paragraph. Both the item-detail description and the Now Playing card now use `white-space: pre-line` to preserve the line/paragraph breaks; the Now Playing card also normalizes legacy `\r\n` line endings.
+
 ## [0.7.2] - 2026-06-08
 
 ### Changed
