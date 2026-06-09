@@ -236,7 +236,35 @@ a:hover {
 .card-actions {
     padding: 0.4rem 0.75rem 0.6rem;
     display: flex;
+    flex-direction: column;
+    align-items: stretch;
     gap: 0.4rem;
+}
+.card-actions .btn {
+    width: 100%;
+}
+
+/* Branded placeholder art with hover-to-real-thumbnail (B2). Two stacked
+   images inside .card-poster; the real (often poor) MediaCMS thumbnail is
+   revealed on hover via a crossfade — no JS required. */
+.card-poster-art {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.card-poster-art img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.card-poster-art .poster-real {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.card-poster:hover .card-poster-art .poster-real {
+    opacity: 1;
 }
 .btn-queue {
     background: var(--accent);
@@ -418,18 +446,6 @@ a:hover {
 .queue-item-now-playing .qi-title {
     color: var(--accent);
     font-weight: 600;
-}
-.qi-pos {
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    min-width: 1.5rem;
-}
-.qi-drag {
-    cursor: grab;
-    color: var(--text-secondary);
-    font-size: 1rem;
-    user-select: none;
-    line-height: 1;
 }
 .qi-cover {
     width: 48px;
@@ -816,6 +832,7 @@ a.np-chip {
 .job-status-failed { color: var(--danger); }
 .job-status-running { color: var(--accent); }
 .job-status-cancelled { color: var(--text-secondary); }
+.job-status-interrupted { color: var(--warning); }
 
 /* Empty state */
 .empty-state {

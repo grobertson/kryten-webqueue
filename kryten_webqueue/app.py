@@ -28,6 +28,7 @@ from .routes.admin_playlists import router as admin_playlists_router
 from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
+from .routes.admin_catalog import router as admin_catalog_router
 from .routes.pages import router as pages_router
 from .ws.handler import router as ws_router
 
@@ -42,6 +43,11 @@ async def lifespan(app: FastAPI):
     db = Database(config.db_path)
     await db.connect()
     await db.run_migrations()
+    # Any job run still marked 'running' is an orphan from a prior crash/restart
+    # (the running flag is in-memory only). Reconcile before registering jobs.
+    orphaned = await db.reconcile_orphaned_job_runs()
+    if orphaned:
+        logger.warning("Reconciled %d orphaned job run(s) to 'interrupted'", orphaned)
     app.state.db = db
 
     # API Gate client
@@ -184,6 +190,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_schedules_router)
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
+    app.include_router(admin_catalog_router)
     app.include_router(ws_router)
 
     # Health check

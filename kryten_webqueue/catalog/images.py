@@ -40,9 +40,46 @@ class CoverArtResolver:
         self._client = httpx.AsyncClient(timeout=15.0)
         self._image_dir.mkdir(parents=True, exist_ok=True)
         self._placeholder_dir.mkdir(parents=True, exist_ok=True)
+        # Cached list of branded placeholder image URLs (served under /images).
+        self._placeholder_urls: list[str] = []
+        self._placeholder_cache_at: float = 0.0
 
     async def close(self):
         await self._client.aclose()
+
+    def list_placeholder_urls(self, *, ttl: float = 300.0) -> list[str]:
+        """Return web URLs for branded placeholder images, cached in memory.
+
+        The directory is rescanned at most once per ``ttl`` seconds to avoid a
+        disk scan on every browse request. URLs are resolved relative to the
+        ``/images`` static mount when the placeholder dir lives under the image
+        dir (the default layout); otherwise the bare filename is used.
+        """
+        import time
+
+        now = time.monotonic()
+        if self._placeholder_urls and (now - self._placeholder_cache_at) < ttl:
+            return self._placeholder_urls
+
+        exts = {".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif"}
+        try:
+            files = sorted(
+                p.name for p in self._placeholder_dir.iterdir()
+                if p.is_file() and p.suffix.lower() in exts
+            )
+        except OSError:
+            files = []
+
+        try:
+            rel = self._placeholder_dir.resolve().relative_to(self._image_dir.resolve())
+            prefix = "/images/" + rel.as_posix().strip("/") + "/"
+        except ValueError:
+            prefix = "/images/placeholders/"
+
+        self._placeholder_urls = [prefix + f for f in files]
+        self._placeholder_cache_at = now
+        return self._placeholder_urls
+
 
     async def resolve(self, friendly_token: str, title: str, db) -> str | None:
         """Try to fetch cover art; return relative path or None."""

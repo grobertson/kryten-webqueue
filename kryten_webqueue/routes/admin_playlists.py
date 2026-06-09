@@ -98,6 +98,55 @@ async def import_to_live(request: Request, playlist_id: int, user: dict = Depend
     return result
 
 
+@router.post("/recent/append")
+async def append_item_recent(request: Request, user: dict = Depends(require_admin)):
+    """Append a catalog item to the admin's most-recently-created playlist (B5).
+
+    Registered before /{playlist_id}/append so the literal path wins.
+    """
+    body = await request.json()
+    token = body.get("friendly_token")
+    if not token:
+        raise HTTPException(400, "friendly_token required")
+    db = request.app.state.db
+    playlist = await db.get_most_recent_playlist(user["username"])
+    if not playlist:
+        raise HTTPException(409, "Create a playlist first")
+    item = await db.get_item_admin(token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    count = await db.append_playlist_item(playlist["id"], {
+        "media_type": "cm",
+        "media_id": item["manifest_url"],
+        "title": item.get("title"),
+        "duration_sec": item.get("duration_sec"),
+    })
+    return {"success": True, "playlist_id": playlist["id"], "name": playlist["name"], "count": count}
+
+
+@router.post("/{playlist_id}/append")
+async def append_item(request: Request, playlist_id: int, user: dict = Depends(require_admin)):
+    """Append a single catalog item to a playlist (B4)."""
+    body = await request.json()
+    token = body.get("friendly_token")
+    if not token:
+        raise HTTPException(400, "friendly_token required")
+    db = request.app.state.db
+    playlist = await db.get_saved_playlist(playlist_id)
+    if not playlist:
+        raise HTTPException(404, "Playlist not found")
+    item = await db.get_item_admin(token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    count = await db.append_playlist_item(playlist_id, {
+        "media_type": "cm",
+        "media_id": item["manifest_url"],
+        "title": item.get("title"),
+        "duration_sec": item.get("duration_sec"),
+    })
+    return {"success": True, "playlist_id": playlist_id, "name": playlist["name"], "count": count}
+
+
 @router.post("/parse-text")
 async def parse_text(request: Request, user: dict = Depends(require_admin)):
     """Parse the plain-text playlist import format into resolved items.

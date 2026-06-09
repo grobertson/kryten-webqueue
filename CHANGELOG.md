@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased]
+
+### Added
+
+- **Browse sort control.** Browse and search now offer a *Sort by* dropdown — `Default` (quality-weighted), `Title A–Z`, `Title Z–A`, `Newest first`, `Oldest first` — available to everyone. The choice carries through pagination and the facet form and is remembered per-browser via `localStorage`. `Newest`/`Oldest` order by the catalog `added_at`, which is now populated from the MediaCMS `add_date` on sync (and backfilled from `synced_at` for existing rows).
+- **Branded placeholder art with hover-to-thumbnail.** Tiles without a real poster match (no TMDB/OMDB art) now show a random branded placeholder from `placeholder_dir` instead of the raw MediaCMS thumbnail; hovering reveals the real thumbnail via a CSS crossfade. The placeholder list is cached in memory and rescanned periodically.
+- **Admin tile actions.** Catalog tiles now offer admins (rank ≥ 3) *Add to playlist* (picker modal), *+ Recent* (append to the admin's most recently created playlist, no modal), and *Hide* (tags the item `kryten-hidden` in MediaCMS and hides it locally immediately). New endpoints: `POST /admin/playlists/{id}/append`, `POST /admin/playlists/recent/append`, `POST /admin/catalog/{token}/hide`, and `POST /admin/catalog/{token}/unhide`.
+
+### Changed
+
+- **Tile action buttons stack vertically**, full-width, for clearer affordance at narrow tile widths.
+
+### Fixed
+
+- **Job-run history no longer shows phantom `running` rows.** A job's running flag lived only in memory, so a restart or killed worker mid-run left the `job_runs` row stuck at `running` forever. On startup such orphans are now reconciled to a new `interrupted` status (styled in the admin dashboard).
+
+### Removed
+
+- **Live queue page no longer shows the order number or a drag handle.** The `qi-pos` index and the non-functional `qi-drag` (☰) affordance were removed; reordering lives in the playlist editor, not the live queue.
+
 ## [0.8.2] - 2026-06-08
 
 ### Fixed
