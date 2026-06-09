@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Added missing `python-slugify>=8.0` core dependency (required by the `fetch` job).
+
+## [0.9.1] — 2026-06-09
+
+### Fixed
+
 - Moved `requests`, `openpyxl`, `pyyaml`, and `yt-dlp` from the optional `[jobs]` extra into core dependencies; the `jobs` extra is removed. This fixes installation under `pipx` and other tools that do not support `package[extra]` syntax.
 
 ## [0.9.0] — 2026-06-09
