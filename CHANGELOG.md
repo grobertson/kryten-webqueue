@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.7.4] - 2026-06-08
+
+### Changed
+
+- **Catalog item detail page redesigned** to a two-column layout: the poster and action buttons (Queue / Play Next / Queue as Admin) stack in a sticky left column, while the right column shows the title, a divider, the formatted description, and **Category** / **Tags** facet rows. Category and tag chips link back into a filtered catalog browse. Categories/tags are sourced from the catalog join tables (populated by sync since 0.7.0).
+
 ## [0.7.3] - 2026-06-08
 
 ### Fixed

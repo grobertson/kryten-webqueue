@@ -409,7 +409,7 @@ class Database:
             "SELECT description FROM catalog WHERE friendly_token = ?", [friendly_token]
         )
         cats = await self._fetch_all(
-            "SELECT cat.name FROM categories cat "
+            "SELECT cat.name, cat.slug FROM categories cat "
             "JOIN catalog_categories cc ON cc.category_id = cat.id "
             "WHERE cc.friendly_token = ? ORDER BY cat.name",
             [friendly_token],
@@ -422,7 +422,7 @@ class Database:
         )
         return {
             "description": (row or {}).get("description"),
-            "categories": [c["name"] for c in cats],
+            "categories": [{"name": c["name"], "slug": c["slug"]} for c in cats],
             "tags": [t["name"] for t in tags],
         }
 

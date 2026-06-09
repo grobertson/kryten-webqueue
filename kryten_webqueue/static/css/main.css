@@ -507,12 +507,82 @@ a:hover {
     white-space: pre-line;
     overflow-wrap: anywhere;
 }
+/* Item detail: poster + buttons on the left, title/description/facets on right. */
+.item-detail-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+}
+@media (max-width: 700px) {
+    .item-detail-layout {
+        grid-template-columns: 1fr;
+    }
+}
+.item-detail-poster {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    position: sticky;
+    top: calc(var(--nav-height) + 1rem);
+}
+.item-detail-poster img,
+.item-detail-poster .card-poster-placeholder {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: var(--radius);
+    display: block;
+}
+.item-detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+.item-detail-actions .btn {
+    width: 100%;
+}
+.item-detail-info {
+    min-width: 0;
+}
+.item-detail-title {
+    margin: 0;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+.item-detail-meta {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
 /* MediaCMS descriptions are newline-delimited plain text; preserve the line
    breaks (Synopsis / Tagline / Cast & Crew sections) instead of collapsing them. */
 .item-detail-description {
     white-space: pre-line;
     overflow-wrap: anywhere;
     line-height: 1.6;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+}
+.item-detail-facet {
+    margin-top: 1rem;
+}
+.item-detail-facet-label {
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+}
+.item-detail-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+a.np-chip {
+    text-decoration: none;
 }
 .np-chips {
     display: flex;

@@ -19,6 +19,14 @@
             {% else %}
                 <div class="card-poster-placeholder"><span>{{ item.title[:1] }}</span></div>
             {% endif %}
+
+            <div class="card-actions item-detail-actions">
+                <button class="btn btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
+                <button class="btn btn-playnext" onclick="playNext('{{ item.friendly_token }}')">Play Next</button>
+                {% if user.rank >= 3 %}
+                <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
+                {% endif %}
+            </div>
         </div>
 
         <div class="item-detail-info">
@@ -35,13 +43,27 @@
                 <p class="item-detail-description empty-state">No description available.</p>
             {% endif %}
 
-            <div class="card-actions item-detail-actions">
-                <button class="btn btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
-                <button class="btn btn-playnext" onclick="playNext('{{ item.friendly_token }}')">Play Next</button>
-                {% if user.rank >= 3 %}
-                <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
-                {% endif %}
+            {% if categories %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Category</span>
+                <div class="item-detail-chips">
+                    {% for cat in categories %}
+                        <a class="np-chip np-chip-cat" href="/catalog/browse?category={{ cat.slug }}">{{ cat.name }}</a>
+                    {% endfor %}
+                </div>
             </div>
+            {% endif %}
+
+            {% if tags %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Tags</span>
+                <div class="item-detail-chips">
+                    {% for tag in tags %}
+                        <a class="np-chip np-chip-tag" href="/catalog/browse?tag={{ tag | urlencode }}">{{ tag }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

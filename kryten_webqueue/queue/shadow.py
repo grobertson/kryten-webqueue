@@ -222,7 +222,7 @@ class QueueShadow:
                 try:
                     facets = await db.get_item_facets(np["friendly_token"])
                     np.setdefault("description", facets.get("description"))
-                    np["categories"] = facets.get("categories") or []
+                    np["categories"] = [c["name"] for c in (facets.get("categories") or [])]
                     np["tags"] = facets.get("tags") or []
                 except Exception:
                     logger.debug("Failed to enrich now-playing facets", exc_info=True)

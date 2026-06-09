@@ -109,9 +109,12 @@ async def catalog_item_page(request: Request, friendly_token: str):
         return templates.TemplateResponse(
             request, "catalog/item_not_found.html", {"user": user}, status_code=404
         )
+    facets = await db.get_item_facets(friendly_token)
     return templates.TemplateResponse(request, "catalog/item_detail.html", {
         "user": user,
         "item": item,
+        "categories": facets.get("categories") or [],
+        "tags": facets.get("tags") or [],
     })
 
 
