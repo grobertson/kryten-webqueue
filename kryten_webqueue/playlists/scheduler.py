@@ -71,7 +71,7 @@ class PlaylistScheduler:
                 if nxt:
                     nxt_utc = nxt.astimezone(UTC)
                     await self._db.update_schedule(
-                        sched["id"], fire_at=nxt_utc.isoformat(), fired_at=None
+                        sched["id"], fire_at=nxt_utc.isoformat(), fired_at=None, lock_disabled=0
                     )
                     self._add_job(sched["id"], nxt_utc)
                     logger.info(
@@ -115,7 +115,7 @@ class PlaylistScheduler:
             return
         nxt_utc = nxt.astimezone(UTC)
         await self._db.update_schedule(
-            schedule_id, fire_at=nxt_utc.isoformat(), fired_at=None
+            schedule_id, fire_at=nxt_utc.isoformat(), fired_at=None, lock_disabled=0
         )
         self._add_job(schedule_id, nxt_utc)
         logger.info(f"Recurring schedule {schedule_id} re-armed for {nxt_utc}")

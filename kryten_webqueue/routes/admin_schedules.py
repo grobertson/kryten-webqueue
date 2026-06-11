@@ -127,3 +127,26 @@ async def clear_active(request: Request, user: dict = Depends(require_admin)):
     db = request.app.state.db
     await db.clear_active_schedule()
     return {"success": True}
+
+
+@router.post("/unlock")
+async def unlock(request: Request, user: dict = Depends(require_admin)):
+    """Lift the currently-active pay-to-play lock without deleting the schedule.
+
+    Targets the in-progress scheduled-event lock first (keeps the event banner
+    and any recurring schedule armed); otherwise lifts an active pre-fire lock
+    for its current occurrence only (a recurring schedule re-locks on its next
+    firing).
+    """
+    db = request.app.state.db
+
+    if await db.is_event_lock_active():
+        await db.disable_active_lock()
+        return {"success": True, "lifted": "event"}
+
+    prefire = await db.get_active_pre_fire_lock()
+    if prefire:
+        await db.update_schedule(prefire["id"], lock_disabled=1)
+        return {"success": True, "lifted": "pre_fire"}
+
+    return {"success": True, "lifted": None}

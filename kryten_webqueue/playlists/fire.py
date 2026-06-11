@@ -34,13 +34,16 @@ async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
         # Load scheduled playlist items
         items = await db.get_saved_playlist_items(playlist_id)
         total_duration = 0
+        last_item_uid = None
         for item in items:
             try:
-                await api_gate.playlist_add(
+                add_result = await api_gate.playlist_add(
                     media_type=item["media_type"],
                     media_id=item["media_id"],
                     position="end",
                 )
+                if isinstance(add_result, dict) and add_result.get("uid") is not None:
+                    last_item_uid = add_result["uid"]
                 total_duration += item.get("duration_sec", 0) or 0
             except Exception as e:
                 logger.warning(f"Schedule fire: failed to add {item['media_id']}: {e}")
@@ -53,6 +56,7 @@ async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
             is_immutable=playlist.get("is_immutable", False),
             started_at=now.isoformat(),
             estimated_end_at=(now + timedelta(seconds=total_duration)).isoformat(),
+            last_item_uid=last_item_uid,
         )
 
         # Mark schedule as fired

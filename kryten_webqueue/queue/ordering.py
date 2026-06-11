@@ -98,6 +98,24 @@ def _shadow_index_after_uid(shadow, target_uid: int | None) -> int:
     return len(shadow.items)
 
 
+def _last_pay_uid(shadow) -> int | None:
+    """UID of the last paid item in true play order, read from the in-memory shadow.
+
+    The in-memory shadow is rebuilt in CyTube playlist order on every poll, so
+    it is the authoritative source for FIFO positioning. (The persisted
+    ``queue_shadow.position`` column can lag between polls because reconciliation
+    re-indexes positions in memory only, which previously caused new paid items
+    to be anchored against a stale uid and land directly after the now-playing
+    item instead of at the tail of the pay queue.)
+    """
+    last = None
+    for it in shadow.items:
+        if it.get("is_pay"):
+            last = it.get("uid")
+    return last
+
+
+
 async def _move_after(api_gate, *, uid: int, target_uid: int | None) -> None:
     """Move uid to immediately after target_uid. No-op when target is None."""
     if target_uid is not None:
@@ -136,7 +154,7 @@ async def insert_pay_queue(
 
         # Target position: immediately after the LAST item in the persistent
         # pay-queue list, or after the currently-playing item when none exist.
-        last_pay_uid = await db.get_last_pay_uid()
+        last_pay_uid = _last_pay_uid(shadow)
         if last_pay_uid:
             target_uid = last_pay_uid
         else:
@@ -404,7 +422,7 @@ async def insert_admin_queue(
             # after_purchased: immediately after the LAST persistent pay item,
             # or after the currently-playing item when none exist.
             removed = 0
-            last_pay_uid = await db.get_last_pay_uid()
+            last_pay_uid = _last_pay_uid(shadow)
             if last_pay_uid:
                 target_uid = last_pay_uid
             else:

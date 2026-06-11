@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.3] — 2026-06-11
+
+### Fixed
+
+- **Queue ETAs are computed from the remainder of the *currently-playing* item and wrap around the playlist.** Previously the schedule was built as if the item at list index 0 always played next, so whenever the now-playing item was not at the head, every ETA was wrong. ETAs now start from the time left on the current item and walk the rest of the list in true play order (item after current → end → wrap to the front), matching CyTube's looping playlist.
+- **Paid items keep their purchase order (FIFO).** New paid items were being anchored against a stale `queue_shadow.position` read from the DB (poll reconciliation only re-indexed positions in memory), which could drop every new item directly after the now-playing item and scramble the order. The FIFO anchor is now derived from the in-memory shadow (the authoritative play order), and reconciliation persists positions back to the DB so DB-backed queries no longer drift.
+
+### Added
+
+- **One-click playlist Reserve/Release.** The admin Playlists list now has a direct Reserve/Release action (and a Mutable/Immutable status) to toggle a saved playlist's immutability without digging into the editor. Immutable playlists' items stay hidden from public browse/search and reserved for scheduled play; releasing returns them to the catalog and pay-to-play.
+- **Scheduled-event pay-to-play lock with auto-expiry + manual unlock.** While an *immutable* scheduled playlist is playing, pay-to-play is locked so the curated event can't be interrupted. The lock now **auto-lifts once the last scheduled item begins playing** (so viewers can queue content for after the event). Admins get an **Unlock now** button (on the active-event banner and during a schedule's pre-fire window) that lifts the current lock while keeping the schedule armed for future firings — no more deleting the schedule to clear a lock.
+
+## [0.9.2] — 2026-06-09
+
 ### Fixed
 
 - Added missing `python-slugify>=8.0` core dependency (required by the `fetch` job).

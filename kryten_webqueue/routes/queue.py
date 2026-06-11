@@ -26,6 +26,25 @@ async def _pre_fire_lock_detail(db) -> str:
         return f'Pay-to-play is closed ahead of "{label}". Try again after the event.'
 
 
+async def _queue_lock_detail(db) -> str:
+    """Pay-to-play lock message, covering both the pre-fire window and an
+    in-progress scheduled event."""
+    if await db.is_pre_fire_lock_active():
+        return await _pre_fire_lock_detail(db)
+    active = await db.get_active_schedule()
+    label = "a scheduled event"
+    if active and active.get("playlist_id"):
+        playlist = await db.get_saved_playlist(active["playlist_id"])
+        if playlist and playlist.get("name"):
+            label = playlist["name"]
+    return f'Pay-to-play is closed during "{label}". It reopens when the last scheduled item begins playing.'
+
+
+async def _queue_locked(db) -> bool:
+    """True when pay-to-play is closed by either lock type."""
+    return await db.is_pre_fire_lock_active() or await db.is_event_lock_active()
+
+
 @router.get("/state")
 async def get_queue_state(request: Request, user: dict = Depends(get_current_user)):
     """Get current queue state."""
@@ -48,9 +67,9 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
     api_gate = request.app.state.api_gate
     shadow = request.app.state.shadow
 
-    # Check pre-fire lock
-    if await db.is_pre_fire_lock_active():
-        raise HTTPException(423, await _pre_fire_lock_detail(db))
+    # Check pay-to-play locks (pre-fire window or in-progress scheduled event)
+    if await _queue_locked(db):
+        raise HTTPException(423, await _queue_lock_detail(db))
 
     # Look up catalog item
     item = await db.get_item(friendly_token)
@@ -104,9 +123,9 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
     api_gate = request.app.state.api_gate
     shadow = request.app.state.shadow
 
-    # Check pre-fire lock
-    if await db.is_pre_fire_lock_active():
-        raise HTTPException(423, await _pre_fire_lock_detail(db))
+    # Check pay-to-play locks (pre-fire window or in-progress scheduled event)
+    if await _queue_locked(db):
+        raise HTTPException(423, await _queue_lock_detail(db))
 
     # Look up catalog item
     item = await db.get_item(friendly_token)

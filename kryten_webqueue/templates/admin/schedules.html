@@ -42,11 +42,23 @@ async function loadActive() {
     if (!a || !a.schedule_id) { banner.classList.add('hidden'); return; }
     const name = playlistMap[a.playlist_id] || `Playlist #${a.playlist_id}`;
     banner.classList.remove('hidden');
+    const locked = a.is_immutable && !a.lock_disabled;
     banner.innerHTML = `
         <strong>Active schedule running:</strong> ${escapeHtml(name)}
         ${a.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : ''}
+        ${locked ? '<span class="badge badge-warn">Pay-to-play locked</span>' : '<span class="badge">Unlocked</span>'}
         ${a.estimated_end_at ? `<div class="muted">Ends ~${formatLocalDateTime(a.estimated_end_at)}</div>` : ''}
-        <div style="margin-top:0.5rem;"><button class="btn btn-sm btn-danger" onclick="clearActive()">Clear Active</button></div>`;
+        <div style="margin-top:0.5rem;">
+            ${locked ? '<button class="btn btn-sm" onclick="unlockNow()">Unlock now</button> ' : ''}
+            <button class="btn btn-sm btn-danger" onclick="clearActive()">Clear Active</button>
+        </div>`;
+}
+
+async function unlockNow() {
+    if (!confirm('Lift the pay-to-play lock now? Users will be able to queue items again. The schedule stays armed for future firings.')) return;
+    const resp = await fetch('/admin/schedules/unlock', {method: 'POST'});
+    showToast(resp.ok ? 'Lock lifted' : 'Failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
 }
 
 async function clearActive() {
@@ -69,11 +81,16 @@ async function loadSchedules() {
         <tr><th>Label</th><th>Playlist</th><th>Fires</th><th>Lock</th><th>Status</th><th></th></tr>
         ${rows.map(s => {
             const fired = s.fired_at ? 'fired' : (new Date(s.fire_at).getTime() < now ? 'past' : 'pending');
+            const fireMs = new Date(s.fire_at).getTime();
+            const lockMin = s.pre_fire_lock_minutes ?? 15;
+            const inPreFire = s.is_active && !isNaN(fireMs)
+                && now >= fireMs - lockMin * 60000 && now < fireMs;
+            const preFireLocked = inPreFire && !s.lock_disabled;
             return `<tr>
                 <td>${escapeHtml(s.label)}${s.is_recurring ? ' <span class="badge">↻</span>' : ''}</td>
                 <td>${escapeHtml(playlistMap[s.playlist_id] || ('#' + s.playlist_id))}</td>
                 <td>${formatLocalDateTime(s.fire_at)}</td>
-                <td>${s.pre_fire_lock_minutes ?? 15}m</td>
+                <td>${lockMin}m${preFireLocked ? ' <button class="btn btn-xs" onclick="unlockNow()" title="Lift the active pre-fire lock now">Unlock</button>' : (inPreFire && s.lock_disabled ? ' <span class="muted">(unlocked)</span>' : '')}</td>
                 <td><span class="job-status job-status-${fired === 'pending' ? 'running' : (fired === 'fired' ? 'completed' : 'cancelled')}">${s.is_active ? fired : 'disabled'}</span></td>
                 <td class="row-actions">
                     <button class="btn btn-sm" onclick="fireNow(${s.id}, '${escapeHtml(s.label)}')">Fire Now</button>

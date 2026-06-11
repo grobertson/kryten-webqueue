@@ -86,6 +86,10 @@ class QueueShadow:
                         merged["media_id"] = media_id
                     if not merged.get("media_type") or merged.get("media_type") == "unknown":
                         merged["media_type"] = media_type
+                    # Persist the reconciled position so DB-backed queries
+                    # (e.g. last paid item) don't drift from true play order.
+                    if local_map[uid].get("position") != pos:
+                        await self._db.update_shadow_position(uid, pos)
                 else:
                     # New item from external source
                     merged = {
@@ -108,6 +112,65 @@ class QueueShadow:
 
             self._items = new_items
             await self._recalculate_estimated_starts()
+            await self._maybe_lift_event_lock()
+
+    async def _maybe_lift_event_lock(self):
+        """Auto-lift a scheduled-event lock once its last item begins playing.
+
+        When the currently-playing item is the last item that was loaded by the
+        scheduled fire, the curated event is effectively over (only the final
+        item remains), so pay-to-play should reopen for content that plays after
+        it. Idempotent: a no-op once the lock is already lifted.
+        """
+        active = await self._db.get_active_schedule()
+        if not active or active.get("lock_disabled"):
+            return
+        last_uid = active.get("last_item_uid")
+        if last_uid is None:
+            return
+        idx = self._now_playing_index()
+        if idx is None:
+            return
+        cur_uid = self._items[idx].get("uid")
+        try:
+            if cur_uid is not None and int(cur_uid) == int(last_uid):
+                await self._db.disable_active_lock()
+                logger.info("Scheduled-event lock lifted: last scheduled item now playing")
+        except (TypeError, ValueError):
+            return
+
+    def _now_playing_index(self) -> int | None:
+        """Index of the currently-playing item within ``self._items``.
+
+        Prefers the playlist ``uid``; falls back to matching the now-playing
+        media id/type (CyTube's ``changeMedia`` payload carries no uid). Returns
+        None when there is no now-playing item or it cannot be located.
+        """
+        if not self._now_playing:
+            return None
+        np = self._now_playing
+        uid = np.get("uid")
+        if uid is not None:
+            try:
+                uid = int(uid)
+            except (TypeError, ValueError):
+                uid = None
+        if uid is not None:
+            for i, it in enumerate(self._items):
+                try:
+                    if int(it.get("uid")) == uid:
+                        return i
+                except (TypeError, ValueError):
+                    continue
+        np_id = np.get("id") or np.get("media_id")
+        np_type = np.get("type") or np.get("media_type")
+        if np_id is not None:
+            for i, it in enumerate(self._items):
+                if it.get("media_id") == np_id and (
+                    np_type is None or it.get("media_type") == np_type
+                ):
+                    return i
+        return None
 
     async def _recalculate_estimated_starts(self):
         """Recalculate estimated start times based on position and now-playing.
@@ -120,22 +183,46 @@ class QueueShadow:
         immune to server clock skew / timezone misconfiguration, which is the
         usual cause of ETAs appearing shifted by a whole UTC offset. The browser
         computes the wall-clock time from its own clock (Date.now() + offset).
+
+        ETAs are computed from the *remainder of the currently-playing item* and
+        proceed with the item AFTER it, wrapping around the end of the list back
+        to the items before it (CyTube loops the playlist). The current item may
+        sit at any position, not just index 0.
         """
         if not self._items:
             return
 
-        # Offset (seconds from now) until the head of the queue starts playing.
-        offset = 0.0
+        n = len(self._items)
+        now = datetime.now(UTC)
+
+        # Seconds left on the current item before the next one starts.
+        remaining = 0.0
         if self._now_playing:
             np_total = _to_seconds(self._now_playing.get("seconds", self._now_playing.get("duration")))
-            remaining = np_total - _to_seconds(self._now_playing.get("currentTime"))
-            offset = max(0.0, remaining)
+            remaining = max(0.0, np_total - _to_seconds(self._now_playing.get("currentTime")))
 
-        now = datetime.now(UTC)
-        for item in self._items:
+        np_index = self._now_playing_index()
+
+        if np_index is None:
+            # No identifiable now-playing item: assume the head of the list is
+            # next, starting after the current item's remaining time.
+            offset = remaining
+            for item in self._items:
+                item["estimated_start_in_sec"] = round(offset)
+                item["estimated_start_at"] = (now + timedelta(seconds=offset)).isoformat()
+                offset += _to_seconds(item.get("duration_sec"))
+            return
+
+        # The now-playing item is on screen now (offset 0).
+        np_item = self._items[np_index]
+        np_item["estimated_start_in_sec"] = 0
+        np_item["estimated_start_at"] = now.isoformat()
+
+        # Walk the rest in true play order, wrapping past the end of the list.
+        offset = remaining
+        for step in range(1, n):
+            item = self._items[(np_index + step) % n]
             item["estimated_start_in_sec"] = round(offset)
-            # Absolute timestamp retained for compatibility; relative offset is
-            # what the UI renders.
             item["estimated_start_at"] = (now + timedelta(seconds=offset)).isoformat()
             offset += _to_seconds(item.get("duration_sec"))
 

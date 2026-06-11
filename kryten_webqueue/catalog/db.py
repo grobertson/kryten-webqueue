@@ -271,6 +271,19 @@ MIGRATIONS = [
     """
     UPDATE catalog SET added_at = synced_at WHERE added_at IS NULL;
     """,
+    # v7: Per-schedule pre-fire lock override. Lets an admin lift a currently
+    # active pre-fire lock without deleting/unarming the (recurring) schedule.
+    # Reset to 0 whenever a recurring schedule re-arms its next occurrence.
+    """
+    ALTER TABLE playlist_schedules ADD COLUMN lock_disabled INTEGER NOT NULL DEFAULT 0;
+    """,
+    # v8: Track the firing's last scheduled item + an in-progress lock override
+    # so the scheduled-event lock can auto-lift once the last item begins
+    # playing, and admins can disable it mid-event.
+    """
+    ALTER TABLE active_schedule ADD COLUMN last_item_uid INTEGER;
+    ALTER TABLE active_schedule ADD COLUMN lock_disabled INTEGER NOT NULL DEFAULT 0;
+    """,
 ]
 
 
@@ -976,15 +989,38 @@ class Database:
         return await self._fetch_one("SELECT * FROM active_schedule WHERE id=1")
 
     async def set_active_schedule(self, *, schedule_id: int, playlist_id: int,
-                                  is_immutable: bool, started_at: str, estimated_end_at: str):
+                                  is_immutable: bool, started_at: str, estimated_end_at: str,
+                                  last_item_uid: int | None = None):
         await self._execute(
-            "INSERT OR REPLACE INTO active_schedule (id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at) "
-            "VALUES (1, ?, ?, ?, ?, ?)",
-            [schedule_id, playlist_id, int(is_immutable), started_at, estimated_end_at],
+            "INSERT OR REPLACE INTO active_schedule "
+            "(id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at, last_item_uid, lock_disabled) "
+            "VALUES (1, ?, ?, ?, ?, ?, ?, 0)",
+            [schedule_id, playlist_id, int(is_immutable), started_at, estimated_end_at, last_item_uid],
         )
 
     async def clear_active_schedule(self):
         await self._execute("DELETE FROM active_schedule WHERE id=1")
+
+    async def disable_active_lock(self):
+        """Lift the in-progress scheduled-event lock without ending the event.
+
+        Keeps the ``active_schedule`` row (so banners/state still show the event)
+        and leaves the underlying schedule armed for future occurrences.
+        """
+        await self._execute("UPDATE active_schedule SET lock_disabled=1 WHERE id=1")
+
+    async def is_event_lock_active(self) -> bool:
+        """True while an immutable scheduled event is locking pay-to-play.
+
+        Auto-lifts (via :meth:`disable_active_lock`, set when the last scheduled
+        item begins playing) and respects an admin's manual unlock.
+        """
+        row = await self.get_active_schedule()
+        if not row:
+            return False
+        if not row.get("is_immutable"):
+            return False
+        return not row.get("lock_disabled")
 
     # --- Pre-fire lock check ---
 
@@ -992,6 +1028,7 @@ class Database:
         row = await self._fetch_one("""
             SELECT 1 FROM playlist_schedules
             WHERE is_active = 1
+              AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND fire_at > datetime('now')
             LIMIT 1
@@ -1007,6 +1044,7 @@ class Database:
         return await self._fetch_one("""
             SELECT * FROM playlist_schedules
             WHERE is_active = 1
+              AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND fire_at > datetime('now')
             ORDER BY fire_at

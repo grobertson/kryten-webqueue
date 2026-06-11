@@ -87,14 +87,31 @@ async function loadPlaylists() {
             <tr>
                 <td><a href="#" onclick="openEditor(${p.id});return false;">${escapeHtml(p.name)}</a>
                     ${p.description ? `<div class="muted">${escapeHtml(p.description)}</div>` : ''}</td>
-                <td>${p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '—'}</td>
+                <td>${p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '<span class="muted">Mutable</span>'}</td>
                 <td>${escapeHtml(p.created_by || '')}</td>
                 <td class="row-actions">
+                    <button class="btn btn-sm" onclick="toggleImmutable(${p.id}, ${p.is_immutable ? 1 : 0}, '${escapeHtml(p.name)}')"
+                        title="${p.is_immutable ? 'Release items back to the public catalog' : 'Reserve items — hide from public catalog/search'}">
+                        ${p.is_immutable ? 'Release' : 'Reserve'}</button>
                     <button class="btn btn-sm" onclick="openEditor(${p.id})">Edit</button>
                     <button class="btn btn-sm btn-danger" onclick="deletePlaylist(${p.id}, '${escapeHtml(p.name)}')">Delete</button>
                 </td>
             </tr>`).join('')}
     </table>`;
+}
+
+async function toggleImmutable(id, currentlyImmutable, name) {
+    const makeImmutable = !currentlyImmutable;
+    const verb = makeImmutable ? 'Reserve' : 'Release';
+    if (!confirm(`${verb} "${name}"?\n\n${makeImmutable
+        ? 'Its items will be hidden from the public catalog and search and reserved for scheduled play.'
+        : 'Its items will return to the public catalog and become available for pay-to-play.'}`)) return;
+    const resp = await fetch(`/admin/playlists/${id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({is_immutable: makeImmutable})
+    });
+    showToast(resp.ok ? `${verb}d` : `${verb} failed`, resp.ok ? 'success' : 'error');
+    loadPlaylists();
 }
 
 function showCreateModal() {
