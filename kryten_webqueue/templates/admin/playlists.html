@@ -49,9 +49,13 @@
                     <div id="cat-results" class="cat-results"></div>
 
                     <h3 style="margin-top:1.5rem;">Bulk Text Import</h3>
-                    <p class="muted" style="font-size:0.8rem;">One token per line. <code>cm:token</code>, <code>yt:id</code>, or a bare catalog token. <code>#</code> comments allowed.</p>
-                    <textarea id="import-text" class="import-text" rows="5" placeholder="abc123def&#10;yt:dQw4w9WgXcQ"></textarea>
-                    <button class="btn btn-sm" onclick="parseImport()">Append Parsed Items</button>
+                    <p class="muted" style="font-size:0.8rem;">One entry per line: a <strong>dropsugar.co</strong> link, a <strong>YouTube</strong>/<strong>youtu.be</strong> link (playlist &amp; start-time args are stripped), <code>cm:token</code>, <code>yt:id</code>, or a bare catalog token. <code>#</code> starts a comment (whole-line or trailing). Unknown sites are skipped.</p>
+                    <textarea id="import-text" class="import-text" rows="5" placeholder="https://www.dropsugar.co/view?m=abc123def&#10;https://youtu.be/dQw4w9WgXcQ?t=42  # start time is stripped&#10;yt:dQw4w9WgXcQ&#10;abc123def"></textarea>
+                    <div class="btn-group" style="margin-top:0.25rem;">
+                        <button class="btn btn-sm" onclick="parseImport()">Append Parsed Items</button>
+                        <input type="file" id="import-file" accept=".txt,.csv,text/plain" style="display:none" onchange="loadImportFile(event)">
+                        <button class="btn btn-sm" onclick="document.getElementById('import-file').click()">Choose text file…</button>
+                    </div>
                     <div id="import-errors" class="import-errors"></div>
                 </div>
             </div>
@@ -261,6 +265,22 @@ async function parseImport() {
     } else { errEl.innerHTML = ''; }
     showToast(`Appended ${(data.items || []).length} item(s)`);
     document.getElementById('import-text').value = '';
+}
+
+function loadImportFile(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const ta = document.getElementById('import-text');
+        // Append (with a newline separator) so the admin can review before parsing.
+        ta.value = (ta.value.trim() ? ta.value.replace(/\s*$/, '') + '\n' : '') + reader.result;
+        showToast(`Loaded ${file.name}`);
+    };
+    reader.onerror = () => showToast('Could not read file', 'error');
+    reader.readAsText(file);
+    // Reset so picking the same file again re-fires change.
+    event.target.value = '';
 }
 
 async function saveItems() {

@@ -159,4 +159,5 @@ async def parse_text(request: Request, user: dict = Depends(require_admin)):
     body = await request.json()
     text = body.get("text", "")
     db = request.app.state.db
-    return await import_playlist_text(db, text)
+    config = request.app.state.config
+    return await import_playlist_text(db, text, mediacms_url=config.mediacms_url)

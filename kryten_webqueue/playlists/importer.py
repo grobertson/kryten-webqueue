@@ -1,7 +1,59 @@
 import logging
-from datetime import datetime, UTC
+import re
 
 logger = logging.getLogger(__name__)
+
+
+# --- URL parsing helpers (module-level, pure) ---
+
+_YT_ID = r"[A-Za-z0-9_-]{11}"
+
+
+def extract_youtube_id(url: str) -> str | None:
+    """Return the 11-char YouTube video id from any YouTube/youtu.be URL.
+
+    Strips playlists (``list=``), start times (``t=``/``start=``) and every
+    other query/path argument. Returns None when no video id is present (e.g. a
+    bare ``/playlist?list=...`` link, which we do not expand)."""
+    # youtu.be/<id>
+    m = re.search(rf"youtu\.be/({_YT_ID})", url)
+    if m:
+        return m.group(1)
+    # youtube.com/watch?v=<id>
+    m = re.search(rf"[?&]v=({_YT_ID})", url)
+    if m:
+        return m.group(1)
+    # youtube.com/shorts/<id>, /embed/<id>, /v/<id>, /live/<id>
+    m = re.search(rf"/(?:shorts|embed|v|live)/({_YT_ID})", url)
+    if m:
+        return m.group(1)
+    return None
+
+
+def extract_dropsugar_token(url: str) -> str | None:
+    """Return the MediaCMS friendly_token from a dropsugar manifest/view URL."""
+    m = re.search(r"/media/cytube/([^./?&]+)\.json", url)
+    if m:
+        return m.group(1)
+    m = re.search(r"[?&]m=([^&]+)", url)
+    if m:
+        return m.group(1)
+    return None
+
+
+def _is_youtube(host: str) -> bool:
+    host = host.lower()
+    return "youtube.com" in host or "youtu.be" in host
+
+
+def _is_dropsugar(host: str) -> bool:
+    return "dropsugar." in host.lower()
+
+
+def _manifest_url_for_token(token: str, mediacms_url: str | None) -> str | None:
+    if not mediacms_url:
+        return None
+    return f"{mediacms_url.rstrip('/')}/api/v1/media/cytube/{token}.json?format=json"
 
 
 class PlaylistImporter:
@@ -38,51 +90,115 @@ class PlaylistImporter:
         return {"success": True, "added": added, "errors": errors}
 
 
-async def import_playlist_text(db, text: str) -> dict:
-    """Parse plain-text playlist import format.
+async def import_playlist_text(db, text: str, *, mediacms_url: str | None = None) -> dict:
+    """Parse the plain-text playlist import format into resolved items.
 
-    Format:
-      - Lines starting with # are comments
-      - Blank lines are skipped
-      - "type:id" for explicit type (e.g. "yt:dQw4w9WgXcQ")
-      - "cm:friendly_token" for MediaCMS items
-      - Bare token resolves from catalog
+    Tolerant by design — never raises; unrecognised lines are reported in
+    ``errors`` so the import can proceed with whatever resolved.
 
-    Returns: {"items": [...], "errors": [...]}
+    Supported per line (one entry per line):
+      - Blank lines are skipped.
+      - ``#`` starts a comment: a whole-line comment, or an inline trailing
+        comment (everything from the first ``#`` is ignored).
+      - **dropsugar.co / dropsugar.com URLs** — watch (``/view?m=TOKEN``) or
+        manifest (``/api/v1/media/cytube/TOKEN.json``) links. Resolved against
+        the catalog (for title/duration); falls back to a constructed manifest
+        URL when the token isn't catalogued yet.
+      - **YouTube / youtu.be URLs** — playlist, start-time (``t``) and all other
+        arguments are stripped, leaving a clean ``yt:VIDEOID`` item.
+      - Other ``http(s)`` URLs (unknown sites) are skipped (reported as
+        ``unsupported_site``).
+      - Legacy tokens: ``cm:token``, ``yt:id``, or a bare catalog token.
+      - Trailing free text after a URL (e.g. ``URL - Some Title``) is used as a
+        title hint for items not found in the catalog.
+
+    Returns: ``{"items": [...], "errors": [...]}``.
     """
     items = []
     errors = []
+    url_re = re.compile(r"https?://\S+")
 
-    for line_num, line in enumerate(text.splitlines(), 1):
-        line = line.strip()
-        if not line or line.startswith("#"):
+    for line_num, raw in enumerate(text.splitlines(), 1):
+        # Strip inline comments: everything from the first '#'.
+        line = raw.split("#", 1)[0].strip()
+        if not line:
             continue
 
+        url_match = url_re.search(line)
+        if url_match:
+            url = url_match.group(0).rstrip(".,;")
+            # Free text after the URL is a title hint (e.g. " - My Title").
+            trailing = line[url_match.end():].strip().lstrip("-–").strip()
+            title_hint = trailing or None
+            host = re.sub(r"^https?://", "", url).split("/", 1)[0]
+
+            if _is_youtube(host):
+                vid = extract_youtube_id(url)
+                if vid:
+                    items.append({
+                        "media_type": "yt",
+                        "media_id": vid,
+                        "title": title_hint,
+                        "duration_sec": None,
+                    })
+                else:
+                    errors.append({"line": line_num, "token": url, "reason": "youtube_no_video_id"})
+                continue
+
+            if _is_dropsugar(host):
+                token = extract_dropsugar_token(url)
+                if not token:
+                    errors.append({"line": line_num, "token": url, "reason": "no_token_in_url"})
+                    continue
+                catalog_item = await db.get_item_admin(token)
+                if catalog_item:
+                    items.append({
+                        "media_type": "cm",
+                        "media_id": catalog_item["manifest_url"],
+                        "title": catalog_item.get("title") or title_hint,
+                        "duration_sec": catalog_item.get("duration_sec"),
+                    })
+                else:
+                    manifest = _manifest_url_for_token(token, mediacms_url)
+                    if manifest:
+                        items.append({
+                            "media_type": "cm",
+                            "media_id": manifest,
+                            "title": title_hint,
+                            "duration_sec": None,
+                        })
+                    else:
+                        errors.append({"line": line_num, "token": token, "reason": "not_in_catalog"})
+                continue
+
+            # Any other site — skip tolerantly.
+            errors.append({"line": line_num, "token": url, "reason": "unsupported_site"})
+            continue
+
+        # --- legacy token forms (no URL on the line) ---
         if line.startswith("cm:"):
-            media_id = line[3:]
+            media_id = line[3:].strip()
             catalog_item = await db.get_item_admin(media_id)
             items.append({
                 "media_type": "cm",
-                "media_id": media_id,
+                "media_id": catalog_item["manifest_url"] if catalog_item else media_id,
                 "title": catalog_item["title"] if catalog_item else None,
                 "duration_sec": catalog_item["duration_sec"] if catalog_item else None,
             })
-        elif ":" in line:
-            # Explicit type:id (e.g. yt:abc123)
-            media_type, media_id = line.split(":", 1)
+        elif line.startswith("yt:"):
             items.append({
-                "media_type": media_type,
-                "media_id": media_id,
+                "media_type": "yt",
+                "media_id": line[3:].strip(),
                 "title": None,
                 "duration_sec": None,
             })
         else:
-            # Bare token — resolve from catalog
+            # Bare token — resolve from catalog.
             catalog_item = await db.get_item_admin(line)
             if catalog_item:
                 items.append({
                     "media_type": "cm",
-                    "media_id": catalog_item["friendly_token"],
+                    "media_id": catalog_item["manifest_url"],
                     "title": catalog_item["title"],
                     "duration_sec": catalog_item["duration_sec"],
                 })
@@ -90,3 +206,4 @@ async def import_playlist_text(db, text: str) -> dict:
                 errors.append({"line": line_num, "token": line, "reason": "not_in_catalog"})
 
     return {"items": items, "errors": errors}
+

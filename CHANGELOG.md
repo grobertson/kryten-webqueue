@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.6] — 2026-06-11
+
+### Added
+
+- **Richer Bulk Text Import on the admin Playlists editor.** The text import now accepts, one entry per line:
+  - **dropsugar.co / dropsugar.com links** (watch `?m=TOKEN` or manifest `/api/v1/media/cytube/TOKEN.json`) — resolved against the catalog for title/duration, falling back to a constructed manifest URL when the token isn't catalogued yet.
+  - **YouTube / youtu.be links** — playlist (`list=`), start-time (`t`/`start`) and all other arguments are stripped, leaving a clean `yt:VIDEOID` item.
+  - Legacy `cm:token`, `yt:id`, and bare catalog tokens (unchanged).
+  - Trailing free text after a URL (e.g. `URL - My Title`) is used as a title hint.
+- **Upload a local text file** into the importer via a "Choose text file…" button (contents are loaded into the textarea for review before parsing).
+
+### Changed
+
+- The text import parser is now **tolerant**: blank lines, whole-line `#` comments, and inline trailing `#` comments are ignored, and links to unknown sites are skipped (reported as `unsupported_site`) instead of failing the import.
+
 ## [0.9.5] — 2026-06-11
 
 ### Changed
