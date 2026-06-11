@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Richer Bulk Text Import on the admin Playlists editor.** The text import now accepts, one entry per line:
-  - **dropsugar.co / dropsugar.com links** (watch `?m=TOKEN` or manifest `/api/v1/media/cytube/TOKEN.json`) — resolved against the catalog for title/duration, falling back to a constructed manifest URL when the token isn't catalogued yet.
+  - **dropsugar.co links** (watch `?m=TOKEN` or manifest `/api/v1/media/cytube/TOKEN.json`) — resolved against the catalog for title/duration, falling back to a constructed manifest URL when the token isn't catalogued yet.
   - **YouTube / youtu.be links** — playlist (`list=`), start-time (`t`/`start`) and all other arguments are stripped, leaving a clean `yt:VIDEOID` item.
   - Legacy `cm:token`, `yt:id`, and bare catalog tokens (unchanged).
   - Trailing free text after a URL (e.g. `URL - My Title`) is used as a title hint.
