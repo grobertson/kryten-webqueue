@@ -48,6 +48,29 @@ async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
             except Exception as e:
                 logger.warning(f"Schedule fire: failed to add {item['media_id']}: {e}")
 
+        # Append the optional fallback (mutable) playlist AFTER the event items so
+        # the live queue isn't left empty once the event is exhausted. The
+        # fallback items are not part of the "scheduled event", so they do not
+        # change last_item_uid (the event lock still lifts when the last EVENT
+        # item begins) and they remain available for pay-to-play/search.
+        fallback_id = schedule.get("fallback_playlist_id")
+        if fallback_id:
+            fallback_items = await db.get_saved_playlist_items(fallback_id)
+            for item in fallback_items:
+                try:
+                    await api_gate.playlist_add(
+                        media_type=item["media_type"],
+                        media_id=item["media_id"],
+                        position="end",
+                    )
+                except Exception as e:
+                    logger.warning(f"Schedule fire: failed to add fallback {item['media_id']}: {e}")
+            if fallback_items:
+                logger.info(
+                    f"Schedule {schedule_id}: appended {len(fallback_items)} fallback item(s) "
+                    f"from playlist {fallback_id}"
+                )
+
         # Update active schedule
         now = datetime.now(UTC)
         await db.set_active_schedule(

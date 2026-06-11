@@ -22,6 +22,7 @@
 {% block scripts %}
 <script>
 let playlistMap = {};
+let playlistRows = [];
 
 function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str == null ? '' : str; return d.innerHTML; }
 
@@ -30,6 +31,7 @@ async function loadPlaylistsForSelect() {
     if (!resp.ok) return [];
     const rows = await resp.json();
     playlistMap = {};
+    playlistRows = rows;
     rows.forEach(p => playlistMap[p.id] = p.name);
     return rows;
 }
@@ -88,7 +90,7 @@ async function loadSchedules() {
             const preFireLocked = inPreFire && !s.lock_disabled;
             return `<tr>
                 <td>${escapeHtml(s.label)}${s.is_recurring ? ' <span class="badge">↻</span>' : ''}</td>
-                <td>${escapeHtml(playlistMap[s.playlist_id] || ('#' + s.playlist_id))}</td>
+                <td>${escapeHtml(playlistMap[s.playlist_id] || ('#' + s.playlist_id))}${s.fallback_playlist_id ? `<div class="muted">then: ${escapeHtml(playlistMap[s.fallback_playlist_id] || ('#' + s.fallback_playlist_id))}</div>` : ''}</td>
                 <td>${formatLocalDateTime(s.fire_at)}</td>
                 <td>${lockMin}m${preFireLocked ? ' <button class="btn btn-xs" onclick="unlockNow()" title="Lift the active pre-fire lock now">Unlock</button>' : (inPreFire && s.lock_disabled ? ' <span class="muted">(unlocked)</span>' : '')}</td>
                 <td><span class="job-status job-status-${fired === 'pending' ? 'running' : (fired === 'fired' ? 'completed' : 'cancelled')}">${s.is_active ? fired : 'disabled'}</span></td>
@@ -106,6 +108,11 @@ function scheduleForm(s) {
     s = s || {};
     const opts = Object.entries(playlistMap).map(([id, name]) =>
         `<option value="${id}" ${s.playlist_id == id ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+    // Fallback options: mutable (non-immutable) playlists only, plus a "none" choice.
+    const mutable = playlistRows.filter(p => !p.is_immutable);
+    const fallbackOpts = '<option value="">— none (leave queue empty) —</option>' +
+        mutable.map(p =>
+            `<option value="${p.id}" ${s.fallback_playlist_id == p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
     // fire_at → datetime-local value (local tz)
     let dtLocal = '';
     if (s.fire_at) {
@@ -116,6 +123,8 @@ function scheduleForm(s) {
         <h3>${s.id ? 'Edit' : 'New'} Schedule</h3>
         <label class="field"><span>Label</span><input type="text" id="s-label" value="${escapeHtml(s.label || '')}"></label>
         <label class="field"><span>Playlist</span><select id="s-playlist">${opts}</select></label>
+        <label class="field"><span>Fallback playlist</span><select id="s-fallback">${fallbackOpts}</select></label>
+        <p class="muted" style="font-size:0.8rem;margin-top:-0.25rem;">Plays after the scheduled playlist is exhausted, so the queue isn't left empty. Only mutable playlists can be used.</p>
         <label class="field"><span>Fire at</span><input type="datetime-local" id="s-fireat" value="${dtLocal}"></label>
         <label class="field"><span>Pre-fire lock (min)</span><input type="number" id="s-lock" min="0" value="${s.pre_fire_lock_minutes ?? 15}"></label>
         <label class="check"><input type="checkbox" id="s-recur" ${s.is_recurring ? 'checked' : ''}> Recurring</label>
@@ -151,6 +160,8 @@ function collectSchedule() {
         is_recurring: document.getElementById('s-recur').checked,
         rrule: document.getElementById('s-rrule').value.trim() || null,
     };
+    const fallbackVal = document.getElementById('s-fallback').value;
+    body.fallback_playlist_id = fallbackVal ? parseInt(fallbackVal, 10) : null;
     const active = document.getElementById('s-active');
     if (active) body.is_active = active.checked;
     return body;

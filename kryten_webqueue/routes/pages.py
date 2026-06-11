@@ -8,6 +8,10 @@ from ..auth.session import get_current_user
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
+# Expose the package version to every template (used in the footer).
+from .. import __version__ as _wq_version
+templates.env.globals["app_version"] = _wq_version
+
 router = APIRouter(tags=["pages"])
 
 # Sort keys exposed in the browse/search UI. Order defines the dropdown order.

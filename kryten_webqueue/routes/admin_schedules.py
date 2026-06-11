@@ -53,6 +53,7 @@ async def create_schedule(request: Request, user: dict = Depends(require_admin))
         is_recurring=body.get("is_recurring", False),
         rrule=body.get("rrule"),
         pre_fire_lock_minutes=body.get("pre_fire_lock_minutes", 15),
+        fallback_playlist_id=body.get("fallback_playlist_id"),
         is_active=True,
         created_by=user["username"],
     )

@@ -284,6 +284,12 @@ MIGRATIONS = [
     ALTER TABLE active_schedule ADD COLUMN last_item_uid INTEGER;
     ALTER TABLE active_schedule ADD COLUMN lock_disabled INTEGER NOT NULL DEFAULT 0;
     """,
+    # v9: Optional fallback (mutable) playlist appended to the live queue after a
+    # scheduled event's items, so the queue isn't left empty when the event is
+    # exhausted. NULL = no fallback (legacy behaviour).
+    """
+    ALTER TABLE playlist_schedules ADD COLUMN fallback_playlist_id INTEGER REFERENCES saved_playlists(id) ON DELETE SET NULL;
+    """,
 ]
 
 

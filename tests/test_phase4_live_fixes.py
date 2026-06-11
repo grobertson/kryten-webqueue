@@ -168,3 +168,83 @@ async def test_pre_fire_lock_can_be_disabled(db):
 
     await db.update_schedule(sid, lock_disabled=1)
     assert await db.is_pre_fire_lock_active() is False
+
+
+# --- #2 (v0.9.4) scheduled-event fallback playlist ---
+
+class _FakeApiGate:
+    """Minimal api_gate stub recording playlist_add calls."""
+
+    def __init__(self):
+        self.added = []
+        self._uid = 0
+        self.cleared = False
+
+    async def playlist_clear(self):
+        self.cleared = True
+
+    async def playlist_add(self, *, media_type, media_id, position="end"):
+        self._uid += 1
+        self.added.append({"media_type": media_type, "media_id": media_id, "uid": self._uid})
+        return {"success": True, "uid": self._uid}
+
+
+class _FakeWs:
+    async def broadcast(self, *_a, **_k):
+        pass
+
+
+async def test_fire_appends_fallback_after_event(db):
+    from kryten_webqueue.playlists.fire import fire_schedule
+
+    event_pid = await db.create_saved_playlist(
+        name="Event", description=None, is_immutable=True, created_by="admin"
+    )
+    await db.replace_playlist_items(event_pid, [
+        {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
+        {"media_type": "cm", "media_id": "e2", "title": "E2", "duration_sec": 100},
+    ])
+    fallback_pid = await db.create_saved_playlist(
+        name="Filler", description=None, is_immutable=False, created_by="admin"
+    )
+    await db.replace_playlist_items(fallback_pid, [
+        {"media_type": "cm", "media_id": "f1", "title": "F1", "duration_sec": 100},
+    ])
+    sid = await db.create_schedule(
+        playlist_id=event_pid, label="Event",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1, created_by="admin", fallback_playlist_id=fallback_pid,
+    )
+
+    api = _FakeApiGate()
+    shadow = QueueShadow(db)
+    await fire_schedule(schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs())
+
+    # Event items first, fallback appended after.
+    assert [a["media_id"] for a in api.added] == ["e1", "e2", "f1"]
+
+    # The event lock's last item is the last EVENT item (e2, uid=2), NOT the
+    # fallback — so the lock lifts when e2 starts, not when the filler plays.
+    active = await db.get_active_schedule()
+    assert active["last_item_uid"] == 2
+
+
+async def test_fire_without_fallback_only_adds_event(db):
+    from kryten_webqueue.playlists.fire import fire_schedule
+
+    event_pid = await db.create_saved_playlist(
+        name="Event", description=None, is_immutable=True, created_by="admin"
+    )
+    await db.replace_playlist_items(event_pid, [
+        {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
+    ])
+    sid = await db.create_schedule(
+        playlist_id=event_pid, label="Event",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1, created_by="admin",
+    )
+
+    api = _FakeApiGate()
+    shadow = QueueShadow(db)
+    await fire_schedule(schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs())
+    assert [a["media_id"] for a in api.added] == ["e1"]

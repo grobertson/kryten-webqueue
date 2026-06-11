@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.4] — 2026-06-11
+
+### Added
+
+- **App version in the footer.** Every view now shows the running `kryten-webqueue` version (e.g. `v0.9.4`) in the footer, sourced from the installed package metadata.
+- **Scheduled-event fallback playlist.** Each schedule can name an optional *mutable* fallback playlist that is appended to the live CyTube queue right after the event's items, so the queue is no longer left empty once a scheduled event is exhausted — no manual intervention required. The fallback items aren't part of the "scheduled event", so they stay available for pay-to-play/search and don't affect when the event lock lifts. Configured via a dropdown (mutable playlists only) in the admin Schedule editor.
+
+### Fixed
+
+- **Playlist rows with a description no longer break row formatting.** The admin table action cell was a `display:flex` `<td>`, which dropped it from the table layout so its bottom border stopped aligning once a name + description grew taller. Action cells are now normal table cells (top-aligned, inline button layout), so buttons and row separators line up regardless of description length.
+
 ## [0.9.3] — 2026-06-11
 
 ### Fixed
