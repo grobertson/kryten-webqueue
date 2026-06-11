@@ -26,7 +26,7 @@ def _add_failure_reason(add_result: dict | None, exc: httpx.HTTPStatusError | No
 
 
 def _announcement_position(shadow, uid: int) -> int | None:
-    """Position of the item for chat announcement.
+    """Position of the item for chat announcement (deprecated; kept for tests).
 
     Counting starts at the currently-playing item (position 0), so the next
     item to play is position 1. The shadow mirrors the full CyTube playlist
@@ -39,13 +39,80 @@ def _announcement_position(shadow, uid: int) -> int | None:
     return None
 
 
-async def _announce_queued(api_gate, shadow, *, uid: int, title: str, username: str) -> None:
-    """Announce a successful queue placement to the channel chat."""
-    pos = _announcement_position(shadow, uid)
-    if pos is None:
+_ONES_ORDINAL = {
+    "one": "first", "two": "second", "three": "third", "five": "fifth",
+    "eight": "eighth", "nine": "ninth", "twelve": "twelfth",
+}
+_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight",
+         "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
+         "sixteen", "seventeen", "eighteen", "nineteen"]
+_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
+         "eighty", "ninety"]
+
+
+def _cardinal_words(n: int) -> str:
+    """English cardinal words for 1..999 (queue positions never exceed this)."""
+    if n < 20:
+        return _ONES[n]
+    if n < 100:
+        tens, ones = divmod(n, 10)
+        return _TENS[tens] + (f"-{_ONES[ones]}" if ones else "")
+    hundreds, rem = divmod(n, 100)
+    head = f"{_ONES[hundreds]} hundred"
+    return f"{head} {_cardinal_words(rem)}" if rem else head
+
+
+def _to_ordinal_word(word: str) -> str:
+    """Convert a single cardinal word to its ordinal form."""
+    if word in _ONES_ORDINAL:
+        return _ONES_ORDINAL[word]
+    if word.endswith("y"):
+        return word[:-1] + "ieth"
+    return word + "th"
+
+
+def _ordinal_words(n: int) -> str:
+    """English ordinal words for n (e.g. 3 -> 'third', 42 -> 'forty-second')."""
+    cardinal = _cardinal_words(n)
+    # Convert only the final word (handles 'forty-two'->'forty-second',
+    # 'one hundred seven'->'one hundred seventh').
+    if "-" in cardinal:
+        head, last = cardinal.rsplit("-", 1)
+        return f"{head}-{_to_ordinal_word(last)}"
+    parts = cardinal.rsplit(" ", 1)
+    if len(parts) == 2:
+        return f"{parts[0]} {_to_ordinal_word(parts[1])}"
+    return _to_ordinal_word(cardinal)
+
+
+async def _announce_paid_queued(api_gate, shadow, *, uid: int, title: str, username: str) -> None:
+    """Announce a paid queue placement to the channel chat.
+
+    Position is counted from the currently-playing item, wrapping around the
+    playlist (CyTube loops). The item immediately after now-playing reads
+    "next"; everything else uses an English ordinal counting the now-playing
+    item as first (so the item two slots away is "third").
+    """
+    items = shadow.items
+    np_uid = await _now_playing_uid(api_gate, shadow)
+    np_index = None
+    item_index = None
+    for i, it in enumerate(items):
+        if it.get("uid") == np_uid:
+            np_index = i
+        if it.get("uid") == uid:
+            item_index = i
+    if item_index is None:
         return
+    n = len(items)
+    offset = item_index if np_index is None else (item_index - np_index) % n
+    if offset <= 0:
+        return
+    position = "next" if offset == 1 else _ordinal_words(offset + 1)
     try:
-        await api_gate.send_chat(f"{title} has been queued in position {pos} by {username}")
+        await api_gate.send_chat(
+            f"{title} added to the queue with Zcoin by {username} and is now {position}."
+        )
     except Exception:
         logger.warning("Failed to send queue announcement", exc_info=True)
 
@@ -238,7 +305,7 @@ async def insert_pay_queue(
         )
 
         # Announce placement to the channel
-        await _announce_queued(api_gate, shadow, uid=uid, title=title, username=username)
+        await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
 
         return {"success": True, "uid": uid, "request_id": request_id}
 
@@ -351,7 +418,7 @@ async def insert_pay_playnext(
         )
 
         # Announce placement to the channel
-        await _announce_queued(api_gate, shadow, uid=uid, title=title, username=username)
+        await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
 
         return {"success": True, "uid": uid, "request_id": request_id}
 
@@ -479,8 +546,7 @@ async def insert_admin_queue(
             title=title, tier="admin", z_cost=0,
         )
 
-        # Announce placement to the channel
-        await _announce_queued(api_gate, shadow, uid=uid, title=title, username=username)
+        # Admin queueing is intentionally NOT announced in the channel.
 
         return {"success": True, "uid": uid, "refunded": removed}
 

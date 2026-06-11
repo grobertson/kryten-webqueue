@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.7] — 2026-06-11
+
+### Changed
+
+- **Paid-queue chat announcement reworded.** A purchased item now announces as `"<title> added to the queue with Zcoin by <user> and is now <position>."` where `<position>` is `next` for the item immediately after the currently-playing one, or an English ordinal counting the now-playing item as first (e.g. `third`, `forty-second`, `one hundred seventh`). Position is computed relative to the currently-playing item and wraps around the playlist.
+- **Admin queueing is no longer announced** in the channel chat (only paid placements are announced).
+- Renamed the admin Schedules heading from “Scheduled Fires” to “Scheduled Events”.
+
 ## [0.9.6] — 2026-06-11
 
 ### Added
