@@ -41,13 +41,17 @@ from slugify import slugify
 # available runtime is used. Applied centrally via a thin YoutubeDL subclass so
 # every extraction/download call in this module gets it without editing each
 # ydl_opts dict. ``setdefault`` means an explicit per-call value still wins.
-_JS_RUNTIMES = ["deno", "node"]
+#
+# yt-dlp expects ``js_runtimes`` as a dict of ``{runtime: {config}}`` (an empty
+# dict means default config for that runtime); passing a list raises
+# "Invalid js_runtimes format, expected a dict of {runtime: {config}}".
+_JS_RUNTIMES = {"deno": {}, "node": {}}
 
 
 class _YoutubeDLWithJSRuntimes(yt_dlp.YoutubeDL):
     def __init__(self, params=None, *args, **kwargs):  # noqa: D107
         merged = dict(params or {})
-        merged.setdefault("js_runtimes", _JS_RUNTIMES)
+        merged.setdefault("js_runtimes", dict(_JS_RUNTIMES))
         super().__init__(merged, *args, **kwargs)
 
 
