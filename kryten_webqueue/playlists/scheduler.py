@@ -27,11 +27,13 @@ def _next_occurrence(rrule_str: str, dtstart: datetime, after: datetime) -> date
 class PlaylistScheduler:
     """APScheduler-based scheduler for playlist fire events."""
 
-    def __init__(self, *, db, api_gate, shadow, ws_manager):
+    def __init__(self, *, db, api_gate, shadow, ws_manager, add_delay_sec: float = 0.0, add_max_retries: int = 0):
         self._db = db
         self._api_gate = api_gate
         self._shadow = shadow
         self._ws_manager = ws_manager
+        self._add_delay_sec = add_delay_sec
+        self._add_max_retries = add_max_retries
         self._scheduler = AsyncIOScheduler()
 
     async def start(self):
@@ -96,6 +98,8 @@ class PlaylistScheduler:
             db=self._db,
             shadow=self._shadow,
             ws_manager=self._ws_manager,
+            add_delay_sec=self._add_delay_sec,
+            add_max_retries=self._add_max_retries,
         )
         # After an automatic timed fire, advance recurring schedules to their
         # next occurrence and re-arm. (Manual "Fire Now" does NOT advance the

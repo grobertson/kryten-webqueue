@@ -112,12 +112,15 @@ async def fire_now(request: Request, schedule_id: int, user: dict = Depends(requ
     if not sched:
         raise HTTPException(404, "Schedule not found")
 
+    config = request.app.state.config
     await fire_schedule(
         schedule_id=schedule_id,
         api_gate=request.app.state.api_gate,
         db=db,
         shadow=request.app.state.shadow,
         ws_manager=request.app.state.ws_manager,
+        add_delay_sec=config.playlist_bulk_add_delay_sec,
+        add_max_retries=config.playlist_bulk_add_max_retries,
     )
     return {"success": True}
 

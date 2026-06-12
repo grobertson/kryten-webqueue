@@ -1,5 +1,8 @@
+import asyncio
 import logging
 import re
+
+from .bulk_add import add_item_throttled
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +62,12 @@ def _manifest_url_for_token(token: str, mediacms_url: str | None) -> str | None:
 class PlaylistImporter:
     """Imports items from a saved playlist into the live CyTube queue."""
 
-    def __init__(self, *, api_gate, db, shadow):
+    def __init__(self, *, api_gate, db, shadow, add_delay_sec: float = 0.0, add_max_retries: int = 0):
         self._api_gate = api_gate
         self._db = db
         self._shadow = shadow
+        self._add_delay_sec = add_delay_sec
+        self._add_max_retries = add_max_retries
 
     async def import_playlist(self, playlist_id: int) -> dict:
         """Import all items from a saved playlist into the live queue."""
@@ -72,12 +77,19 @@ class PlaylistImporter:
 
         added = 0
         errors = 0
-        for item in items:
+        for index, item in enumerate(items):
+            # Throttle consecutive adds so CyTube can validate each item before
+            # the next arrives (avoids transient queueFail/422 under load).
+            if index and self._add_delay_sec:
+                await asyncio.sleep(self._add_delay_sec)
             try:
-                result = await self._api_gate.playlist_add(
+                result = await add_item_throttled(
+                    self._api_gate,
                     media_type=item["media_type"],
                     media_id=item["media_id"],
                     position="end",
+                    max_retries=self._add_max_retries,
+                    retry_delay_sec=self._add_delay_sec or 0.5,
                 )
                 if result.get("success"):
                     added += 1

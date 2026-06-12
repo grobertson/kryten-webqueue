@@ -89,10 +89,13 @@ async def import_to_live(request: Request, playlist_id: int, user: dict = Depend
     if not playlist:
         raise HTTPException(404, "Playlist not found")
 
+    config = request.app.state.config
     importer = PlaylistImporter(
         api_gate=request.app.state.api_gate,
         db=db,
         shadow=request.app.state.shadow,
+        add_delay_sec=config.playlist_bulk_add_delay_sec,
+        add_max_retries=config.playlist_bulk_add_max_retries,
     )
     result = await importer.import_playlist(playlist_id)
     return result

@@ -60,6 +60,13 @@ class Config(BaseModel):
     pre_fire_lock_minutes_default: int = 15
     state_poll_interval_sec: float = 3.0
 
+    # Bulk playlist loading (manual import + scheduled fire). CyTube validates
+    # each queued item server-side (fetching custom manifests); adding faster
+    # than it can validate triggers a transient queueFail (surfaced by api-gate
+    # as HTTP 422). Throttle consecutive adds and retry the transient 422.
+    playlist_bulk_add_delay_sec: float = 0.5   # pause between consecutive adds
+    playlist_bulk_add_max_retries: int = 2     # retries on transient 422
+
     # Monitoring
     prometheus_port: int = 28292
 

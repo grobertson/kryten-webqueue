@@ -131,7 +131,11 @@ async def lifespan(app: FastAPI):
     app.state.rate_limiter = RateLimiter()
 
     # Playlist scheduler
-    scheduler = PlaylistScheduler(db=db, api_gate=api_gate, shadow=shadow, ws_manager=ws_manager)
+    scheduler = PlaylistScheduler(
+        db=db, api_gate=api_gate, shadow=shadow, ws_manager=ws_manager,
+        add_delay_sec=config.playlist_bulk_add_delay_sec,
+        add_max_retries=config.playlist_bulk_add_max_retries,
+    )
     await scheduler.start()
     app.state.scheduler = scheduler
 

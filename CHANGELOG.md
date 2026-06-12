@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.13] — 2026-06-12
+
+### Fixed
+
+- **Bulk playlist loads no longer fail with spurious `422 Unprocessable Entity`.** When importing a saved playlist into the live queue or firing a scheduled playlist, items were added back-to-back with no pacing. CyTube validates each queued item server-side (fetching the custom MediaCMS manifest), and adding faster than it can validate triggers a transient `queueFail` — surfaced by api-gate as HTTP 422 — even for perfectly valid URLs. The importer and scheduled-fire loops now throttle consecutive adds and retry the transient 422 with a short backoff.
+
+### Added
+
+- Config: `playlist_bulk_add_delay_sec` (default `0.5`) — pause between consecutive CyTube adds during bulk loads — and `playlist_bulk_add_max_retries` (default `2`) — retries on a transient 422.
+
 ## [0.9.12] — 2026-06-12
 
 ### Fixed

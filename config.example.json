@@ -32,5 +32,8 @@
   "pre_fire_lock_minutes_default": 15,
   "state_poll_interval_sec": 3.0,
 
+  "playlist_bulk_add_delay_sec": 0.5,
+  "playlist_bulk_add_max_retries": 2,
+
   "prometheus_port": 28292
 }

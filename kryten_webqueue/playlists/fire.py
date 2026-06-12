@@ -3,13 +3,23 @@ import logging
 from datetime import datetime, timedelta, UTC
 
 from ..queue.ordering import refund_item
+from .bulk_add import add_item_throttled
 
 logger = logging.getLogger(__name__)
 
 _queue_lock = asyncio.Lock()
 
 
-async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
+async def fire_schedule(
+    *,
+    schedule_id: int,
+    api_gate,
+    db,
+    shadow,
+    ws_manager,
+    add_delay_sec: float = 0.0,
+    add_max_retries: int = 0,
+):
     """Fire a scheduled playlist: clear queue, refund displaced pay items, load playlist."""
     async with _queue_lock:
         schedule = await db.get_schedule(schedule_id)
@@ -35,12 +45,19 @@ async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
         items = await db.get_saved_playlist_items(playlist_id)
         total_duration = 0
         last_item_uid = None
-        for item in items:
+        for index, item in enumerate(items):
+            # Throttle consecutive adds so CyTube can validate each item before
+            # the next arrives (avoids transient queueFail/422 under load).
+            if index and add_delay_sec:
+                await asyncio.sleep(add_delay_sec)
             try:
-                add_result = await api_gate.playlist_add(
+                add_result = await add_item_throttled(
+                    api_gate,
                     media_type=item["media_type"],
                     media_id=item["media_id"],
                     position="end",
+                    max_retries=add_max_retries,
+                    retry_delay_sec=add_delay_sec or 0.5,
                 )
                 if isinstance(add_result, dict) and add_result.get("uid") is not None:
                     last_item_uid = add_result["uid"]
@@ -56,12 +73,17 @@ async def fire_schedule(*, schedule_id: int, api_gate, db, shadow, ws_manager):
         fallback_id = schedule.get("fallback_playlist_id")
         if fallback_id:
             fallback_items = await db.get_saved_playlist_items(fallback_id)
-            for item in fallback_items:
+            for index, item in enumerate(fallback_items):
+                if index and add_delay_sec:
+                    await asyncio.sleep(add_delay_sec)
                 try:
-                    await api_gate.playlist_add(
+                    await add_item_throttled(
+                        api_gate,
                         media_type=item["media_type"],
                         media_id=item["media_id"],
                         position="end",
+                        max_retries=add_max_retries,
+                        retry_delay_sec=add_delay_sec or 0.5,
                     )
                 except Exception as e:
                     logger.warning(f"Schedule fire: failed to add fallback {item['media_id']}: {e}")
