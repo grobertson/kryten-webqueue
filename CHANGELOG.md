@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.11] — 2026-06-12
+
+### Fixed
+
+- **`fetch`/`fetchurls` now enable a Node.js JavaScript runtime for yt-dlp.** yt-dlp needs an external JS runtime to solve YouTube's JS challenges; only `deno` is enabled by default, so hosts with only Node installed hit a "No supported JavaScript runtime could be found" warning and could miss formats. The vendored downloader now passes `js_runtimes=['deno', 'node']` to every yt-dlp call (priority deno > node, so the highest-priority available runtime is used), applied centrally via a thin `YoutubeDL` wrapper.
+
 ## [0.9.10] — 2026-06-12
 
 ### Changed

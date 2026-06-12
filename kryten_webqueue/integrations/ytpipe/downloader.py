@@ -34,6 +34,28 @@ import yt_dlp
 from slugify import slugify
 
 
+# yt-dlp needs an external JavaScript runtime to solve YouTube's JS challenges.
+# Only "deno" is enabled by default; many hosts only have Node installed, which
+# triggers a "No supported JavaScript runtime could be found" warning and missing
+# formats. Enable both (priority order deno > node) so the highest-priority
+# available runtime is used. Applied centrally via a thin YoutubeDL subclass so
+# every extraction/download call in this module gets it without editing each
+# ydl_opts dict. ``setdefault`` means an explicit per-call value still wins.
+_JS_RUNTIMES = ["deno", "node"]
+
+
+class _YoutubeDLWithJSRuntimes(yt_dlp.YoutubeDL):
+    def __init__(self, params=None, *args, **kwargs):  # noqa: D107
+        merged = dict(params or {})
+        merged.setdefault("js_runtimes", _JS_RUNTIMES)
+        super().__init__(merged, *args, **kwargs)
+
+
+# Route all `yt_dlp.YoutubeDL(...)` calls in this module through the wrapper.
+yt_dlp.YoutubeDL = _YoutubeDLWithJSRuntimes
+
+
+
 def clean_youtube_url(url: str) -> str:
     """
     Clean YouTube URLs by removing Mix/Radio playlist parameters.
