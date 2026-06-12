@@ -1379,9 +1379,13 @@ def run(params: dict, *, config, progress=None) -> dict:
     all_sheets = wb_peek.sheetnames
     wb_peek.close()
     if sheet_name not in all_sheets:
+        # Suggest only date-format weekend sheets (ignore Sheet1/Played Movies/etc).
+        weekend_sheets = [s for s in all_sheets if _SHEET_DATE_RE.match(s.strip())]
+        available = ", ".join(weekend_sheets) if weekend_sheets else ", ".join(all_sheets)
         raise RuntimeError(
-            f"Sheet '{sheet_name}' (upcoming weekend) not found. "
-            f"Available: {', '.join(all_sheets)}"
+            f"This weekend's worksheet '{sheet_name}' was not found in the workbook. "
+            f"Add a sheet named '{sheet_name}' (Friday.date-Saturday.date), or check "
+            f"the sheet name matches. Available weekend sheets: {available}"
         )
 
     _emit({"phase": "parsing", "sheet": sheet_name})

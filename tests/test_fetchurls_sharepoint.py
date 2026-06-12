@@ -71,6 +71,21 @@ def test_run_no_source_raises(tmp_path):
         fetchurls.run({}, config=_config(), progress=None)
 
 
+# --- vendored RuntimeError → JobError translation ---
+
+async def test_run_vendored_translates_runtimeerror_to_joberror(db, monkeypatch):
+    from kryten_webqueue.jobs.manager import JobError
+
+    def boom(params, *, config, progress):
+        raise RuntimeError("This weekend's worksheet was not found.")
+
+    fake_mod = SimpleNamespace(run=boom)
+    monkeypatch.setattr(tasks.importlib, "import_module", lambda name, *a, **k: fake_mod)
+
+    with pytest.raises(JobError, match="worksheet was not found"):
+        await tasks._run_vendored("whatever", {}, _ctx(db), deps=[])
+
+
 # --- fixed section-label playlist names + immutable preserve ---
 
 async def _add_catalog(db, token, title="T"):

@@ -15,6 +15,8 @@ import functools
 import importlib
 import logging
 
+from .manager import JobError
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,14 +46,23 @@ def _thread_safe_progress(ctx, loop):
 
 
 async def _run_vendored(module_path: str, params: dict, ctx, *, deps: list[str]):
-    """Import a vendored module, verify deps, and run its ``run()`` off-loop."""
-    for dep in deps:
-        _require(dep)
-    module = importlib.import_module(module_path)
-    loop = asyncio.get_running_loop()
-    progress = _thread_safe_progress(ctx, loop)
-    fn = functools.partial(module.run, params, config=ctx.config, progress=progress)
-    return await asyncio.to_thread(fn)
+    """Import a vendored module, verify deps, and run its ``run()`` off-loop.
+
+    The vendored tools raise ``RuntimeError`` for expected, user-facing failures
+    (missing/unauthenticated workbook, a sheet that isn't present, a missing
+    optional dependency). Surface those as :class:`JobError` so the run history
+    shows a clean, actionable message instead of a stack trace.
+    """
+    try:
+        for dep in deps:
+            _require(dep)
+        module = importlib.import_module(module_path)
+        loop = asyncio.get_running_loop()
+        progress = _thread_safe_progress(ctx, loop)
+        fn = functools.partial(module.run, params, config=ctx.config, progress=progress)
+        return await asyncio.to_thread(fn)
+    except RuntimeError as exc:
+        raise JobError(str(exc)) from exc
 
 
 # ── Enrich jobs ────────────────────────────────────────────────────────────────

@@ -212,13 +212,14 @@ async function loadJobs() {
         const el = document.getElementById('job-runs');
         if (runs.length > 0) {
             el.innerHTML = `<table class="admin-table">
-                <tr><th>Job</th><th>Started</th><th>Ended</th><th>Status</th></tr>
+                <tr><th>Job</th><th>Started</th><th>Ended</th><th>Status</th><th>Detail</th></tr>
                 ${runs.map(r => `
                     <tr>
                         <td>${escapeHtml(r.job_name || '')}</td>
                         <td>${formatLocalDateTime(r.started_at)}</td>
                         <td>${r.ended_at ? formatLocalDateTime(r.ended_at) : '—'}</td>
                         <td><span class="job-status job-status-${escapeHtml(r.status || '')}">${escapeHtml(r.status || '')}</span></td>
+                        <td class="job-detail">${escapeHtml(summarizeRunDetail(r.detail))}</td>
                     </tr>
                 `).join('')}
             </table>`;
@@ -267,6 +268,27 @@ function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// Summarize a job_runs.detail JSON blob for the history table. Prefers a
+// failure message, otherwise a compact success summary.
+function summarizeRunDetail(detail) {
+    if (!detail) return '';
+    let d;
+    try { d = typeof detail === 'string' ? JSON.parse(detail) : detail; }
+    catch { return String(detail).slice(0, 160); }
+    if (d && d.error) return d.error;
+    if (d && typeof d === 'object') {
+        const parts = [];
+        if (d.sheet) parts.push(d.sheet);
+        if (d.imported_playlists && d.imported_playlists.length) parts.push(`imported: ${d.imported_playlists.join(', ')}`);
+        if (typeof d.resolved === 'number') parts.push(`resolved ${d.resolved}`);
+        if (typeof d.failures === 'number' && d.failures) parts.push(`${d.failures} failed`);
+        if (typeof d.committed === 'number') parts.push(`committed ${d.committed}`);
+        if (typeof d.added_to_playlist !== 'undefined' && d.added_to_playlist) parts.push(`→ playlist ${d.added_to_playlist}`);
+        if (parts.length) return parts.join(' · ');
+    }
+    return '';
 }
 
 loadAdminData();

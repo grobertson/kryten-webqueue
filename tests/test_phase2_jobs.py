@@ -135,6 +135,36 @@ async def test_unknown_job_raises_keyerror(db):
         await jm.run("nope")
 
 
+async def test_job_error_records_clean_message(db):
+    from kryten_webqueue.jobs.manager import JobError
+
+    async def job(params, ctx):
+        raise JobError("This weekend's worksheet '6.12-6.13' was not found.")
+
+    jm = JobManager(db)
+    jm.register("fetchurls", job)
+    await jm.run("fetchurls")
+    run = await _wait_terminal(db, "fetchurls")
+    assert run["status"] == "failed"
+    # Clean message, no "RuntimeError:"/"JobError:" type prefix or traceback.
+    assert json.loads(run["detail"]) == {
+        "error": "This weekend's worksheet '6.12-6.13' was not found."
+    }
+
+
+async def test_unexpected_error_keeps_type_prefix(db):
+    async def job(params, ctx):
+        raise ValueError("boom")
+
+    jm = JobManager(db)
+    jm.register("crashy", job)
+    await jm.run("crashy")
+    run = await _wait_terminal(db, "crashy")
+    assert run["status"] == "failed"
+    # Unexpected (bug) failures retain the exception type for debugging.
+    assert json.loads(run["detail"]) == {"error": "ValueError: boom"}
+
+
 async def test_already_running_guard(db):
     started = asyncio.Event()
     release = asyncio.Event()

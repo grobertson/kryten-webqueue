@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.9] — 2026-06-12
+
+### Changed
+
+- **Graceful handling of expected job failures.** Misconfiguration and bad-input errors (e.g. `fetchurls` not finding this weekend's worksheet, a missing/unauthenticated workbook, or a missing optional dependency) are now recorded as a clean, actionable message in the job-run history and logged at WARNING — no stack trace. A new internal `JobError` distinguishes these expected failures from unexpected bugs (which still log a full traceback and keep their exception-type prefix).
+- The `fetchurls` "sheet not found" message now reads as guidance ("This weekend's worksheet 'M.D-M.D' was not found…") and lists only the date-format weekend sheets instead of every tab in the workbook.
+- The admin Jobs history table now shows a **Detail** column — the failure message for failed runs, or a compact summary (sheet, imported playlists, counts) for successful ones.
+
 ## [0.9.8] — 2026-06-12
 
 ### Added

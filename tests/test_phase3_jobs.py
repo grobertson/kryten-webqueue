@@ -69,6 +69,7 @@ def test_extract_manifest_token():
 async def test_fetch_job_missing_ytdlp_fails_fast(db, monkeypatch):
     # Simulate yt_dlp absent regardless of the host environment.
     import importlib
+    from kryten_webqueue.jobs.manager import JobError
     real_import = importlib.import_module
 
     def fake_import(name, *a, **k):
@@ -77,7 +78,8 @@ async def test_fetch_job_missing_ytdlp_fails_fast(db, monkeypatch):
         return real_import(name, *a, **k)
 
     monkeypatch.setattr(tasks.importlib, "import_module", fake_import)
-    with pytest.raises(RuntimeError, match="yt_dlp"):
+    # A missing optional dependency is a clean, user-facing JobError.
+    with pytest.raises(JobError, match="yt_dlp"):
         await tasks.fetch_job({"url": "http://x"}, _ctx(db))
 
 

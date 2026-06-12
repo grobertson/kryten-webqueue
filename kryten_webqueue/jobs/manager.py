@@ -24,6 +24,15 @@ logger = logging.getLogger(__name__)
 JobFunc = Callable[[dict, "JobContext"], Awaitable[dict | None]]
 
 
+class JobError(Exception):
+    """An expected, user-facing job failure (bad input / config, not a bug).
+
+    Raising this from a job records a clean ``failed`` run with the message and
+    logs it at WARNING without a stack trace, so misconfiguration (e.g. a
+    missing workbook sheet) reads as actionable guidance rather than a crash.
+    """
+
+
 def _option_values(field: dict) -> list:
     """Return the allowed values for an enum field's ``options``.
 
@@ -184,6 +193,13 @@ class JobManager:
         except asyncio.CancelledError:
             await self._db.finish_job_run(run_id, "cancelled", None)
             raise
+        except JobError as exc:
+            # Expected, user-facing failure (bad input/config): record a clean
+            # message and log without a stack trace.
+            logger.warning("Job '%s' failed: %s", name, exc)
+            await self._db.finish_job_run(
+                run_id, "failed", json.dumps({"error": str(exc)})
+            )
         except Exception as exc:  # noqa: BLE001 - record any failure
             logger.exception("Job '%s' failed", name)
             await self._db.finish_job_run(
