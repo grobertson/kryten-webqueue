@@ -287,6 +287,43 @@ def acquire_graph_token(tenant_id: str, client_id: str, cache_path: str = "") ->
     return result["access_token"]
 
 
+def acquire_graph_token_silent(tenant_id: str, client_id: str, cache_path: str) -> Optional[str]:
+    """Return a Graph access token from a pre-seeded MSAL cache, or None.
+
+    Unlike :func:`acquire_graph_token`, this NEVER prompts interactively — it is
+    safe to call from the headless webqueue service. The cache must have been
+    seeded out-of-band (``python -m kryten_webqueue.jobs.fetchurls_auth``). A
+    None return means the admin must (re)authenticate.
+    """
+    if not _HAS_MSAL:
+        raise RuntimeError(
+            "fetchurls SharePoint integration requires 'msal'. "
+            "Install the optional extra: pip install 'kryten-webqueue[jobs]'"
+        )
+    if not cache_path:
+        return None
+    cache_file = Path(cache_path)
+    if not cache_file.exists():
+        return None
+    token_cache = msal.SerializableTokenCache()
+    token_cache.deserialize(cache_file.read_text(encoding="utf-8"))
+    app = msal.PublicClientApplication(
+        client_id,
+        authority=f"https://login.microsoftonline.com/{tenant_id}",
+        token_cache=token_cache,
+    )
+    accounts = app.get_accounts()
+    if not accounts:
+        return None
+    result = app.acquire_token_silent(GRAPH_SCOPES, account=accounts[0])
+    if token_cache.has_state_changed:
+        cache_file.write_text(token_cache.serialize(), encoding="utf-8")
+    if result and "access_token" in result:
+        return result["access_token"]
+    return None
+
+
+
 def _encode_sharing_url(url: str) -> str:
     """Encode a SharePoint sharing/document URL for use with the Graph shares API."""
     encoded = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
@@ -1269,13 +1306,21 @@ def _make_inprocess_fetch(config):
 
 
 def run(params: dict, *, config, progress=None) -> dict:
-    """Resolve the upcoming weekend's Channel Z workbook into playlist files.
+    """Resolve the upcoming weekend's Channel Z workbook into playlist sections.
 
-    File-only (OQ-1): reads a local ``.xlsx`` (``params['workbook_path']`` or
-    ``config.fetchurls.workbook_path``); no SharePoint/Graph/MSAL, no column-F
-    writeback. Off-site URLs are downloaded via the in-process yt-pipe
-    downloader. Returns counts + per-section resolved ``cm:`` lines for the job
-    wrapper to import as saved playlists.
+    Source precedence:
+      1. ``params['workbook_path']`` (one-off local override, e.g. for tests)
+      2. SharePoint via Microsoft Graph when ``config.fetchurls.sharepoint_*``
+         are set (token acquired *silently* from the pre-seeded MSAL cache)
+      3. ``config.fetchurls.workbook_path`` (local file fallback)
+
+    When the source is SharePoint and ``writeback`` is on (and not a dry run),
+    resolved dropsugar URLs are written back to column F via the Graph Excel
+    API. Off-site URLs are downloaded via the in-process yt-pipe downloader.
+
+    Returns counts plus, per section slug, the resolved ``cm:`` lines and the
+    human label ("Friday Night", etc.) so the job wrapper can import each into a
+    fixed, well-known saved playlist.
     """
     _check_openpyxl()
     import openpyxl as _oxl  # noqa: F811 - explicit local import for clarity
@@ -1283,23 +1328,51 @@ def run(params: dict, *, config, progress=None) -> dict:
     section = params.get("section") or "all"
     dry_run = bool(params.get("dry_run", False))
     validate = bool(params.get("validate", True))
-
-    cfg_fetchurls = getattr(config, "fetchurls", None)
-    cfg_path = ""
-    if cfg_fetchurls is not None:
-        cfg_path = getattr(cfg_fetchurls, "workbook_path", "") or ""
-    workbook_path = params.get("workbook_path") or cfg_path
-    if not workbook_path:
-        raise RuntimeError("fetchurls requires a workbook path (config.fetchurls.workbook_path)")
-    wb_file = Path(workbook_path)
-    if not wb_file.exists():
-        raise RuntimeError(f"Workbook not found: {wb_file}")
+    writeback = bool(params.get("writeback", True))
 
     def _emit(detail):
         if progress:
             progress(detail)
 
-    wb_bytes = wb_file.read_bytes()
+    cfg = getattr(config, "fetchurls", None)
+    local_override = params.get("workbook_path") or ""
+    sp_tenant = getattr(cfg, "sharepoint_tenant_id", "") if cfg else ""
+    sp_client = getattr(cfg, "sharepoint_client_id", "") if cfg else ""
+    sp_share = getattr(cfg, "sharepoint_sharing_url", "") if cfg else ""
+    sp_cache = getattr(cfg, "token_cache_path", "") if cfg else ""
+    cfg_local = getattr(cfg, "workbook_path", "") if cfg else ""
+
+    use_sharepoint = bool(sp_tenant and sp_client and sp_share) and not local_override
+
+    wb_ctx = None
+    drive_id = item_id = ""
+    graph_token = ""
+
+    if use_sharepoint:
+        _emit({"phase": "auth", "source": "sharepoint"})
+        graph_token = acquire_graph_token_silent(sp_tenant, sp_client, sp_cache)
+        if not graph_token:
+            raise RuntimeError(
+                "SharePoint authentication unavailable: no valid token in the MSAL "
+                "cache. Run a one-time sign-in on the server: "
+                "python -m kryten_webqueue.jobs.fetchurls_auth"
+            )
+        _emit({"phase": "download", "source": "sharepoint"})
+        try:
+            wb_bytes, drive_id, item_id = download_sharepoint_xlsx(graph_token, sp_share)
+        except SystemExit as exc:  # the vendored reader uses sys.exit on failure
+            raise RuntimeError(f"SharePoint download failed: {exc}") from exc
+    else:
+        workbook_path = local_override or cfg_local
+        if not workbook_path:
+            raise RuntimeError(
+                "fetchurls needs a workbook source: configure "
+                "fetchurls.sharepoint_* (recommended) or fetchurls.workbook_path."
+            )
+        wb_file = Path(workbook_path)
+        if not wb_file.exists():
+            raise RuntimeError(f"Workbook not found: {wb_file}")
+        wb_bytes = wb_file.read_bytes()
 
     sheet_name, friday, saturday = upcoming_weekend_sheet()
     wb_peek = _oxl.load_workbook(io.BytesIO(wb_bytes), read_only=True)
@@ -1316,6 +1389,14 @@ def run(params: dict, *, config, progress=None) -> dict:
     if section and section != "all":
         sections = {k: v for k, v in sections.items() if k == section}
 
+    # Build the writeback context (SharePoint only, non-dry-run, writeback on).
+    if use_sharepoint and writeback and not dry_run:
+        wb_ctx = WritebackContext(
+            token=graph_token, drive_id=drive_id, item_id=item_id,
+            sheet_name=sheet_name, dry_run=False,
+            tenant_id=sp_tenant, client_id=sp_client, cache_path=sp_cache,
+        )
+
     # Swap in the in-process fetch (no fetch.ps1 subprocess in a service).
     global run_fetch  # noqa: PLW0603
     original_run_fetch = run_fetch
@@ -1328,15 +1409,17 @@ def run(params: dict, *, config, progress=None) -> dict:
     downloaded = 0
     failures = 0
     section_lines: dict[str, list[str]] = {}
+    section_labels: dict[str, str] = {}
     all_results: dict[str, list[ProcessResult]] = {}
 
     try:
         for slug, url_rows in sections.items():
             if not url_rows:
                 continue
-            label = SECTION_LABELS.get(slug, slug) if "SECTION_LABELS" in globals() else slug
+            label = SECTION_LABELS.get(slug, slug)
+            section_labels[slug] = label
             results = process_section(
-                label, url_rows, Path("."), dry_run, validate, wb_ctx=None,
+                label, url_rows, Path("."), dry_run, validate, wb_ctx=wb_ctx,
             )
             all_results[slug] = results
             write_playlist(out_dir / f"{sheet_name}-{slug}.txt", results)
@@ -1354,14 +1437,26 @@ def run(params: dict, *, config, progress=None) -> dict:
         write_failures(out_dir / f"{sheet_name}-failures.txt", all_results)
     finally:
         run_fetch = original_run_fetch
+        if wb_ctx is not None:
+            try:
+                _close_workbook_session(wb_ctx)
+            except Exception:  # noqa: BLE001 - best-effort cleanup
+                pass
+
+    writeback_stats = None
+    if wb_ctx is not None:
+        writeback_stats = {"ok": wb_ctx.writes_ok, "failed": wb_ctx.writes_fail}
 
     _emit({"phase": "done", "sheet": sheet_name, "resolved": resolved, "failures": failures})
     return {
         "sheet": sheet_name,
+        "source": "sharepoint" if use_sharepoint else "local",
         "resolved": resolved,
         "downloaded": downloaded,
         "failures": failures,
+        "writeback": writeback_stats,
         "section_lines": section_lines,
+        "section_labels": section_labels,
         "imported_playlists": [],  # filled in by the async job wrapper
         "dry_run": dry_run,
     }

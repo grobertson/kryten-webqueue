@@ -129,8 +129,9 @@ async def test_legacy_tokens_still_work(db):
     yt = [i for i in out["items"] if i["media_type"] == "yt"]
     cm = [i for i in out["items"] if i["media_type"] == "cm"]
     assert yt[0]["media_id"] == "dQw4w9WgXcQ"
-    # bare1 resolves to its manifest URL; cm:cmtoken passes through.
+    # bare1 resolves to its manifest URL; cm:cmtoken (not in catalog) now falls
+    # back to a constructed manifest URL so not-yet-synced items still play.
     assert any(i["media_id"].endswith("bare1.json?format=json") for i in cm)
-    assert any(i["media_id"] == "cmtoken" for i in cm)
+    assert any(i["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/cmtoken.json?format=json" for i in cm)
     # unknownbare is not in catalog -> error
     assert any(e["token"] == "unknownbare" for e in out["errors"])

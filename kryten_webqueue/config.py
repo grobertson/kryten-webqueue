@@ -4,9 +4,22 @@ import json
 
 
 class FetchUrlsConfig(BaseModel):
-    """Settings for the fetchurls job (v1 = local file only, OQ-1)."""
+    """Settings for the fetchurls job.
 
-    workbook_path: str = ""  # absolute path to a synced Channel Z Playlist .xlsx
+    Reads the Channel Z workbook from SharePoint (Microsoft Graph) when the
+    SharePoint fields are configured, otherwise falls back to a local ``.xlsx``
+    at ``workbook_path``. SharePoint auth uses a pre-seeded MSAL token cache
+    (see ``python -m kryten_webqueue.jobs.fetchurls_auth``); the service only
+    acquires tokens *silently* from that cache and never prompts interactively.
+    """
+
+    workbook_path: str = ""  # local .xlsx fallback (used when SharePoint unset)
+
+    # SharePoint / Microsoft Graph (read workbook + write resolved URLs to col F)
+    sharepoint_tenant_id: str = ""
+    sharepoint_client_id: str = ""
+    sharepoint_sharing_url: str = ""
+    token_cache_path: str = ""  # MSAL cache file, pre-seeded out-of-band
 
 
 class Config(BaseModel):

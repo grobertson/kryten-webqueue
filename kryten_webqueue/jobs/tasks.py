@@ -121,33 +121,43 @@ async def fetch_job(params: dict, ctx):
 # ── fetchurls job ──────────────────────────────────────────────────────────────
 
 async def _import_section_as_playlist(ctx, name: str, lines: list[str], triggered_by: str) -> dict | None:
-    """Import resolved ``cm:`` lines as a saved playlist, idempotent by name.
+    """Import resolved ``cm:`` lines into a fixed, well-known saved playlist.
 
-    Re-running replaces the items of an existing same-named playlist (matched
-    by name + creator) rather than creating a duplicate.
+    The three fetchurls playlists ("Friday Night", "Saturday Morning",
+    "Saturday Night") pre-exist and are immutable. We match by **name only**
+    (any creator), replace their items in place (idempotent re-runs), and
+    preserve their existing immutability. If a playlist is missing it is created
+    as immutable so a recreated playlist keeps the reserved status.
     """
     from ..playlists.importer import import_playlist_text
 
     if not lines:
         return None
-    parsed = await import_playlist_text(ctx.db, "\n".join(lines))
+    parsed = await import_playlist_text(
+        ctx.db, "\n".join(lines), mediacms_url=ctx.config.mediacms_url
+    )
     items = parsed.get("items") or []
     if not items:
         return None
 
-    existing = await ctx.db.get_playlist_by_name(name, triggered_by)
+    existing = await ctx.db.get_playlist_by_name_any(name)
     if existing:
         playlist_id = existing["id"]
     else:
         playlist_id = await ctx.db.create_saved_playlist(
-            name=name, description=None, is_immutable=False, created_by=triggered_by,
+            name=name, description=None, is_immutable=True, created_by=triggered_by,
         )
     await ctx.db.replace_playlist_items(playlist_id, items)
     return {"id": playlist_id, "name": name, "count": len(items)}
 
 
 async def fetchurls_job(params: dict, ctx):
-    """Resolve the upcoming-weekend workbook, then import each section playlist."""
+    """Resolve the upcoming-weekend workbook, then import each section playlist.
+
+    Sections map to the fixed playlists by their human label:
+      friday → "Friday Night", saturday-morning → "Saturday Morning",
+      saturday-night → "Saturday Night".
+    """
     result = await _run_vendored(
         "kryten_webqueue.integrations.cmsutils.fetchurls", params, ctx,
         deps=["openpyxl", "yaml", "requests"],
@@ -156,16 +166,17 @@ async def fetchurls_job(params: dict, ctx):
     if result.get("dry_run"):
         return result
 
-    sheet = result.get("sheet")
     triggered_by = ctx.triggered_by or "system"
+    labels = result.get("section_labels") or {}
     imported = []
     for slug, lines in (result.get("section_lines") or {}).items():
-        name = f"{sheet}-{slug}"
+        name = labels.get(slug) or slug
         info = await _import_section_as_playlist(ctx, name, lines, triggered_by)
         if info:
             imported.append(info["name"])
     result["imported_playlists"] = imported
     result.pop("section_lines", None)  # keep the persisted detail compact
+    result.pop("section_labels", None)
     return result
 
 
@@ -210,5 +221,6 @@ FETCHURLS_SCHEMA = [
      "options": ["all", "friday", "saturday-night", "saturday-morning"], "label": "Section"},
     {"name": "dry_run", "type": "bool", "default": False, "label": "Dry run (resolve only)"},
     {"name": "validate", "type": "bool", "default": True, "label": "Validate existing URLs"},
-    {"name": "workbook_path", "type": "string", "default": None, "label": "Workbook path (override)"},
+    {"name": "writeback", "type": "bool", "default": True, "label": "Write resolved URLs back to SharePoint (col F)"},
+    {"name": "workbook_path", "type": "string", "default": None, "label": "Local workbook path (override SharePoint)"},
 ]

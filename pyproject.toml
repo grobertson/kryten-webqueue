@@ -1,6 +1,6 @@
 [project]
 name = "kryten-webqueue"
-version = "0.9.7"
+version = "0.9.8"
 description = "Netflix/Tubi-style catalog browser and pay-to-play queue management for CyTube"
 readme = "README.md"
 license = "MIT"
@@ -25,6 +25,7 @@ dependencies = [
     "requests>=2.31",
     "pyyaml>=6.0",
     "python-slugify>=8.0",
+    "msal>=1.28",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +40,7 @@ dev = [
 
 [project.scripts]
 kryten-webqueue = "kryten_webqueue.__main__:main"
+kryten-webqueue-fetchurls-auth = "kryten_webqueue.jobs.fetchurls_auth:main"
 
 [build-system]
 requires = ["hatchling"]

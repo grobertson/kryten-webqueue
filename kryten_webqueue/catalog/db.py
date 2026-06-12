@@ -956,6 +956,19 @@ class Database:
             [name, created_by],
         )
 
+    async def get_playlist_by_name_any(self, name: str) -> dict | None:
+        """Match an existing saved playlist by exact name, any creator.
+
+        Used for the fetchurls fixed section playlists ("Friday Night",
+        "Saturday Morning", "Saturday Night") which pre-exist (possibly created
+        by a different admin) and must be reused/replaced in place rather than
+        duplicated.
+        """
+        return await self._fetch_one(
+            "SELECT * FROM saved_playlists WHERE name=? ORDER BY id LIMIT 1",
+            [name],
+        )
+
     # --- Schedules ---
 
     async def get_schedules(self) -> list[dict]:

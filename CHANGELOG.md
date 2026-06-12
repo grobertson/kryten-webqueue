@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.9.8] — 2026-06-12
+
+### Added
+
+- **`fetchurls` job now reads the Channel Z workbook from SharePoint** (Microsoft Graph) and **writes resolved dropsugar URLs back to column F**, restoring the original tool's full round-trip. The service authenticates *silently* from a pre-seeded MSAL token cache and never prompts interactively. A one-time sign-in helper seeds the cache: `python -m kryten_webqueue.jobs.fetchurls_auth` (also installed as `kryten-webqueue-fetchurls-auth`). It prints a device-code URL; sign in once and the ~90-day refresh token is cached for unattended runs. If the cache is missing/expired the job fails with a clear "run fetchurls_auth" message.
+  - New config under `fetchurls`: `sharepoint_tenant_id`, `sharepoint_client_id`, `sharepoint_sharing_url`, `token_cache_path`. A local `workbook_path` (or a per-run `workbook_path` param) still works as a fallback/override.
+  - New `writeback` job parameter (default on) controls column-F writeback; `dry_run` and local-file mode skip it.
+  - Added `msal` as a core dependency.
+- **`fetchurls` imports into three fixed, well-known playlists** — `Friday Night`, `Saturday Morning`, `Saturday Night` — instead of date-prefixed names. The playlists are matched by name (any creator), their items replaced in place on every run (idempotent), and their existing immutability preserved; if a playlist is missing it is (re)created as immutable so the reserved status is retained.
+
+### Fixed
+
+- Bulk/`cm:` playlist imports for items not yet in the local catalog (e.g. freshly downloaded by `fetch`/`fetchurls` before a sync) now construct the CyTube manifest URL from the token instead of leaving a bare token that wouldn't play.
+
 ## [0.9.7] — 2026-06-11
 
 ### Changed

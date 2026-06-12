@@ -179,9 +179,16 @@ async def import_playlist_text(db, text: str, *, mediacms_url: str | None = None
         if line.startswith("cm:"):
             media_id = line[3:].strip()
             catalog_item = await db.get_item_admin(media_id)
+            if catalog_item:
+                resolved_media = catalog_item["manifest_url"]
+            else:
+                # Not yet in the local catalog (e.g. freshly downloaded by the
+                # fetch/fetchurls job before a sync) — construct the CyTube
+                # manifest URL from the token so it still plays.
+                resolved_media = _manifest_url_for_token(media_id, mediacms_url) or media_id
             items.append({
                 "media_type": "cm",
-                "media_id": catalog_item["manifest_url"] if catalog_item else media_id,
+                "media_id": resolved_media,
                 "title": catalog_item["title"] if catalog_item else None,
                 "duration_sec": catalog_item["duration_sec"] if catalog_item else None,
             })

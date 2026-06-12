@@ -16,7 +16,11 @@
 
   "fetch_cookies_path": "",
   "fetchurls": {
-    "workbook_path": ""
+    "workbook_path": "",
+    "sharepoint_tenant_id": "",
+    "sharepoint_client_id": "",
+    "sharepoint_sharing_url": "",
+    "token_cache_path": "/var/lib/kryten-webqueue/.fetchurls_tokens.bin"
   },
 
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",
