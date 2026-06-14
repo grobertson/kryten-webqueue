@@ -23,6 +23,14 @@
     "token_cache_path": "/var/lib/kryten-webqueue/.fetchurls_tokens.bin"
   },
 
+  "presence_refund": {
+    "enabled": true,
+    "on_leave": true,
+    "on_afk": false,
+    "grace_seconds": 60.0,
+    "check_interval_seconds": 15.0
+  },
+
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",
 
   "image_dir": "/var/lib/kryten-webqueue/images",

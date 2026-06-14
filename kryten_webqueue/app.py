@@ -16,6 +16,7 @@ from .jobs import JobManager
 from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
+from .queue.presence import PresenceRefundMonitor
 from .ws.manager import WebSocketManager
 from .playlists.scheduler import PlaylistScheduler
 from .auth.rate_limit import RateLimiter
@@ -139,6 +140,14 @@ async def lifespan(app: FastAPI):
     await scheduler.start()
     app.state.scheduler = scheduler
 
+    # Presence-based cancel/refund monitor
+    presence_monitor = PresenceRefundMonitor(
+        api_gate=api_gate, shadow=shadow, db=db, ws_manager=ws_manager,
+        config=config.presence_refund,
+    )
+    await presence_monitor.start()
+    app.state.presence_monitor = presence_monitor
+
     # Background workers
     async def _catalog_sync_loop():
         interval = config.catalog_sync_interval_hours * 3600
@@ -195,6 +204,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
     await poller.stop()
     await scheduler.stop()
+    await presence_monitor.stop()
     await catalog_sync.close()
     await cover_art.close()
     await api_gate.close()

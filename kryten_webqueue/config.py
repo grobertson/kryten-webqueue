@@ -22,6 +22,26 @@ class FetchUrlsConfig(BaseModel):
     token_cache_path: str = ""  # MSAL cache file, pre-seeded out-of-band
 
 
+class PresenceRefundConfig(BaseModel):
+    """Settings for presence-based cancel/refund of pending paid items.
+
+    When a viewer who paid to queue an item leaves the channel or goes AFK,
+    cancel and refund their not-yet-played paid items after a grace period.
+    The currently-playing item is never cancelled; free/scheduled items are
+    left alone.
+
+    ``on_afk`` relies on the Robot tracking CyTube's ``setAFK`` event (shipped
+    in Kryten-Robot v1.10.0). It defaults off; enable it once that Robot
+    version is deployed to production.
+    """
+
+    enabled: bool = True
+    on_leave: bool = True
+    on_afk: bool = False              # needs Kryten-Robot >= 1.10.0 deployed
+    grace_seconds: float = 60.0       # wait before acting; re-check after grace
+    check_interval_seconds: float = 15.0  # how often to evaluate owners
+
+
 class Config(BaseModel):
     """Application configuration loaded from JSON file."""
 
@@ -47,6 +67,9 @@ class Config(BaseModel):
     # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
     fetch_cookies_path: str = ""          # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()
+
+    # Presence-based cancel/refund of pending paid items
+    presence_refund: PresenceRefundConfig = PresenceRefundConfig()
 
     # Database
     db_path: str = "/var/lib/kryten-webqueue/webqueue.db"

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.10.0] — 2026-06-13
+
+### Added
+
+- **Presence-based cancel/refund of pending paid items.** When a viewer who paid to queue an item leaves the channel (or goes AFK), their not-yet-played paid items are now automatically refunded and removed after a configurable grace period. The currently-playing item is never cancelled, and free/scheduled items are left untouched. If the owner returns before the grace window elapses the item is kept; transient api-gate/robot lookup failures are treated as inconclusive and never trigger a cancellation. Implemented by a new `PresenceRefundMonitor` running on its own interval (decoupled from the 3s state poll).
+- Config: `presence_refund` block — `enabled` (default `true`), `on_leave` (default `true`), `on_afk` (default `false`; enable once Kryten-Robot ≥ 1.10.0, which tracks CyTube's `setAFK` event, is deployed), `grace_seconds` (default `60`), and `check_interval_seconds` (default `15`).
+
 ## [0.9.13] — 2026-06-12
 
 ### Fixed
