@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.14.2] — 2026-06-13
+
+### Added
+
+- **Save all search/browse results to a playlist.** The Browse/search results page now shows an admin-only **Save results to playlist** button. It appends every catalog item matching the current search query or browse facets (across all pages, honouring the hidden-items toggle) to a playlist of your choosing. Where a season/episode marker is detectable in the title (`S01E02`, `1x02`, `Season 1 Episode 2`, …) items are laid out in proper series → season → episode order; everything else falls back to a stable alphabetical placement. Items already in the target playlist are skipped, so re-running is idempotent. Backend: `POST /admin/playlists/{id}/append-results` (admin-only) plus a de-duplicating bulk `Database.append_playlist_items` and a pure `playlists.ordering` helper.
+
 ## [0.14.1] — 2026-06-13
 
 ### Fixed

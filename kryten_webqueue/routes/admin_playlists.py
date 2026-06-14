@@ -166,6 +166,64 @@ async def append_item(request: Request, playlist_id: int, user: dict = Depends(r
     return {"success": True, "playlist_id": playlist_id, "name": playlist["name"], "count": count}
 
 
+@router.post("/{playlist_id}/append-results")
+async def append_results(request: Request, playlist_id: int, user: dict = Depends(require_admin)):
+    """Append every catalog item matching the current browse/search filters to a
+    playlist (0.14.2).
+
+    The browse/search facets are sent in the body so the server re-runs the same
+    (unpaginated) query the admin is looking at. Items are laid out in
+    season/episode order where a marker is detectable in the title, and any item
+    already present in the playlist is skipped.
+    """
+    from ..playlists.ordering import order_for_playlist
+
+    body = await request.json()
+    db = request.app.state.db
+    playlist = await db.get_saved_playlist(playlist_id)
+    if not playlist:
+        raise HTTPException(404, "Playlist not found")
+
+    mode = body.get("mode", "browse")
+    show_hidden = bool(body.get("show_hidden"))
+    sort = body.get("sort") or "default"
+
+    if mode == "search":
+        q = (body.get("q") or "").strip()
+        if not q:
+            raise HTTPException(400, "Query required for search results")
+        total = await db.search_count(q, show_hidden=show_hidden)
+        items = await db.search(q, page=1, per_page=max(total, 1),
+                                show_hidden=show_hidden, sort=sort)
+    else:
+        category = body.get("category") or None
+        tag = body.get("tag") or None
+        total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden)
+        items = await db.browse(category=category, tag=tag, page=1, per_page=max(total, 1),
+                                show_hidden=show_hidden, sort=sort)
+
+    ordered = order_for_playlist(items)
+    playlist_items = [
+        {
+            "media_type": "cm",
+            "media_id": it["manifest_url"],
+            "title": it.get("title"),
+            "duration_sec": it.get("duration_sec"),
+        }
+        for it in ordered
+        if it.get("manifest_url")
+    ]
+    added = await db.append_playlist_items(playlist_id, playlist_items)
+    count = len(await db.get_saved_playlist_items(playlist_id))
+    return {
+        "success": True,
+        "playlist_id": playlist_id,
+        "name": playlist["name"],
+        "added": added,
+        "count": count,
+    }
+
+
 @router.post("/parse-text")
 async def parse_text(request: Request, user: dict = Depends(require_admin)):
     """Parse the plain-text playlist import format into resolved items.

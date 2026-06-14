@@ -150,6 +150,9 @@ a:hover {
 .admin-hidden-notice a {
     font-weight: 600;
 }
+.admin-results-actions {
+    margin-top: 0.85rem;
+}
 .search-form {
     display: flex;
     gap: 0.5rem;

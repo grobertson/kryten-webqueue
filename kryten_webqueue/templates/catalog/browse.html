@@ -39,6 +39,9 @@
             <a href="{{ request.url.include_query_params(show_hidden=1) }}">Show hidden items?</a>
         {% endif %}
     </div>
+    <div class="admin-results-actions">
+        <button class="btn btn-sm btn-admin" onclick="saveResultsToPlaylist()">Save results to playlist</button>
+    </div>
     {% endif %}
 </div>
 
@@ -227,6 +230,83 @@ async function submitAddToPlaylist(playlistId, token) {
         });
         const data = await resp.json();
         showToast(resp.ok ? `Added (${data.count} items)` : (data.detail || `Failed (${resp.status})`),
+            resp.ok ? 'success' : 'error');
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+
+// --- Save all current results to a playlist (rank >= 3) ---
+
+async function saveResultsToPlaylist() {
+    let playlists = [];
+    try {
+        const resp = await fetch('/admin/playlists/', { credentials: 'same-origin' });
+        if (resp.ok) playlists = await resp.json();
+    } catch (e) { /* handled below */ }
+    if (!playlists.length) {
+        showToast('No playlists yet — create one first', 'error');
+        return;
+    }
+    showResultsPlaylistPicker(playlists);
+}
+
+function showResultsPlaylistPicker(playlists) {
+    closePlaylistPickerModal();
+    const overlay = document.createElement('div');
+    overlay.id = 'playlist-picker-modal';
+    overlay.className = 'modal-overlay';
+    const opts = playlists.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    const scope = CURRENT_QUERY ? 'search' : 'filter';
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>Save all results to playlist</h3>
+            <p class="muted">Every item matching the current ${scope} will be appended, ordered by season/episode where detected. Items already in the playlist are skipped.</p>
+            <div class="field">
+                <label for="playlist-picker-select">Playlist</label>
+                <select id="playlist-picker-select">${opts}</select>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                <button class="btn btn-primary" data-action="save">Save results</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) closePlaylistPickerModal();
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') closePlaylistPickerModal();
+        if (action === 'save') {
+            const pid = document.getElementById('playlist-picker-select').value;
+            closePlaylistPickerModal();
+            submitSaveResults(pid);
+        }
+    });
+    document.body.appendChild(overlay);
+}
+
+async function submitSaveResults(playlistId) {
+    const url = new URL(window.location.href);
+    const isSearch = url.pathname.indexOf('/catalog/search') !== -1;
+    const body = {
+        mode: isSearch ? 'search' : 'browse',
+        q: url.searchParams.get('q') || '',
+        category: url.searchParams.get('category') || '',
+        tag: url.searchParams.get('tag') || '',
+        sort: url.searchParams.get('sort') || 'default',
+        show_hidden: url.searchParams.get('show_hidden') ? 1 : 0,
+    };
+    showToast('Saving results…');
+    try {
+        const resp = await fetch(`/admin/playlists/${playlistId}/append-results`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        showToast(
+            resp.ok ? `Added ${data.added} item(s) — playlist now ${data.count}`
+                    : (data.detail || `Failed (${resp.status})`),
             resp.ok ? 'success' : 'error');
     } catch (e) {
         showToast(`Network error: ${e.message}`, 'error');

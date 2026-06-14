@@ -980,6 +980,39 @@ class Database:
         await self._db.commit()
         return count
 
+    async def append_playlist_items(self, playlist_id: int, items: list[dict]) -> int:
+        """Append many items to the end of a playlist, skipping any whose
+        ``media_id`` is already present. Returns the number actually added."""
+        existing_rows = await self._fetch_all(
+            "SELECT media_id FROM saved_playlist_items WHERE playlist_id=?", [playlist_id]
+        )
+        seen = {r["media_id"] for r in existing_rows}
+        row = await self._fetch_one(
+            "SELECT COALESCE(MAX(position), -1) AS pos FROM saved_playlist_items WHERE playlist_id=?",
+            [playlist_id],
+        )
+        next_pos = (row["pos"] + 1) if row else 0
+        added = 0
+        for item in items:
+            media_id = item.get("media_id")
+            if not media_id or media_id in seen:
+                continue
+            seen.add(media_id)
+            await self._db.execute(
+                "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [playlist_id, next_pos, item.get("media_type", "cm"), media_id,
+                 item.get("title"), item.get("duration_sec")],
+            )
+            next_pos += 1
+            added += 1
+        if added:
+            await self._db.execute(
+                "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?", [playlist_id]
+            )
+        await self._db.commit()
+        return added
+
     async def get_most_recent_playlist(self, created_by: str) -> dict | None:
         """The given admin's most recently *created* saved playlist, if any."""
         return await self._fetch_one(
