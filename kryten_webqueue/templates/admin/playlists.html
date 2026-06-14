@@ -91,7 +91,9 @@ async function loadPlaylists() {
             <tr>
                 <td><a href="#" onclick="openEditor(${p.id});return false;">${escapeHtml(p.name)}</a>
                     ${p.description ? `<div class="muted">${escapeHtml(p.description)}</div>` : ''}</td>
-                <td>${p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '<span class="muted">Mutable</span>'}</td>
+                <td>${p.promo_type
+                    ? `<span class="badge badge-accent" title="Promo pool">Promo: ${escapeHtml(p.promo_type)}</span>`
+                    : (p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '<span class="muted">Mutable</span>')}</td>
                 <td>${escapeHtml(p.created_by || '')}</td>
                 <td class="row-actions">
                     <button class="btn btn-sm" onclick="toggleImmutable(${p.id}, ${p.is_immutable ? 1 : 0}, '${escapeHtml(p.name)}')"

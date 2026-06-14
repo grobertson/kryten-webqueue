@@ -17,6 +17,7 @@ from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
 from .queue.presence import PresenceRefundMonitor
+from .promos.director import PromoDirector
 from .ws.manager import WebSocketManager
 from .playlists.scheduler import PlaylistScheduler
 from .auth.rate_limit import RateLimiter
@@ -30,6 +31,7 @@ from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
 from .routes.admin_catalog import router as admin_catalog_router
+from .routes.admin_promos import router as admin_promos_router
 from .routes.pages import router as pages_router
 from .ws.handler import router as ws_router
 
@@ -117,6 +119,14 @@ async def lifespan(app: FastAPI):
     await shadow.load_from_db()
     app.state.shadow = shadow
 
+    # Promo director (poller-driven; also used synchronously by the pay path)
+    promo_director = PromoDirector(
+        api_gate=api_gate, db=db, shadow=shadow, config=config.promos,
+        add_delay_sec=config.playlist_bulk_add_delay_sec,
+        add_max_retries=config.playlist_bulk_add_max_retries,
+    )
+    app.state.promo_director = promo_director
+
     # State poller
     poller = StatePoller(
         api_gate=api_gate,
@@ -124,6 +134,7 @@ async def lifespan(app: FastAPI):
         ws_manager=ws_manager,
         db=db,
         interval=config.state_poll_interval_sec,
+        promo_director=promo_director,
     )
     await poller.start()
     app.state.poller = poller
@@ -231,6 +242,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
     app.include_router(admin_catalog_router)
+    app.include_router(admin_promos_router)
     app.include_router(ws_router)
 
     # Health check

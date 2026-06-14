@@ -6,6 +6,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.14.0] — 2026-06-13
+
+### Added
+
+- **Inline promo settings editing (plan O2).** The **Promos** admin page settings panel is now editable: toggle the system enable, set the movie threshold, general cadence (`every_n_items` / `every_m_minutes` / `no_repeat`), and per-type `enabled` / `order` / `weight`, then **Save**. Changes are persisted to the service config file and hot-applied to the running `PromoDirector` — no restart required. Backend: `PUT /admin/promos/config` (admin-only) plus `Config.save()` (atomic write back to the loaded config file) and `PromoDirector.update_config()`.
+- **Cancel/refund notifications (plan O4).** When the presence monitor cancels & refunds a pending paid item, the owner now receives a PM explaining it ("… cancelled and refunded because you left the channel / you went AFK"). Controlled by `presence_refund.notify_user` (default on); best-effort so a failed PM never blocks the refund.
+
+### Changed
+
+- **`presence_refund.on_afk` now defaults on (plan O1).** AFK-based cancel/refund is enabled by default now that Kryten-Robot v1.10.0 (which tracks CyTube's `setAFK` event) is released. Set it off if running against an older Robot.
+
+### Tested
+
+- DB-level test asserting promo pool clips are hidden from browse/search and rejected by pay-to-play (`get_item`), and become visible again when the `promo_type` is cleared (plan §2.9 gap).
+- Config save round-trip + no-source-path guard; presence-cancel PM (sent / suppressed) coverage.
+
+
+### Added
+
+- **Promo admin UI.** A new **Promos** admin page (`/admin/promos`, linked from the admin panel):
+  - **Promo pool designation** — assign any saved playlist a promo type from a dropdown (or clear it), reusing the existing playlist editor for the clips. Immutable playlists are excluded (release them first). Promo pools are flagged with a badge on the Playlists page.
+  - **Promo settings panel** — read-only display of the live `promos` configuration (system enable, movie threshold, general cadence, and a per-type table of enabled/order/weight). Inline editing is a planned follow-up; values come from the config file.
+- **Live-queue promo badges.** Promo items in the public queue view now render distinctly, badged by promo type (Channel ID, Event, Mod Shoutout, Feature, Viewer's Choice) with a separate accent.
+- Backend: `GET /admin/promos/config` and `GET /admin/promos/pools` (admin-only).
+
+## [0.11.0] — 2026-06-13
+
+### Added
+
+- **Promo insertion system (`PromoDirector`).** Curated promo clips are now inserted between mutable content as playback advances, driven by the state poller:
+  - **General promos** (`channel_identity`, `event`, `mod_shoutout`) inserted on a cadence — every N content items or every M minutes, whichever comes first — with weighted type selection and per-type `random`/`sequential` clip ordering plus an optional `no_repeat` guard.
+  - **Feature Presentation** lead-in immediately before a mutable-playlist movie (`duration_sec >= movie_threshold_seconds`).
+  - **Viewer's Choice** lead-in immediately before any pay-to-play item (a paid movie gets Viewer's Choice, never Feature Presentation). Inserted synchronously at pay time so it is in place before a "play next" item can begin, and removed automatically if the paid item is later cancelled/refunded (including presence-based cancels).
+  - When both are due before the same item the order is `[general][lead-in][content]`. Promos are added as CyTube **temp** items (via the throttled add helper) so they auto-remove after playing and never accumulate across loops. The director is a no-op during an immutable scheduled event.
+- **Promo pools.** A saved playlist can be designated a promo pool by tagging it with a `promo_type` (via the playlist create/update API). Promo pools are hidden from public browse/search and excluded from pay-to-play, the same treatment as immutable playlists.
+- Config: `promos` block — global `enabled`, `movie_threshold_seconds`, a `general` cadence block (`every_n_items`, `every_m_minutes`, `no_repeat`), and per-type `enabled`/`order`/`weight` settings.
+- DB: migration v10 (`promo_type` on `saved_playlists` + index) and v11 (`is_promo`, `promo_type`, `lead_in_for_uid` on `queue_shadow`).
+
+### Note
+
+- Backend promo designation and the full insertion engine ship in this release. A dedicated admin promo-settings panel and live-queue promo badges are a planned follow-up; pools can be designated today via the playlist API and `promos` config is file-based.
+
 ## [0.10.0] — 2026-06-13
 
 ### Added

@@ -163,11 +163,37 @@ class PresenceRefundMonitor:
             await self._shadow.remove(uid)
         except Exception:
             logger.warning("Presence cancel: failed to remove uid=%s from shadow", uid, exc_info=True)
+        try:
+            from ..promos.director import remove_lead_in_for
+            await remove_lead_in_for(api_gate=self._api_gate, shadow=self._shadow, uid=uid)
+        except Exception:
+            logger.debug("Presence cancel: lead-in cleanup failed for uid=%s", uid, exc_info=True)
+        await self._notify_owner(item, reason)
         logger.info(
             "Presence cancel: refunded & removed uid=%s (%s) owner=%s reason=%s",
             uid, item.get("title"), item.get("paid_by"), reason,
         )
         return True
+
+    async def _notify_owner(self, item: dict, reason: str):
+        """PM the owner that their paid item was cancelled & refunded.
+
+        Best-effort: a failed PM never blocks the cancel/refund itself.
+        """
+        if not getattr(self._config, "notify_user", False):
+            return
+        owner = item.get("paid_by")
+        if not owner:
+            return
+        why = "you left the channel" if reason == "owner_left" else "you went AFK"
+        title = item.get("title") or "your queued item"
+        try:
+            await self._api_gate.send_pm(
+                owner,
+                f"Your queued item \"{title}\" was cancelled and refunded because {why}.",
+            )
+        except Exception:
+            logger.debug("Presence cancel: failed to PM %s", owner, exc_info=True)
 
     async def _broadcast_state(self):
         try:

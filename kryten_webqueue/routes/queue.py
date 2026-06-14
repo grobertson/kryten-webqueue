@@ -102,6 +102,7 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
         duration_sec=item["duration_sec"],
         tier=tier,
         z_cost=z_cost,
+        promo_director=getattr(request.app.state, "promo_director", None),
     )
 
     if not result["success"]:
@@ -158,6 +159,7 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
         duration_sec=item["duration_sec"],
         tier=tier,
         z_cost=z_cost,
+        promo_director=getattr(request.app.state, "promo_director", None),
     )
 
     if not result["success"]:

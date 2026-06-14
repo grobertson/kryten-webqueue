@@ -26,9 +26,27 @@
   "presence_refund": {
     "enabled": true,
     "on_leave": true,
-    "on_afk": false,
+    "on_afk": true,
     "grace_seconds": 60.0,
-    "check_interval_seconds": 15.0
+    "check_interval_seconds": 15.0,
+    "notify_user": true
+  },
+
+  "promos": {
+    "enabled": true,
+    "movie_threshold_seconds": 3600.0,
+    "general": {
+      "every_n_items": 4,
+      "every_m_minutes": 20.0,
+      "no_repeat": true
+    },
+    "types": {
+      "channel_identity": { "enabled": true, "order": "random", "weight": 3 },
+      "event": { "enabled": true, "order": "random", "weight": 2 },
+      "mod_shoutout": { "enabled": true, "order": "sequential", "weight": 1 },
+      "feature_presentation": { "enabled": true, "order": "random", "weight": 1 },
+      "viewers_choice": { "enabled": true, "order": "random", "weight": 1 }
+    }
   },
 
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",

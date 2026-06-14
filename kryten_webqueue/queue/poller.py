@@ -7,12 +7,13 @@ logger = logging.getLogger(__name__)
 class StatePoller:
     """Polls api-gate at a fixed interval to keep QueueShadow in sync."""
 
-    def __init__(self, *, api_gate, shadow, ws_manager, db=None, interval: float = 3.0):
+    def __init__(self, *, api_gate, shadow, ws_manager, db=None, interval: float = 3.0, promo_director=None):
         self._api_gate = api_gate
         self._shadow = shadow
         self._ws_manager = ws_manager
         self._db = db
         self._interval = interval
+        self._promo_director = promo_director
         self._task: asyncio.Task | None = None
 
     async def start(self):
@@ -34,6 +35,12 @@ class StatePoller:
                 playlist = await self._api_gate.get_playlist()
                 now_playing = await self._api_gate.get_now_playing()
                 await self._shadow.apply_poll_result(playlist, now_playing)
+                # Promo insertion runs after reconciliation, before broadcast.
+                if self._promo_director is not None:
+                    try:
+                        await self._promo_director.on_poll()
+                    except Exception as e:
+                        logger.warning(f"Promo director error: {e}")
                 # Broadcast updated state
                 if self._db is not None:
                     state = await self._shadow.get_enriched_state(self._db)

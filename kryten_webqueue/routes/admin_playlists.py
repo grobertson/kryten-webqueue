@@ -2,8 +2,22 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from datetime import datetime
 
 from ..auth.session import require_admin
+from ..promos import PROMO_TYPES
 
 router = APIRouter(prefix="/admin/playlists", tags=["admin"])
+
+
+def _validate_promo_type(value):
+    """Normalise/validate a promo_type from a request body.
+
+    Accepts ``None``/empty (a normal playlist) or one of the recognised promo
+    types; rejects anything else with HTTP 400.
+    """
+    if value in (None, "", "none"):
+        return None
+    if value not in PROMO_TYPES:
+        raise HTTPException(400, f"Invalid promo_type: {value!r}")
+    return value
 
 
 @router.get("/")
@@ -34,6 +48,7 @@ async def create_playlist(request: Request, user: dict = Depends(require_admin))
         description=body.get("description"),
         is_immutable=body.get("is_immutable", False),
         created_by=user["username"],
+        promo_type=_validate_promo_type(body.get("promo_type")),
     )
     return {"id": playlist_id}
 
@@ -51,6 +66,7 @@ async def update_playlist(request: Request, playlist_id: int, user: dict = Depen
         name=body.get("name", playlist["name"]),
         description=body.get("description", playlist.get("description")),
         is_immutable=body.get("is_immutable", playlist.get("is_immutable", False)),
+        promo_type=_validate_promo_type(body.get("promo_type", playlist.get("promo_type"))),
     )
     return {"success": True}
 

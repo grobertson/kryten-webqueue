@@ -104,6 +104,9 @@ class QueueShadow:
                         "tier": None,
                         "z_cost": None,
                         "schedule_id": None,
+                        "is_promo": False,
+                        "promo_type": None,
+                        "lead_in_for_uid": None,
                         "added_at": datetime.now(UTC).isoformat(),
                     }
                     await self._db.upsert_shadow_item(merged)

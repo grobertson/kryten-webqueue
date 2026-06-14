@@ -142,13 +142,14 @@ function renderQueue(state) {
             .map((item, i) => ({ item, i }))
             .filter(({ i }) => !(hidePrevious && nowIndex >= 0 && i < nowIndex))
             .map(({ item, i }) => `
-            <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''} ${nowUid != null && String(item.uid) === nowUid ? 'queue-item-now-playing' : ''}" data-uid="${item.uid}">
+            <div class="queue-item ${item.is_pay ? 'queue-item-paid' : ''} ${item.is_promo ? 'queue-item-promo' : ''} ${nowUid != null && String(item.uid) === nowUid ? 'queue-item-now-playing' : ''}" data-uid="${item.uid}">
                 <div class="qi-cover">${coverHtml(item)}</div>
                 <div class="qi-info">
                     <span class="qi-title">${escapeHtml(item.title || 'Unknown')}</span>
                     <span class="qi-meta">
                         ${item.paid_by ? `<span class="qi-user">by ${escapeHtml(item.paid_by)}</span>` : ''}
                         ${item.is_pay ? `<span class="qi-badge badge-paid">${escapeHtml(item.tier || '')}</span>` : ''}
+                        ${item.is_promo ? `<span class="qi-badge badge-promo">${escapeHtml(promoLabel(item.promo_type))}</span>` : ''}
                     </span>
                 </div>
                 <div class="qi-right">
@@ -193,6 +194,15 @@ function coverHtml(item) {
     const letter = (item.title || '?').trim().charAt(0) || '?';
     return `<div class="cover-placeholder">${escapeHtml(letter)}</div>`;
 }
+
+const PROMO_TYPE_LABELS = {
+    channel_identity: 'Channel ID',
+    event: 'Event',
+    mod_shoutout: 'Mod Shoutout',
+    feature_presentation: 'Feature',
+    viewers_choice: "Viewer's Choice",
+};
+function promoLabel(t) { return PROMO_TYPE_LABELS[t] || 'Promo'; }
 
 function formatEta(item) {
     // Prefer the clock-independent relative offset: the server tells us how many

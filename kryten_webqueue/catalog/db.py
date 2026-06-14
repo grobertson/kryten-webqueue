@@ -290,6 +290,23 @@ MIGRATIONS = [
     """
     ALTER TABLE playlist_schedules ADD COLUMN fallback_playlist_id INTEGER REFERENCES saved_playlists(id) ON DELETE SET NULL;
     """,
+    # v10: Tag a saved playlist as a promo pool. A non-NULL promo_type marks the
+    # playlist as a reserved pool of promo clips for that type; such playlists
+    # are hidden from public browse/search and excluded from pay-to-play (same
+    # treatment as is_immutable). NULL = a normal playlist.
+    """
+    ALTER TABLE saved_playlists ADD COLUMN promo_type TEXT;
+    CREATE INDEX IF NOT EXISTS idx_saved_playlists_promo ON saved_playlists(promo_type);
+    """,
+    # v11: Annotate live promo items inserted into the queue shadow. is_promo
+    # marks a system-inserted promo clip; promo_type is its pool; lead_in_for_uid
+    # links a Feature-Presentation / Viewer's-Choice lead-in to the content uid
+    # it immediately precedes (NULL for general cadence promos).
+    """
+    ALTER TABLE queue_shadow ADD COLUMN is_promo BOOLEAN NOT NULL DEFAULT 0;
+    ALTER TABLE queue_shadow ADD COLUMN promo_type TEXT;
+    ALTER TABLE queue_shadow ADD COLUMN lead_in_for_uid INTEGER;
+    """,
 ]
 
 
@@ -351,7 +368,7 @@ class Database:
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
                 JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
             )
         """
         params: list = []
@@ -400,7 +417,7 @@ class Database:
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
                 JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
             )
         """
         params: list = []
@@ -439,7 +456,7 @@ class Database:
               AND c.friendly_token NOT IN (
                   SELECT spi.media_id FROM saved_playlist_items spi
                   JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
               )
         """
         params: list = [query_text]
@@ -463,7 +480,7 @@ class Database:
               AND c.friendly_token NOT IN (
                   SELECT spi.media_id FROM saved_playlist_items spi
                   JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
               )
         """
         params: list = [query_text]
@@ -481,7 +498,7 @@ class Database:
               AND friendly_token NOT IN (
                   SELECT spi.media_id FROM saved_playlist_items spi
                   JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE sp.is_immutable = 1 AND spi.media_type = 'cm'
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
               )
         """
         return await self._fetch_one(sql, [friendly_token])
@@ -545,7 +562,7 @@ class Database:
         sql = """
             SELECT 1 FROM saved_playlist_items spi
             JOIN saved_playlists sp ON spi.playlist_id = sp.id
-            WHERE sp.is_immutable = 1
+            WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL)
               AND spi.media_type = 'cm'
               AND spi.media_id = ?
             LIMIT 1
@@ -803,13 +820,17 @@ class Database:
     async def upsert_shadow_item(self, item: dict):
         sql = """
             INSERT OR REPLACE INTO queue_shadow
-                (uid, position, title, media_type, media_id, duration_sec, is_pay, paid_by, tier, z_cost, schedule_id, added_at)
+                (uid, position, title, media_type, media_id, duration_sec, is_pay, paid_by, tier, z_cost, schedule_id,
+                 is_promo, promo_type, lead_in_for_uid, added_at)
             VALUES (:uid, :position, :title, :media_type, :media_id, :duration_sec, :is_pay,
-                    :paid_by, :tier, :z_cost, :schedule_id, :added_at)
+                    :paid_by, :tier, :z_cost, :schedule_id,
+                    :is_promo, :promo_type, :lead_in_for_uid, :added_at)
         """
         defaults = {"paid_by": None, "tier": None, "z_cost": None, "schedule_id": None,
-                    "friendly_token": None, "added_at": datetime.now(UTC).isoformat()}
+                    "friendly_token": None, "is_promo": 0, "promo_type": None,
+                    "lead_in_for_uid": None, "added_at": datetime.now(UTC).isoformat()}
         row = {**defaults, **item}
+        row["is_promo"] = int(bool(row.get("is_promo")))
         await self._db.execute(sql, row)
         await self._db.commit()
 
@@ -886,18 +907,39 @@ class Database:
     async def get_saved_playlist(self, playlist_id: int) -> dict | None:
         return await self._fetch_one("SELECT * FROM saved_playlists WHERE id=?", [playlist_id])
 
-    async def create_saved_playlist(self, *, name: str, description: str | None, is_immutable: bool, created_by: str) -> int:
+    async def create_saved_playlist(self, *, name: str, description: str | None, is_immutable: bool, created_by: str, promo_type: str | None = None) -> int:
         cursor = await self._db.execute(
-            "INSERT INTO saved_playlists (name, description, is_immutable, created_by) VALUES (?, ?, ?, ?)",
-            [name, description, int(is_immutable), created_by],
+            "INSERT INTO saved_playlists (name, description, is_immutable, created_by, promo_type) VALUES (?, ?, ?, ?, ?)",
+            [name, description, int(is_immutable), created_by, promo_type],
         )
         await self._db.commit()
         return cursor.lastrowid
 
-    async def update_saved_playlist(self, playlist_id: int, *, name: str, description: str | None, is_immutable: bool):
+    async def update_saved_playlist(self, playlist_id: int, *, name: str, description: str | None, is_immutable: bool, promo_type: str | None = None):
         await self._execute(
-            "UPDATE saved_playlists SET name=?, description=?, is_immutable=?, updated_at=datetime('now') WHERE id=?",
-            [name, description, int(is_immutable), playlist_id],
+            "UPDATE saved_playlists SET name=?, description=?, is_immutable=?, promo_type=?, updated_at=datetime('now') WHERE id=?",
+            [name, description, int(is_immutable), promo_type, playlist_id],
+        )
+
+    async def get_promo_pools(self) -> list[dict]:
+        """All saved playlists that are designated promo pools (promo_type set)."""
+        return await self._fetch_all(
+            "SELECT * FROM saved_playlists WHERE promo_type IS NOT NULL ORDER BY promo_type, name"
+        )
+
+    async def get_promo_pool_items(self, promo_type: str) -> list[dict]:
+        """Union of clips across every playlist tagged with ``promo_type``.
+
+        Returns the playlist items in a stable order (playlist id, then
+        position) so ``sequential`` selection is deterministic.
+        """
+        return await self._fetch_all(
+            "SELECT spi.media_type, spi.media_id, spi.title, spi.duration_sec "
+            "FROM saved_playlist_items spi "
+            "JOIN saved_playlists sp ON spi.playlist_id = sp.id "
+            "WHERE sp.promo_type = ? "
+            "ORDER BY sp.id, spi.position",
+            [promo_type],
         )
 
     async def delete_saved_playlist(self, playlist_id: int):

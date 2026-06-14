@@ -392,11 +392,33 @@ load-time. (FP and general promos stay purely poller-driven.)
   fields, skips redundant KV writes) and registers the event in `state_events`.
   Covered by `tests/test_state_manager_afk.py`. Once Robot v1.10.0 is deployed,
   `on_afk` can be safely defaulted **on** in webqueue's presence-refund config.
+
+  **DONE (webqueue v0.13.0):** `presence_refund.on_afk` now defaults **on** (the
+  `PresenceRefundConfig` default and `config.example.json` both flipped to
+  `true`). Set it back off only if running against a Robot older than v1.10.0.
 - **O2 — Config editability**: is runtime editing of `promos` config in-scope, or
   is file-config + restart acceptable for the first cut? (Plan assumes file
   config first, editable panel as a follow-up.)
+
+  **RESOLVED (v0.13.0):** the editable panel shipped. The Promos admin settings
+  panel now edits the `promos` config (system enable, movie threshold, general
+  cadence, per-type enable/order/weight) via `PUT /admin/promos/config`, which
+  validates against `PromoConfig`, persists with `Config.save()` (atomic write
+  back to the loaded config file), and hot-applies via
+  `PromoDirector.update_config()` — no restart required.
 - **O3 — Single vs multiple pools per type**: plan supports multiple playlists of
   the same `promo_type` (unioned). Confirm one-per-type is acceptable in the UI.
+
+  **RESOLVED (v0.13.0):** **multiple pools per type are intentionally allowed.**
+  Clips from every playlist sharing a `promo_type` are unioned into that type's
+  pool (`get_promo_pool_items`), and the admin UI permits tagging more than one
+  playlist with the same type. No enforcement was added — this is the accepted
+  product behaviour, not a bug.
 - **O4 — Notifications**: should a cancelled-on-disappear item post a chat/PM
   notice, or refund silently? (Plan: silent refund + WS state update; easy to add
   a notice.)
+
+  **RESOLVED (v0.13.0):** a PM is now sent. On a presence-based cancel the owner
+  receives a PM ("… cancelled and refunded because you left the channel / you
+  went AFK"), gated by `presence_refund.notify_user` (default on) and best-effort
+  so a failed PM never blocks the refund.

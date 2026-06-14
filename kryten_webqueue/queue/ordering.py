@@ -202,6 +202,7 @@ async def insert_pay_queue(
     duration_sec: int,
     tier: str,
     z_cost: int,
+    promo_director=None,
 ) -> dict:
     """Insert a paid item at the end of the pay-queue section (FIFO)."""
     async with _queue_lock:
@@ -307,6 +308,13 @@ async def insert_pay_queue(
         # Announce placement to the channel
         await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
 
+        # Insert a Viewer's Choice lead-in immediately before this paid item.
+        if promo_director is not None:
+            try:
+                await promo_director.insert_viewers_choice(uid)
+            except Exception:
+                logger.warning("Viewer's Choice lead-in insert failed for uid=%s", uid, exc_info=True)
+
         return {"success": True, "uid": uid, "request_id": request_id}
 
 
@@ -323,6 +331,7 @@ async def insert_pay_playnext(
     duration_sec: int,
     tier: str,
     z_cost: int,
+    promo_director=None,
 ) -> dict:
     """Insert a paid item at position 0 (play next)."""
     async with _queue_lock:
@@ -420,6 +429,13 @@ async def insert_pay_playnext(
         # Announce placement to the channel
         await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
 
+        # Insert a Viewer's Choice lead-in immediately before this paid item.
+        if promo_director is not None:
+            try:
+                await promo_director.insert_viewers_choice(uid)
+            except Exception:
+                logger.warning("Viewer's Choice lead-in insert failed for uid=%s", uid, exc_info=True)
+
         return {"success": True, "uid": uid, "request_id": request_id}
 
 
@@ -448,6 +464,11 @@ async def _refund_and_remove_pending_pay(api_gate, shadow, db) -> int:
             await shadow.remove(uid)
         except Exception:
             pass
+        try:
+            from ..promos.director import remove_lead_in_for
+            await remove_lead_in_for(api_gate=api_gate, shadow=shadow, uid=uid)
+        except Exception:
+            logger.debug("Lead-in cleanup failed for uid %s", uid, exc_info=True)
         removed += 1
     return removed
 

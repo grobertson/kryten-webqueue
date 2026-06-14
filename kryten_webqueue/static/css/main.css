@@ -438,6 +438,10 @@ a:hover {
 .queue-item-paid {
     border-left-color: var(--accent);
 }
+.queue-item-promo {
+    border-left-color: var(--warning);
+    opacity: 0.92;
+}
 .queue-item-now-playing {
     border-left-color: var(--accent);
     background: linear-gradient(90deg, rgba(108, 92, 231, 0.18), var(--bg-card) 60%);
@@ -518,6 +522,10 @@ a:hover {
 }
 .badge-paid {
     background: var(--accent);
+}
+.badge-promo {
+    background: var(--warning);
+    color: #1a1a1a;
 }
 .qi-user {
     font-size: 0.75rem;
@@ -1086,6 +1094,23 @@ a.np-chip {
 }
 .badge-warn { background: rgba(253, 203, 110, 0.15); border-color: var(--warning); color: var(--warning); }
 .badge-accent { background: rgba(108, 92, 231, 0.2); border-color: var(--accent); color: var(--text-primary); }
+
+/* Promo settings summary grid */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.75rem;
+}
+.settings-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.settings-grid > div > span { font-size: 0.75rem; }
 
 /* Modal form fields */
 .field {

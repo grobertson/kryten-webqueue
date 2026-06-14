@@ -18,6 +18,7 @@ class _FakeApiGate:
         self._np = np
         self.refunds = []
         self.deleted = []
+        self.pms = []
 
     async def get_now_playing(self):
         return self._np
@@ -30,6 +31,10 @@ class _FakeApiGate:
 
     async def playlist_delete(self, uid):
         self.deleted.append(uid)
+        return {"success": True}
+
+    async def send_pm(self, username, message):
+        self.pms.append((username, message))
         return {"success": True}
 
     async def queue_refund(self, username, request_id, reason):
@@ -121,7 +126,35 @@ async def test_owner_offline_cancels_paid_keeps_free():
     assert ws.messages and ws.messages[-1]["type"] == "queue_state"
 
 
-async def test_owner_afk_returns_within_grace_keeps_item():
+async def test_cancel_pms_owner_when_notify_enabled():
+    shadow = _FakeShadow([_paid(11, "alice", title="Cool Video")], now_playing={"uid": 10})
+    api = _FakeApiGate({"alice": {"online": False}}, np={"uid": 10})
+    db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
+    ws = _FakeWs()
+    mon = _monitor(api, shadow, db, ws, notify_user=True)
+
+    await mon.check_once()                        # first sighting: starts grace
+    await mon.check_once()                        # grace elapsed: acts
+
+    assert len(api.pms) == 1
+    user, msg = api.pms[0]
+    assert user == "alice"
+    assert "Cool Video" in msg
+    assert "left the channel" in msg
+
+
+async def test_cancel_silent_when_notify_disabled():
+    shadow = _FakeShadow([_paid(11, "alice")], now_playing={"uid": 10})
+    api = _FakeApiGate({"alice": {"online": False}}, np={"uid": 10})
+    db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
+    ws = _FakeWs()
+    mon = _monitor(api, shadow, db, ws, notify_user=False)
+
+    await mon.check_once()
+    await mon.check_once()
+
+    assert api.refunds == [("alice", "r11", "owner_left")]
+    assert api.pms == []
     shadow = _FakeShadow([_paid(11, "bob")], now_playing={"uid": 10})
     api = _FakeApiGate({"bob": {"meta": {"afk": True}}}, np={"uid": 10})
     db = _FakeDb({11: {"request_id": "r11", "username": "bob"}})
