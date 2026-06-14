@@ -221,10 +221,13 @@ class PromoDirector:
             clip = self._rng.choice(pool)
             if self._config.general.no_repeat and len(pool) > 1:
                 last = self._last_clip_token.get(promo_type)
-                attempts = 0
-                while clip.get("media_id") == last and attempts < 8:
-                    clip = self._rng.choice(pool)
-                    attempts += 1
+                if clip.get("media_id") == last:
+                    # Draw from the rest of the pool so the no-repeat guarantee
+                    # always holds (bounded random retries could otherwise give
+                    # up and return a repeat).
+                    alternatives = [c for c in pool if c.get("media_id") != last]
+                    if alternatives:
+                        clip = self._rng.choice(alternatives)
         self._last_clip_token[promo_type] = clip.get("media_id")
         return clip
 

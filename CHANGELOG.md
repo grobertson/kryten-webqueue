@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.14.1] — 2026-06-13
+
+### Fixed
+
+- **Cancel/refund PM notifications only fire for AFK owners.** A user who *leaves* the channel is no longer connected to CyTube and cannot receive a PM, so the leave path now skips the notification entirely (the refund + WS state update still happen). AFK owners — who are still present — are PM'd as before. `presence_refund.notify_user` now governs the AFK case only.
+- **`no_repeat` promo selection is now deterministic.** When a `no_repeat` random draw matched the previous clip it was retried up to 8 times and could still return a repeat (a flaky guarantee for small pools). It now draws from the pool excluding the last clip, so a consecutive repeat never occurs for pools of 2+.
+
 ## [0.14.0] — 2026-06-13
 
 ### Added

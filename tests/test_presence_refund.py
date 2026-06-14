@@ -126,12 +126,13 @@ async def test_owner_offline_cancels_paid_keeps_free():
     assert ws.messages and ws.messages[-1]["type"] == "queue_state"
 
 
-async def test_cancel_pms_owner_when_notify_enabled():
+async def test_afk_cancel_pms_owner_when_notify_enabled():
+    # AFK owners are still connected and CAN be PM'd.
     shadow = _FakeShadow([_paid(11, "alice", title="Cool Video")], now_playing={"uid": 10})
-    api = _FakeApiGate({"alice": {"online": False}}, np={"uid": 10})
+    api = _FakeApiGate({"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10})
     db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
     ws = _FakeWs()
-    mon = _monitor(api, shadow, db, ws, notify_user=True)
+    mon = _monitor(api, shadow, db, ws, notify_user=True, on_afk=True)
 
     await mon.check_once()                        # first sighting: starts grace
     await mon.check_once()                        # grace elapsed: acts
@@ -140,20 +141,35 @@ async def test_cancel_pms_owner_when_notify_enabled():
     user, msg = api.pms[0]
     assert user == "alice"
     assert "Cool Video" in msg
-    assert "left the channel" in msg
+    assert "AFK" in msg
 
 
-async def test_cancel_silent_when_notify_disabled():
+async def test_left_channel_cancel_does_not_pm():
+    # A user who LEFT the channel is unreachable by PM — no PM attempted.
     shadow = _FakeShadow([_paid(11, "alice")], now_playing={"uid": 10})
     api = _FakeApiGate({"alice": {"online": False}}, np={"uid": 10})
     db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
     ws = _FakeWs()
-    mon = _monitor(api, shadow, db, ws, notify_user=False)
+    mon = _monitor(api, shadow, db, ws, notify_user=True)
 
     await mon.check_once()
     await mon.check_once()
 
     assert api.refunds == [("alice", "r11", "owner_left")]
+    assert api.pms == []
+
+
+async def test_cancel_silent_when_notify_disabled():
+    shadow = _FakeShadow([_paid(11, "alice")], now_playing={"uid": 10})
+    api = _FakeApiGate({"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10})
+    db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
+    ws = _FakeWs()
+    mon = _monitor(api, shadow, db, ws, notify_user=False, on_afk=True)
+
+    await mon.check_once()
+    await mon.check_once()
+
+    assert api.refunds == [("alice", "r11", "owner_afk")]
     assert api.pms == []
     shadow = _FakeShadow([_paid(11, "bob")], now_playing={"uid": 10})
     api = _FakeApiGate({"bob": {"meta": {"afk": True}}}, np={"uid": 10})

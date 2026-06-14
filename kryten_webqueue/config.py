@@ -35,7 +35,8 @@ class PresenceRefundConfig(BaseModel):
     off if running against an older Robot whose ``meta.afk`` goes stale.
 
     ``notify_user`` PMs the owner when a pending paid item is cancelled & refunded
-    so the cancellation isn't silent.
+    so the cancellation isn't silent. This only applies to **AFK** owners — a
+    user who left the channel is no longer connected and cannot receive a PM.
     """
 
     enabled: bool = True
@@ -43,7 +44,7 @@ class PresenceRefundConfig(BaseModel):
     on_afk: bool = True               # needs Kryten-Robot >= 1.10.0 deployed
     grace_seconds: float = 60.0       # wait before acting; re-check after grace
     check_interval_seconds: float = 15.0  # how often to evaluate owners
-    notify_user: bool = True          # PM the owner on cancel/refund
+    notify_user: bool = True          # PM the AFK owner on cancel/refund
 
 
 class PromoTypeConfig(BaseModel):

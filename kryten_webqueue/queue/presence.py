@@ -178,19 +178,24 @@ class PresenceRefundMonitor:
     async def _notify_owner(self, item: dict, reason: str):
         """PM the owner that their paid item was cancelled & refunded.
 
+        Only AFK owners are notified: a user who *left* the channel is no longer
+        connected to CyTube and cannot receive a PM, so there is no point trying.
+        AFK users are still present and will see the message.
+
         Best-effort: a failed PM never blocks the cancel/refund itself.
         """
         if not getattr(self._config, "notify_user", False):
             return
+        if reason != "owner_afk":
+            return  # owner left the channel — unreachable by PM
         owner = item.get("paid_by")
         if not owner:
             return
-        why = "you left the channel" if reason == "owner_left" else "you went AFK"
         title = item.get("title") or "your queued item"
         try:
             await self._api_gate.send_pm(
                 owner,
-                f"Your queued item \"{title}\" was cancelled and refunded because {why}.",
+                f"Your queued item \"{title}\" was cancelled and refunded because you went AFK.",
             )
         except Exception:
             logger.debug("Presence cancel: failed to PM %s", owner, exc_info=True)

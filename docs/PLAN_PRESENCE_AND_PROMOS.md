@@ -419,6 +419,10 @@ load-time. (FP and general promos stay purely poller-driven.)
   a notice.)
 
   **RESOLVED (v0.13.0):** a PM is now sent. On a presence-based cancel the owner
-  receives a PM ("… cancelled and refunded because you left the channel / you
-  went AFK"), gated by `presence_refund.notify_user` (default on) and best-effort
-  so a failed PM never blocks the refund.
+  receives a PM ("… cancelled and refunded because you went AFK"), gated by
+  `presence_refund.notify_user` (default on) and best-effort so a failed PM never
+  blocks the refund.
+
+  **AMENDED (v0.14.1):** the PM only fires for **AFK** owners. A user who *left*
+  the channel is no longer connected to CyTube and cannot receive a PM, so the
+  leave path skips the notice (refund + WS state update still happen).
