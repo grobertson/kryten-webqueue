@@ -790,6 +790,170 @@ a.np-chip {
     color: var(--danger);
 }
 
+/* Account rank + progression (dashboard left column) */
+.account-rank {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+.rank-name {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+.rank-level {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 0.15rem;
+}
+.rank-progress {
+    margin-top: 0.85rem;
+}
+.rank-progress-head, .rank-progress-foot {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+.rank-progress-head {
+    margin-bottom: 0.35rem;
+}
+.rank-progress-foot {
+    margin-top: 0.35rem;
+}
+.progress-track {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--bg-secondary, #1a1a24);
+    overflow: hidden;
+    border: 1px solid var(--border);
+}
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    transition: width 0.4s ease;
+}
+.account-perks {
+    margin-top: 1.25rem;
+}
+.account-perks h3 {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.4rem;
+}
+.perk-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+.perk-list li {
+    font-size: 0.85rem;
+}
+.perk-list li::before {
+    content: "✓ ";
+    color: var(--success);
+}
+
+/* Vanity items (dashboard left column) */
+.vanity-section {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+}
+.vanity-section h3 {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.6rem;
+}
+.vanity-item {
+    margin-bottom: 0.85rem;
+}
+.vanity-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.vanity-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+.vanity-value {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    margin-top: 0.25rem;
+    word-break: break-word;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.vanity-unset {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+.color-swatch {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+/* Color picker dialog */
+.color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0 1rem;
+}
+.color-picker-row input[type="color"] {
+    width: 48px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: transparent;
+    cursor: pointer;
+}
+.color-hex {
+    flex: 1;
+    text-transform: uppercase;
+}
+
+/* Transaction filter toggle */
+.tx-toggle {
+    display: flex;
+    gap: 0.25rem;
+    margin: 0.5rem 0 0.75rem;
+}
+.tx-toggle-btn {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.8rem;
+    background: var(--bg-secondary, #1a1a24);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    cursor: pointer;
+}
+.tx-toggle-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+/* Dashboard history / transaction pagers */
+.history-pager, .tx-pager {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
 /* Admin */
 .admin-nav {
     display: flex;

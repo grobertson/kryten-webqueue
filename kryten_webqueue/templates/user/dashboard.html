@@ -6,28 +6,59 @@
 <div class="user-dashboard">
     <div class="user-header">
         <h1>{{ user.username }}</h1>
-        <span class="user-rank" id="user-rank">Rank {{ user.rank }}</span>
+        <span class="user-rank" id="user-rank">Loading…</span>
     </div>
 
     <div class="dashboard-grid">
+        <!-- LEFT: Account -->
         <div class="balance-card">
             <h2>Z Coin Balance</h2>
-            <p class="balance-amount" id="balance-amount">Loading...</p>
+            <p class="balance-amount" id="balance-amount">Loading…</p>
             <div class="balance-meta" id="balance-meta"></div>
+
+            <div class="account-rank" id="account-rank"></div>
+            <div class="account-perks" id="account-perks"></div>
+
+            <div class="vanity-section" id="vanity-section">
+                <h3>Vanity</h3>
+                <div class="vanity-item">
+                    <div class="vanity-row">
+                        <span class="vanity-label">Greeting</span>
+                        <button class="btn btn-sm" id="edit-greeting" disabled>Edit</button>
+                    </div>
+                    <div class="vanity-value" id="vanity-greeting">—</div>
+                </div>
+                <div class="vanity-item">
+                    <div class="vanity-row">
+                        <span class="vanity-label">Chat color</span>
+                        <button class="btn btn-sm" id="edit-color" disabled>Edit</button>
+                    </div>
+                    <div class="vanity-value" id="vanity-color">—</div>
+                </div>
+            </div>
         </div>
 
+        <!-- MIDDLE: Queue history -->
         <div class="history-card">
             <h2>Queue History</h2>
             <div id="queue-history">
-                <p class="empty-state">Loading...</p>
+                <p class="empty-state">Loading…</p>
             </div>
+            <div class="history-pager" id="queue-pager"></div>
         </div>
 
+        <!-- RIGHT: Transactions -->
         <div class="transactions-card">
             <h2>Recent Transactions</h2>
-            <div id="transactions">
-                <p class="empty-state">Loading...</p>
+            <div class="tx-toggle" id="tx-toggle">
+                <button class="tx-toggle-btn active" data-filter="all">All</button>
+                <button class="tx-toggle-btn" data-filter="credit">Credits</button>
+                <button class="tx-toggle-btn" data-filter="debit">Debits</button>
             </div>
+            <div id="transactions">
+                <p class="empty-state">Loading…</p>
+            </div>
+            <div class="tx-pager" id="tx-pager"></div>
         </div>
     </div>
 </div>
@@ -35,92 +66,384 @@
 
 {% block scripts %}
 <script>
-const RANK_NAMES = {1: 'Viewer', 2: 'Regular', 3: 'Moderator', 4: 'Admin', 5: 'Owner'};
-
-function formatZ(amount) {
-    return Number(amount).toLocaleString() + ' Z';
+// ── Helpers ────────────────────────────────────────────────────
+function fmt(amount, symbol) {
+    return Number(amount || 0).toLocaleString() + ' ' + (symbol || 'Z');
 }
+
+// Friendly transaction titles keyed on the economy trigger_id.
+const TX_TITLES = {
+    'presence.base': 'Watching reward',
+    'retention.welcome_back': 'Welcome back bonus',
+    'bridge.weekly': 'Weekend bridge bonus',
+    'admin.adjust': 'Admin adjustment',
+    'admin.set_balance': 'Balance set by admin',
+    'admin.grant': 'Admin grant',
+    'admin.deduct': 'Admin deduction',
+    'admin.rain': 'Rain reward',
+    'rain.ambient': 'Rain reward',
+    'refund.gif_rejected': 'Refund: GIF rejected',
+    'refund.cytube_promotion_failed': 'Refund: promotion failed',
+    'spend.vanity.custom_greeting': 'Custom greeting',
+    'spend.vanity.chat_color': 'Custom color',
+    'spend.vanity.custom_title': 'Custom title',
+    'spend.vanity.channel_gif': 'Channel GIF',
+    'spend.vanity.shoutout': 'Shoutout',
+    'spend.vanity.fortune': 'Daily fortune',
+    'spend.forcenow': 'Play Next',
+    'spend.tip': 'Tip sent',
+    'earn.tip': 'Tip received',
+    'spend.cytube_promotion': 'Rank promotion',
+    'bounty.create': 'Bounty created',
+};
+// Prefix fallbacks (checked in order) for unmapped trigger_ids.
+const TX_PREFIX = [
+    ['spend.queue', 'Queued media'],
+    ['queue', 'Queued media'],
+    ['dwell.', 'Watch-time milestone'],
+    ['streak.', 'Streak bonus'],
+    ['gambling.', 'Gambling'],
+    ['presence.', 'Watching reward'],
+    ['earn.', 'Earned'],
+    ['refund.', 'Refund'],
+    ['spend.', 'Purchase'],
+    ['admin.', 'Admin adjustment'],
+];
 
 function describeTx(t) {
-    const type = (t.type || '').toLowerCase();
-    if (t.description) return t.description;
-    if (type === 'queue_spend') return `Queued: ${t.title || t.media_id || 'item'}`;
-    if (type === 'playnext_spend') return `Play Next: ${t.title || t.media_id || 'item'}`;
-    if (type === 'refund') return `Refund: ${t.reason || 'queue item removed'}`;
-    if (type === 'daily_bonus' || type === 'bonus') return 'Daily bonus';
-    if (type === 'watch_reward') return 'Watch reward';
-    if (type === 'gift') return `Gift from ${t.from_user || 'system'}`;
-    if (type === 'admin_grant') return 'Admin grant';
-    return type || 'Transaction';
+    const trig = (t.trigger_id || '').toLowerCase();
+    const isQueue = trig.startsWith('spend.queue') || trig === 'queue';
+    if (isQueue && (t.title || t.media_id)) {
+        return 'Queued: ' + (t.title || t.media_id);
+    }
+    if (TX_TITLES[trig]) return TX_TITLES[trig];
+    for (const [pfx, label] of TX_PREFIX) {
+        if (trig.startsWith(pfx)) return label;
+    }
+    if (t.reason && t.reason.trim()) return t.reason.trim();
+    const type = (t.type || '').replace(/[._]/g, ' ').trim();
+    return type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Transaction';
 }
 
-async function loadDashboard() {
-    // Profile + rank
-    const profResp = await fetch('/user/profile');
-    if (profResp.ok) {
-        const prof = await profResp.json();
-        const rankEl = document.getElementById('user-rank');
-        const rankName = RANK_NAMES[prof.rank] || `Rank ${prof.rank}`;
-        rankEl.textContent = rankName;
-        if (prof.online) rankEl.classList.add('user-online');
+// ── Account / rank / vanity (LEFT column) ──────────────────────
+let accountState = null;
+
+async function loadAccount() {
+    let resp;
+    try {
+        resp = await fetch('/user/account');
+    } catch (e) {
+        document.getElementById('balance-amount').textContent = '—';
+        return;
+    }
+    if (!resp.ok) {
+        document.getElementById('balance-amount').textContent = '—';
+        document.getElementById('balance-meta').textContent = 'Could not load economy data';
+        return;
+    }
+    const a = await resp.json();
+    if (!a || !a.found) {
+        document.getElementById('user-rank').textContent = '';
+        document.getElementById('balance-amount').textContent = '0 Z';
+        document.getElementById('balance-meta').textContent = 'No economy account yet';
+        return;
+    }
+    renderAccount(a);
+}
+
+function renderAccount(a) {
+    accountState = a;
+    const sym = a.currency_symbol || 'Z';
+
+    if (a.rank) document.getElementById('user-rank').textContent = a.rank.name;
+    document.getElementById('balance-amount').textContent = fmt(a.balance, sym);
+    document.getElementById('balance-meta').textContent =
+        'Lifetime earned: ' + fmt(a.lifetime_earned, sym);
+
+    // Rank + progress
+    let html = '';
+    if (a.rank) {
+        html += `<div class="rank-name">⭐ ${escapeHtml(a.rank.name)}</div>`;
+        html += `<div class="rank-level">Level ${a.rank.level} of ${a.rank.tier_count}</div>`;
+    }
+    if (a.next_rank) {
+        const p = Math.min(100, a.next_rank.progress_percent || 0);
+        html += `
+          <div class="rank-progress">
+            <div class="rank-progress-head">
+              <span>Next: ${escapeHtml(a.next_rank.name)}</span>
+              <span>${(a.next_rank.progress_percent || 0).toFixed(1)}%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" style="width:${p}%"></div></div>
+            <div class="rank-progress-foot">${fmt(a.next_rank.remaining, sym)} to go</div>
+          </div>`;
+    } else if (a.rank) {
+        html += `<div class="rank-progress-foot">🏆 Maximum rank achieved!</div>`;
+    }
+    document.getElementById('account-rank').innerHTML = html;
+
+    // Perks
+    const perks = (a.perks || []).slice();
+    if (a.spend_discount_percent > 0) {
+        perks.unshift(`${a.spend_discount_percent}% spend discount`);
+    }
+    const perksEl = document.getElementById('account-perks');
+    perksEl.innerHTML = perks.length
+        ? `<h3>Active perks</h3><ul class="perk-list">` +
+            perks.map(p => `<li>${escapeHtml(p)}</li>`).join('') + `</ul>`
+        : '';
+
+    // Vanity
+    const v = a.vanity || {};
+    const enabled = a.vanity_enabled || {};
+    const costs = a.vanity_costs || {};
+
+    const greetEl = document.getElementById('vanity-greeting');
+    greetEl.innerHTML = v.custom_greeting
+        ? escapeHtml(v.custom_greeting)
+        : '<span class="vanity-unset">Not set</span>';
+
+    const colorEl = document.getElementById('vanity-color');
+    if (v.custom_color) {
+        colorEl.innerHTML =
+            `<span class="color-swatch" style="background:${escapeHtml(v.custom_color)}"></span> ` +
+            escapeHtml(v.custom_color);
+    } else {
+        colorEl.innerHTML = '<span class="vanity-unset">Not set</span>';
     }
 
-    // Balance
-    const balResp = await fetch('/user/balance');
-    if (balResp.ok) {
-        const bal = await balResp.json();
-        document.getElementById('balance-amount').textContent = formatZ(bal.balance || 0);
-        const meta = document.getElementById('balance-meta');
-        const parts = [];
-        if (bal.earned_today != null) parts.push(`Today: +${formatZ(bal.earned_today)}`);
-        if (bal.spent_today != null) parts.push(`Spent: ${formatZ(bal.spent_today)}`);
-        meta.textContent = parts.join(' · ');
-    }
+    const gBtn = document.getElementById('edit-greeting');
+    const cBtn = document.getElementById('edit-color');
+    gBtn.disabled = enabled.custom_greeting === false;
+    cBtn.disabled = enabled.custom_color === false;
+    gBtn.title = costs.custom_greeting ? `${fmt(costs.custom_greeting, sym)} per update` : '';
+    cBtn.title = costs.custom_color ? `${fmt(costs.custom_color, sym)} per update` : '';
+}
 
-    // Queue history
-    const histResp = await fetch('/queue/history');
-    if (histResp.ok) {
-        const hist = await histResp.json();
-        const el = document.getElementById('queue-history');
-        if (hist.items && hist.items.length > 0) {
-            el.innerHTML = hist.items.slice(0, 20).map(h => `
-                <div class="history-item">
-                    <span class="hi-title">${escapeHtml(h.title || 'Unknown')}</span>
-                    <span class="hi-cost">${formatZ(h.z_cost)}</span>
-                    <span class="hi-tier badge-${h.tier}">${h.tier}</span>
-                </div>
-            `).join('');
-        } else {
-            el.innerHTML = '<p class="empty-state">No queue history yet</p>';
+// ── Vanity edit dialogs ────────────────────────────────────────
+function editGreeting() {
+    if (!accountState) return;
+    const sym = accountState.currency_symbol || 'Z';
+    const cur = (accountState.vanity && accountState.vanity.custom_greeting) || '';
+    const cost = (accountState.vanity_costs && accountState.vanity_costs.custom_greeting) || 0;
+    showModal(`
+        <h3>Custom greeting</h3>
+        <p class="muted">The bot greets you with this when you join. Cost: ${fmt(cost, sym)} per update.</p>
+        <label class="field"><span>Greeting text (max 200 characters)</span>
+          <textarea id="greeting-input" maxlength="200" rows="3">${escapeHtml(cur)}</textarea></label>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="greeting-save">Purchase update</button>
+        </div>`);
+    document.getElementById('greeting-save').addEventListener('click', saveGreeting);
+}
+
+async function saveGreeting() {
+    const value = document.getElementById('greeting-input').value.trim();
+    if (!value) { showToast('Greeting cannot be empty', 'error'); return; }
+    const btn = document.getElementById('greeting-save');
+    btn.disabled = true;
+    let resp;
+    try {
+        resp = await fetch('/user/vanity/greeting', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({value}),
+        });
+    } catch (e) {
+        showToast('Network error', 'error'); btn.disabled = false; return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+        showToast('Greeting updated', 'success');
+        closeModal();
+        loadAccount();
+    } else {
+        showToast(data.detail || 'Update failed', 'error');
+        btn.disabled = false;
+    }
+}
+
+function editColor() {
+    if (!accountState) return;
+    const sym = accountState.currency_symbol || 'Z';
+    const cur = (accountState.vanity && accountState.vanity.custom_color) || '';
+    const cost = (accountState.vanity_costs && accountState.vanity_costs.custom_color) || 0;
+    const seed = /^#[0-9A-Fa-f]{6}$/.test(cur) ? cur : '#6C5CE7';
+    showModal(`
+        <h3>Chat color</h3>
+        <p class="muted">Pick a color for your chat messages. Cost: ${fmt(cost, sym)} per update.</p>
+        <div class="color-picker-row">
+          <input type="color" id="color-input" value="${seed}">
+          <input type="text" id="color-hex" class="color-hex" value="${escapeHtml(cur || seed)}" maxlength="7" placeholder="#RRGGBB">
+        </div>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="color-save">Purchase update</button>
+        </div>`);
+    const picker = document.getElementById('color-input');
+    const hex = document.getElementById('color-hex');
+    picker.addEventListener('input', () => { hex.value = picker.value.toUpperCase(); });
+    hex.addEventListener('input', () => {
+        const val = hex.value.trim();
+        if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
+            picker.value = (val.startsWith('#') ? '' : '#') + val;
         }
-    }
+    });
+    document.getElementById('color-save').addEventListener('click', saveColor);
+}
 
-    // Transactions
-    const txResp = await fetch('/user/transactions');
-    if (txResp.ok) {
-        const tx = await txResp.json();
-        const el = document.getElementById('transactions');
-        const items = tx.transactions || tx.items || [];
-        if (items.length > 0) {
-            el.innerHTML = items.slice(0, 20).map(t => `
-                <div class="tx-item">
-                    <span class="tx-desc">${escapeHtml(describeTx(t))}</span>
-                    <span class="tx-amount ${t.amount > 0 ? 'tx-credit' : 'tx-debit'}">${t.amount > 0 ? '+' : ''}${formatZ(t.amount)}</span>
-                    <span class="tx-time">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</span>
-                </div>
-            `).join('');
-        } else {
-            el.innerHTML = '<p class="empty-state">No transactions</p>';
-        }
+async function saveColor() {
+    let value = document.getElementById('color-hex').value.trim();
+    if (!/^#?[0-9A-Fa-f]{6}$/.test(value)) {
+        showToast('Enter a 6-digit hex color', 'error');
+        return;
+    }
+    if (!value.startsWith('#')) value = '#' + value;
+    const btn = document.getElementById('color-save');
+    btn.disabled = true;
+    let resp;
+    try {
+        resp = await fetch('/user/vanity/color', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({value}),
+        });
+    } catch (e) {
+        showToast('Network error', 'error'); btn.disabled = false; return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+        showToast('Color updated', 'success');
+        closeModal();
+        loadAccount();
+    } else {
+        showToast(data.detail || 'Update failed', 'error');
+        btn.disabled = false;
     }
 }
 
-function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+// ── Queue history (MIDDLE column, paginated) ───────────────────
+const QUEUE_LIMIT = 20;
+let queueOffset = 0;
+let queueTotal = 0;
+
+async function loadQueue(offset) {
+    queueOffset = Math.max(0, offset || 0);
+    const el = document.getElementById('queue-history');
+    let resp;
+    try {
+        resp = await fetch(`/queue/history?limit=${QUEUE_LIMIT}&offset=${queueOffset}`);
+    } catch (e) {
+        el.innerHTML = '<p class="empty-state">Failed to load</p>';
+        return;
+    }
+    if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; return; }
+    const data = await resp.json();
+    queueTotal = data.total || 0;
+    const items = data.items || [];
+    if (items.length) {
+        el.innerHTML = items.map(h => `
+            <div class="history-item">
+                <span class="hi-title">${escapeHtml(h.title || 'Unknown')}</span>
+                <span class="hi-cost">${fmt(h.z_cost, 'Z')}</span>
+                <span class="hi-tier badge-${escapeHtml(h.tier || '')}">${escapeHtml(h.tier || '')}</span>
+            </div>`).join('');
+    } else {
+        el.innerHTML = '<p class="empty-state">No queue history yet</p>';
+    }
+    renderQueuePager();
 }
 
-loadDashboard();
+function renderQueuePager() {
+    const pager = document.getElementById('queue-pager');
+    if (queueTotal <= QUEUE_LIMIT) { pager.innerHTML = ''; return; }
+    const start = queueTotal ? queueOffset + 1 : 0;
+    const end = Math.min(queueOffset + QUEUE_LIMIT, queueTotal);
+    const prevDis = queueOffset <= 0 ? 'disabled' : '';
+    const nextDis = end >= queueTotal ? 'disabled' : '';
+    pager.innerHTML = `
+        <button class="btn btn-sm" ${prevDis} onclick="loadQueue(${Math.max(0, queueOffset - QUEUE_LIMIT)})">Prev</button>
+        <span class="page-num">${start}–${end} of ${queueTotal}</span>
+        <button class="btn btn-sm" ${nextDis} onclick="loadQueue(${queueOffset + QUEUE_LIMIT})">Next</button>`;
+}
+
+// ── Transactions (RIGHT column, toggle + load more) ────────────
+const TX_LIMIT = 50;
+let txAll = [];
+let txOffset = 0;
+let txFilter = 'all';
+let txHasMore = true;
+
+async function loadTransactions(reset) {
+    if (reset) { txAll = []; txOffset = 0; txHasMore = true; }
+    let resp;
+    try {
+        resp = await fetch(`/user/transactions?limit=${TX_LIMIT}&offset=${txOffset}`);
+    } catch (e) {
+        document.getElementById('transactions').innerHTML = '<p class="empty-state">Failed to load</p>';
+        return;
+    }
+    if (resp.ok) {
+        const data = await resp.json();
+        const items = data.transactions || data.items || [];
+        txAll = txAll.concat(items);
+        txOffset += items.length;
+        txHasMore = items.length === TX_LIMIT;
+    }
+    renderTransactions();
+}
+
+function renderTransactions() {
+    const el = document.getElementById('transactions');
+    let items = txAll;
+    if (txFilter === 'credit') items = items.filter(t => t.amount > 0);
+    else if (txFilter === 'debit') items = items.filter(t => t.amount < 0);
+
+    if (items.length) {
+        el.innerHTML = items.map(t => `
+            <div class="tx-item">
+                <span class="tx-desc">${escapeHtml(describeTx(t))}</span>
+                <span class="tx-amount ${t.amount > 0 ? 'tx-credit' : 'tx-debit'}">${t.amount > 0 ? '+' : ''}${fmt(t.amount, 'Z')}</span>
+                <span class="tx-time">${t.created_at ? new Date(t.created_at).toLocaleDateString() : ''}</span>
+            </div>`).join('');
+    } else {
+        el.innerHTML = '<p class="empty-state">No transactions</p>';
+    }
+
+    const pager = document.getElementById('tx-pager');
+    pager.innerHTML = txHasMore ? `<button class="btn btn-sm" id="tx-more">Load more</button>` : '';
+    const more = document.getElementById('tx-more');
+    if (more) more.addEventListener('click', () => loadTransactions(false));
+}
+
+// ── Modal helpers ──────────────────────────────────────────────
+function showModal(html) {
+    closeModal();
+    const o = document.createElement('div');
+    o.className = 'modal-overlay';
+    o.id = 'user-modal';
+    o.innerHTML = `<div class="modal-box">${html}</div>`;
+    o.addEventListener('click', e => { if (e.target === o) closeModal(); });
+    document.body.appendChild(o);
+}
+function closeModal() {
+    const m = document.getElementById('user-modal');
+    if (m) m.remove();
+}
+
+// ── Init ───────────────────────────────────────────────────────
+document.getElementById('edit-greeting').addEventListener('click', editGreeting);
+document.getElementById('edit-color').addEventListener('click', editColor);
+document.querySelectorAll('.tx-toggle-btn').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.tx-toggle-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    txFilter = b.dataset.filter;
+    renderTransactions();
+}));
+
+loadAccount();
+loadQueue(0);
+loadTransactions(true);
 </script>
 {% endblock %}

@@ -223,11 +223,15 @@ async def cost_preview(request: Request, friendly_token: str, tier: str = "queue
 
 
 @router.get("/history")
-async def queue_history(request: Request, user: dict = Depends(get_current_user)):
-    """Get user's queue history."""
+async def queue_history(request: Request, limit: int = 20, offset: int = 0,
+                        user: dict = Depends(get_current_user)):
+    """Get user's queue history (paginated, most recent first)."""
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
     db = request.app.state.db
-    history = await db.get_user_queue_history(user["username"])
-    return {"items": history}
+    items = await db.get_user_queue_history(user["username"], limit=limit, offset=offset)
+    total = await db.get_user_queue_history_count(user["username"])
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 @router.get("/next-schedule")

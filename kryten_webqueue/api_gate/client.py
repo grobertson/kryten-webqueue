@@ -93,6 +93,21 @@ class ApiGateClient:
     async def get_transactions(self, username: str, limit: int = 20, offset: int = 0) -> dict:
         return await self.get(f"/economy/transactions/{username}", limit=limit, offset=offset)
 
+    async def get_account_summary(self, username: str) -> dict:
+        return await self.get(f"/economy/account/{username}")
+
+    async def set_vanity_greeting(self, username: str, value: str) -> dict:
+        return await self.post("/economy/vanity/greeting", json={
+            "username": username,
+            "value": value,
+        })
+
+    async def set_vanity_color(self, username: str, value: str) -> dict:
+        return await self.post("/economy/vanity/color", json={
+            "username": username,
+            "value": value,
+        })
+
     async def queue_preview(self, username: str, duration_sec: int, tier: str = "queue") -> dict:
         return await self.post("/economy/queue-preview", json={
             "username": username,

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.15.0] — 2026-06-14
+
+### Added
+
+- **Account progression panel on the Z-Coin dashboard.** The left column now surfaces the user's economy account in full: current rank/level, a progress bar toward the next milestone (remaining Z + percent), active perks (including spend discount), and their purchased vanity items. Powered by the new api-gate `GET /economy/account/{username}` endpoint (economy `account.summary`), proxied via `GET /user/account`.
+- **Vanity item editing dialogs.** Inline **Edit** buttons open dialogs to purchase/update the custom greeting (textarea, 200-char limit) and custom chat color (native color picker synced with a 6-digit hex field). Backed by `POST /user/vanity/greeting` and `POST /user/vanity/color`, which proxy the economy `vanity.set_greeting` / `vanity.set_color` commands. The username is taken from the authenticated session, never the request body.
+- **Transaction credit/debit filter.** The Recent Transactions column gains an All / Credits / Debits toggle and a **Load more** control, with friendlier titles derived from each transaction's `trigger_id` (e.g. `presence.base` → "Watching reward", `spend.vanity.chat_color` → "Custom color") instead of raw `earn` labels.
+
+### Changed
+
+- **Queue history pagination.** `GET /queue/history` now accepts `limit`/`offset` and returns a `total` count; the dashboard's middle column paginates through the full history with Prev/Next controls instead of showing only the most recent 20 entries.
+
 ## [0.14.2] — 2026-06-13
 
 ### Added

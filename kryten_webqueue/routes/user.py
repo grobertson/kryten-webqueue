@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
+from pydantic import BaseModel
 
 from ..auth.session import get_current_user
 
@@ -10,6 +11,59 @@ async def get_balance(request: Request, user: dict = Depends(get_current_user)):
     """Get user's economy balance."""
     api_gate = request.app.state.api_gate
     return await api_gate.get_balance(user["username"])
+
+
+@router.get("/account")
+async def get_account(request: Request, user: dict = Depends(get_current_user)):
+    """Get the user's full economy account summary (rank, progress, perks, vanity)."""
+    api_gate = request.app.state.api_gate
+    return await api_gate.get_account_summary(user["username"])
+
+
+class GreetingUpdate(BaseModel):
+    value: str
+
+
+class ColorUpdate(BaseModel):
+    value: str
+
+
+@router.post("/vanity/greeting")
+async def set_vanity_greeting(
+    body: GreetingUpdate, request: Request, user: dict = Depends(get_current_user)
+):
+    """Purchase/update the current user's custom greeting."""
+    api_gate = request.app.state.api_gate
+    try:
+        return await api_gate.set_vanity_greeting(user["username"], body.value)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
+
+
+@router.post("/vanity/color")
+async def set_vanity_color(
+    body: ColorUpdate, request: Request, user: dict = Depends(get_current_user)
+):
+    """Purchase/update the current user's custom chat color (6-digit hex)."""
+    api_gate = request.app.state.api_gate
+    try:
+        return await api_gate.set_vanity_color(user["username"], body.value)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
+
+
+def _economy_error(exc: Exception) -> str:
+    """Extract a human-readable message from an api-gate HTTP error."""
+    import httpx
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        try:
+            detail = exc.response.json().get("detail")
+            if detail:
+                return str(detail)
+        except Exception:  # noqa: BLE001
+            pass
+    return "Purchase failed. Please try again."
 
 
 @router.get("/transactions")

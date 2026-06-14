@@ -893,11 +893,18 @@ class Database:
             [username, friendly_token, title, tier, z_cost],
         )
 
-    async def get_user_queue_history(self, username: str, limit: int = 50) -> list[dict]:
+    async def get_user_queue_history(self, username: str, limit: int = 50, offset: int = 0) -> list[dict]:
         return await self._fetch_all(
-            "SELECT * FROM queue_history WHERE username=? ORDER BY id DESC LIMIT ?",
-            [username, limit],
+            "SELECT * FROM queue_history WHERE username=? ORDER BY id DESC LIMIT ? OFFSET ?",
+            [username, limit, offset],
         )
+
+    async def get_user_queue_history_count(self, username: str) -> int:
+        row = await self._fetch_one(
+            "SELECT COUNT(*) AS c FROM queue_history WHERE username=?",
+            [username],
+        )
+        return int(row["c"]) if row else 0
 
     # --- Saved playlists ---
 
