@@ -1,6 +1,9 @@
 /* kryten-webqueue — Main Stylesheet */
 
 :root {
+    /* Default (dark) palette. An explicit [data-theme="dark"] block below mirrors
+       these so the navbar toggle is symmetric; [data-theme="light"] overrides
+       them. Theme-independent tokens (radius, fonts, nav height) live here. */
     --bg-primary: #0f0f14;
     --bg-secondary: #1a1a24;
     --bg-card: #22222e;
@@ -13,11 +16,46 @@
     --warning: #fdcb6e;
     --danger: #e17055;
     --border: #33334a;
-    --radius: 8px;
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --radius: 8px;
     --nav-height: 4rem;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     --font-heading: 'Sora', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+/* Explicit dark theme (mirrors the defaults) — set by the toggle. */
+:root[data-theme="dark"] {
+    --bg-primary: #0f0f14;
+    --bg-secondary: #1a1a24;
+    --bg-card: #22222e;
+    --bg-hover: #2a2a3a;
+    --text-primary: #e8e8f0;
+    --text-secondary: #9090a8;
+    --accent: #6c5ce7;
+    --accent-hover: #7f70f0;
+    --success: #00b894;
+    --warning: #fdcb6e;
+    --danger: #e17055;
+    --border: #33334a;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* Light theme. Same accent family; lighter surfaces, darker text, and slightly
+   deepened semantic colors so they keep contrast on white. */
+:root[data-theme="light"] {
+    --bg-primary: #f3f3f8;
+    --bg-secondary: #e9e9f1;
+    --bg-card: #ffffff;
+    --bg-hover: #e4e4ee;
+    --text-primary: #1b1b26;
+    --text-secondary: #5c5c72;
+    --accent: #6c5ce7;
+    --accent-hover: #5a4bd4;
+    --success: #00997a;
+    --warning: #b9810a;
+    --danger: #c84b30;
+    --border: #d6d6e2;
+    --shadow: 0 4px 12px rgba(20, 20, 40, 0.12);
 }
 
 * {
@@ -83,6 +121,23 @@ a:hover {
 }
 .nav-links a:hover {
     color: var(--text-primary);
+}
+
+/* Theme toggle (navbar) */
+.theme-toggle {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 0.3rem 0.5rem;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+.theme-toggle:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
 }
 
 /* Container */

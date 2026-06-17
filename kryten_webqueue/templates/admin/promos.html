@@ -87,17 +87,17 @@ async function loadPools() {
                     ${p.description ? `<div class="muted">${escapeHtml(p.description)}</div>` : ''}</td>
                 <td>${p.promo_type
                     ? `<span class="badge badge-accent">${escapeHtml(typeLabel(p.promo_type))}</span>`
-                    : (p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '<span class="muted">Mutable</span>')}</td>
+                    : (p.is_immutable ? '<span class="badge badge-warn">Non-preemptable</span>' : '<span class="muted">Preemptable</span>')}</td>
                 <td>
                     <select onchange="setPromoType(${p.id}, this.value, '${escapeHtml(p.name)}')"
-                        ${p.is_immutable ? 'disabled title="Release the immutable flag first"' : ''}>
+                        ${p.is_immutable ? 'disabled title="Make the playlist preemptable first"' : ''}>
                         ${options(p.promo_type || '')}
                     </select>
                 </td>
             </tr>`).join('')}
     </table>
     <p class="muted" style="margin-top:0.5rem;font-size:0.8rem;">
-        Immutable playlists can't be promo pools — release them on the Playlists page first.
+        Non-preemptable playlists can't be promo pools — make them preemptable on the Playlists page first.
         Multiple playlists may share a type; their clips are unioned into that type's pool.
     </p>`;
 }

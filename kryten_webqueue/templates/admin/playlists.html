@@ -93,7 +93,7 @@ async function loadPlaylists() {
                     ${p.description ? `<div class="muted">${escapeHtml(p.description)}</div>` : ''}</td>
                 <td>${p.promo_type
                     ? `<span class="badge badge-accent" title="Promo pool">Promo: ${escapeHtml(p.promo_type)}</span>`
-                    : (p.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : '<span class="muted">Mutable</span>')}</td>
+                    : (p.is_immutable ? '<span class="badge badge-warn">Non-preemptable</span>' : '<span class="muted">Preemptable</span>')}</td>
                 <td>${escapeHtml(p.created_by || '')}</td>
                 <td class="row-actions">
                     <button class="btn btn-sm" onclick="toggleImmutable(${p.id}, ${p.is_immutable ? 1 : 0}, '${escapeHtml(p.name)}')"
@@ -125,7 +125,7 @@ function showCreateModal() {
         <h3>New Playlist</h3>
         <label class="field"><span>Name</span><input type="text" id="pl-name"></label>
         <label class="field"><span>Description</span><input type="text" id="pl-desc"></label>
-        <label class="check"><input type="checkbox" id="pl-immut"> Immutable (reserve items — hidden from public catalog)</label>
+        <label class="check"><input type="checkbox" id="pl-immut"> Non-preemptable (reserve items — hidden from public catalog)</label>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="createPlaylist()">Create</button>
@@ -167,7 +167,7 @@ async function openEditor(id) {
     }));
     document.getElementById('editor-title').textContent = pl.name;
     document.getElementById('editor-meta').textContent =
-        `${pl.is_immutable ? 'Immutable (reserved) · ' : ''}${pl.description || ''}`;
+        `${pl.is_immutable ? 'Non-preemptable (reserved) · ' : ''}${pl.description || ''}`;
     document.getElementById('list-view').classList.add('hidden');
     document.getElementById('editor-view').classList.remove('hidden');
     document.getElementById('cat-results').innerHTML = '';
@@ -307,7 +307,7 @@ function editMeta() {
     showModal(`
         <h3>Rename Playlist</h3>
         <label class="field"><span>Name</span><input type="text" id="em-name" value="${escapeHtml(document.getElementById('editor-title').textContent)}"></label>
-        <label class="check"><input type="checkbox" id="em-immut" ${editorImmutable ? 'checked' : ''}> Immutable (reserve items)</label>
+        <label class="check"><input type="checkbox" id="em-immut" ${editorImmutable ? 'checked' : ''}> Non-preemptable (reserve items)</label>
         <div class="modal-actions">
             <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
             <button class="btn btn-primary" onclick="saveMeta()">Save</button>

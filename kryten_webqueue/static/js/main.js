@@ -1,5 +1,32 @@
 /* kryten-webqueue — Main JavaScript */
 
+// --- Theme (light/dark) ---
+// The initial theme is applied pre-paint by an inline script in base.html.
+// Here we keep the toggle button's icon in sync and persist explicit choices.
+function currentTheme() {
+    return document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+}
+
+function updateThemeToggle() {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    const dark = currentTheme() === 'dark';
+    // Show the icon for the theme you'd switch TO.
+    btn.textContent = dark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+    btn.setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
+    btn.title = btn.getAttribute('aria-label');
+}
+
+function setTheme(theme) {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('wq_theme', theme); } catch (e) { /* ignore */ }
+    updateThemeToggle();
+}
+
+function toggleTheme() {
+    setTheme(currentTheme() === 'dark' ? 'light' : 'dark');
+}
+
 // Toast notification system
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
@@ -15,6 +42,12 @@ function showToast(message, type = 'success') {
 
 // Logout handler
 document.addEventListener('DOMContentLoaded', () => {
+    updateThemeToggle();
+    const themeBtn = document.getElementById('theme-toggle');
+    if (themeBtn) {
+        themeBtn.addEventListener('click', toggleTheme);
+    }
+
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async (e) => {

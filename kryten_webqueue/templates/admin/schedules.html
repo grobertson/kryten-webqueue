@@ -47,7 +47,7 @@ async function loadActive() {
     const locked = a.is_immutable && !a.lock_disabled;
     banner.innerHTML = `
         <strong>Active schedule running:</strong> ${escapeHtml(name)}
-        ${a.is_immutable ? '<span class="badge badge-warn">Immutable</span>' : ''}
+        ${a.is_immutable ? '<span class="badge badge-warn">Non-preemptable</span>' : ''}
         ${locked ? '<span class="badge badge-warn">Pay-to-play locked</span>' : '<span class="badge">Unlocked</span>'}
         ${a.estimated_end_at ? `<div class="muted">Ends ~${formatLocalDateTime(a.estimated_end_at)}</div>` : ''}
         <div style="margin-top:0.5rem;">

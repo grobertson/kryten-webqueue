@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.16.0] — 2026-06-17
+
+### Added
+
+- **Light / dark theme toggle.** A navbar button switches between dark (default) and light themes. The choice persists in `localStorage`; first-time visitors follow their OS `prefers-color-scheme`. An inline pre-paint script in `base.html` applies the saved/preferred theme before first render to avoid a flash. Light/dark palettes are defined as `:root[data-theme="..."]` overrides of the existing CSS variables, so the whole UI re-themes without per-component changes.
+
+### Changed
+
+- **Clearer playlist terminology (display only).** Admin playlist/schedule/promo screens now label reserved playlists as **Non-preemptable** and normal ones as **Preemptable** (previously "Immutable" / "Mutable"). This is a wording change only — the `is_immutable` data field, API payloads, and config keys are unchanged.
+
+[0.16.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.16.0
+
 ## [0.15.2] — 2026-06-17
 
 ### Fixed
