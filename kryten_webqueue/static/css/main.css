@@ -797,19 +797,49 @@ a.np-chip {
 }
 .dashboard-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: minmax(280px, 360px) 1fr;
     gap: 1.5rem;
     margin-top: 1.5rem;
+    align-items: start;
 }
 @media (max-width: 900px) {
     .dashboard-grid {
         grid-template-columns: 1fr;
     }
 }
-.balance-card, .history-card, .transactions-card {
+.balance-card, .history-card, .transactions-card, .dashboard-tabs-card {
     background: var(--bg-card);
     border-radius: var(--radius);
     padding: 1.5rem;
+}
+
+/* Dashboard tabbed container */
+.tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1rem;
+}
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.6rem 0.9rem;
+    margin-bottom: -1px;
+}
+.tab-btn:hover {
+    color: var(--text-primary);
+}
+.tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+}
+.tab-panel[hidden] {
+    display: none;
 }
 .balance-amount {
     font-size: 2rem;
@@ -911,17 +941,7 @@ a.np-chip {
     color: var(--success);
 }
 
-/* Vanity items (dashboard left column) */
-.vanity-section {
-    margin-top: 1.25rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid var(--border);
-}
-.vanity-section h3 {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    margin-bottom: 0.6rem;
-}
+/* Vanity items (dashboard "Vanity Items" tab) */
 .vanity-item {
     margin-bottom: 0.85rem;
 }

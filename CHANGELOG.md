@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.19.0] — 2026-06-17
+
+### Changed
+
+- **Z-Coin dashboard reorganized into tabs.** The account page was overcrowded with three side-by-side columns. It's now a widened account card (balance, rank, progress, perks) beside a tabbed container with **Queue History**, **Recent Transactions**, and a new **Vanity Items** tab. Each tab lazy-loads its data on first view; the vanity greeting/color editors moved out of the cramped left column into their own roomier tab. Collapses to a single column on narrow screens.
+
+[0.19.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.19.0
+
 ## [0.18.0] — 2026-06-17
 
 ### Fixed

@@ -10,7 +10,7 @@
     </div>
 
     <div class="dashboard-grid">
-        <!-- LEFT: Account -->
+        <!-- LEFT: Account (widened) -->
         <div class="balance-card">
             <h2>Z Coin Balance</h2>
             <p class="balance-amount" id="balance-amount">Loading…</p>
@@ -18,9 +18,37 @@
 
             <div class="account-rank" id="account-rank"></div>
             <div class="account-perks" id="account-perks"></div>
+        </div>
 
-            <div class="vanity-section" id="vanity-section">
-                <h3>Vanity</h3>
+        <!-- RIGHT: Tabbed container -->
+        <div class="dashboard-tabs-card">
+            <div class="tabs" role="tablist">
+                <button class="tab-btn active" data-tab="queue" role="tab" aria-selected="true">Queue History</button>
+                <button class="tab-btn" data-tab="transactions" role="tab" aria-selected="false">Recent Transactions</button>
+                <button class="tab-btn" data-tab="vanity" role="tab" aria-selected="false">Vanity Items</button>
+            </div>
+
+            <div class="tab-panel" id="tab-queue" role="tabpanel">
+                <div id="queue-history">
+                    <p class="empty-state">Loading…</p>
+                </div>
+                <div class="history-pager" id="queue-pager"></div>
+            </div>
+
+            <div class="tab-panel" id="tab-transactions" role="tabpanel" hidden>
+                <div class="tx-toggle" id="tx-toggle">
+                    <button class="tx-toggle-btn active" data-filter="all">All</button>
+                    <button class="tx-toggle-btn" data-filter="credit">Credits</button>
+                    <button class="tx-toggle-btn" data-filter="debit">Debits</button>
+                </div>
+                <div id="transactions">
+                    <p class="empty-state">Loading…</p>
+                </div>
+                <div class="tx-pager" id="tx-pager"></div>
+            </div>
+
+            <div class="tab-panel" id="tab-vanity" role="tabpanel" hidden>
+                <p class="muted">Personalize how the bot greets you and your chat color. Each update is a one-time purchase.</p>
                 <div class="vanity-item">
                     <div class="vanity-row">
                         <span class="vanity-label">Greeting</span>
@@ -36,29 +64,6 @@
                     <div class="vanity-value" id="vanity-color">—</div>
                 </div>
             </div>
-        </div>
-
-        <!-- MIDDLE: Queue history -->
-        <div class="history-card">
-            <h2>Queue History</h2>
-            <div id="queue-history">
-                <p class="empty-state">Loading…</p>
-            </div>
-            <div class="history-pager" id="queue-pager"></div>
-        </div>
-
-        <!-- RIGHT: Transactions -->
-        <div class="transactions-card">
-            <h2>Recent Transactions</h2>
-            <div class="tx-toggle" id="tx-toggle">
-                <button class="tx-toggle-btn active" data-filter="all">All</button>
-                <button class="tx-toggle-btn" data-filter="credit">Credits</button>
-                <button class="tx-toggle-btn" data-filter="debit">Debits</button>
-            </div>
-            <div id="transactions">
-                <p class="empty-state">Loading…</p>
-            </div>
-            <div class="tx-pager" id="tx-pager"></div>
         </div>
     </div>
 </div>
@@ -442,8 +447,31 @@ document.querySelectorAll('.tx-toggle-btn').forEach(b => b.addEventListener('cli
     renderTransactions();
 }));
 
+// Tabs: show one panel at a time; lazy-load each panel's data on first view.
+const tabLoaded = { queue: false, transactions: false, vanity: false };
+function loadTabOnce(tab) {
+    if (tabLoaded[tab]) return;
+    tabLoaded[tab] = true;
+    if (tab === 'queue') loadQueue(0);
+    else if (tab === 'transactions') loadTransactions(true);
+    // 'vanity' needs no fetch — populated by loadAccount().
+}
+function showTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => {
+        p.hidden = p.id !== `tab-${tab}`;
+    });
+    loadTabOnce(tab);
+}
+document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+
 loadAccount();
-loadQueue(0);
-loadTransactions(true);
+showTab('queue');  // default tab; lazy-loads queue history
 </script>
 {% endblock %}
