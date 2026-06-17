@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.15.1] — 2026-06-17
+
+### Fixed
+
+- **Application logs were silently dropped.** The app never configured Python logging — `uvicorn.run(log_level="info")` only sets up uvicorn's own loggers, leaving the `kryten_webqueue` hierarchy with no handler, so Python's "last resort" path emitted only `WARNING`+. Every `logger.info(...)` (including all promo-insertion diagnostics) was discarded. A new `logging_config.build_log_config()` installs a `dictConfig` (passed to uvicorn via `log_config`) that attaches a console handler to the application loggers.
+- **Silent failure in the promo poll loop.** `PromoDirector.on_poll()` swallowed every exception from the immutable-event-lock check with a bare `except: return` and no log line, hiding faults. It now logs at `WARNING` with a traceback before skipping the cycle.
+
+### Added
+
+- **Configurable log levels.** New `log_level` (default `INFO`) and `promo_log_level` (default falls back to `log_level`) config fields. Set `promo_log_level` to `DEBUG` for a full per-poll trace of promo decisions without flooding the rest of the app (the `kryten_webqueue.promos` logger is independently tunable).
+- **Deep promo observability.** `PromoDirector` now emits detailed diagnostics across the whole insertion path: now-playing advance + cadence counter, clip selection (order, pool size, sequential index, random no-repeat avoidance), weighted type pick (candidates/weights/skipped), cadence-due reason, idempotency-guard skips, lead-in decisions, and the add/move/uid result. It warns on single-clip pools (which always repeat) and **errors** when an add succeeds but returns no uid (an untracked insertion that would otherwise repeat every poll).
+
+[0.15.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.15.1
+
 ## [0.15.0] — 2026-06-14
 
 ### Added

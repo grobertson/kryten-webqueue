@@ -104,6 +104,17 @@ class Config(BaseModel):
     secret_key: str
     session_ttl_hours: int = 24
 
+    # Logging
+    # Root application log level for the ``kryten_webqueue`` logger hierarchy.
+    # Without explicit configuration Python only emits WARNING+ via its
+    # "last resort" handler, so INFO diagnostics (e.g. promo insertions) are
+    # silently dropped. ``__main__`` installs a dictConfig using these values.
+    log_level: str = "INFO"
+    # Independent level for the promo subsystem (``kryten_webqueue.promos``).
+    # Set to "DEBUG" for a full per-poll trace of promo decisions without
+    # flooding the rest of the app. Falls back to ``log_level`` when None.
+    promo_log_level: str | None = None
+
     # API Gate
     api_gate_url: str = "http://127.0.0.1:24444"
     api_gate_token: str

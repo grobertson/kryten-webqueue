@@ -5,6 +5,9 @@
   "secret_key": "CHANGE_ME_long_random_string",
   "session_ttl_hours": 24,
 
+  "log_level": "INFO",
+  "promo_log_level": "DEBUG",
+
   "api_gate_url": "https://www.dropsugar.co:8443/",
   "api_gate_token": "CHANGE_ME",
 
