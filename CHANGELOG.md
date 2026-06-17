@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.20.1] — 2026-06-17
+
+### Fixed
+
+- **Z-Coin dashboard layout polish.** The left account column is now a fixed 320px width (was a flexible 280–360px range that shifted with content), and the tab strip has proper folder-tab styling — filled inactive tabs with hover feedback and an active tab that visually connects to its panel — instead of the previous near-invisible underline.
+
+[0.20.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.20.1
+
 ## [0.20.0] — 2026-06-17
 
 ### Added
