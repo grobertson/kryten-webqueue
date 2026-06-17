@@ -185,9 +185,41 @@ async def fetchurls_job(params: dict, ctx):
         info = await _import_section_as_playlist(ctx, name, lines, triggered_by)
         if info:
             imported.append(info["name"])
+            logger.info("fetchurls: imported %d item(s) into '%s'", info["count"], info["name"])
     result["imported_playlists"] = imported
-    result.pop("section_lines", None)  # keep the persisted detail compact
+
+    # Per-section resolved/failed summary for the process log.
+    sheet = result.get("sheet", "?")
+    for label, counts in (result.get("section_summary") or {}).items():
+        logger.info(
+            "fetchurls[%s] section '%s': resolved %d / failed %d",
+            sheet, label, counts.get("resolved", 0), counts.get("failed", 0),
+        )
+
+    # Surface each failing URL (with its Excel row) at WARNING, and keep a
+    # compact copy in the job result so the admin "Detail" column shows it.
+    failure_details = result.get("failure_details") or []
+    if failure_details:
+        logger.warning(
+            "fetchurls[%s]: %d URL(s) failed to resolve", sheet, len(failure_details)
+        )
+        for f in failure_details:
+            logger.warning(
+                "fetchurls[%s]   [%s row %s] %s — %s",
+                sheet, f.get("section", "?"), f.get("row", "?"),
+                f.get("url", ""), f.get("note", ""),
+            )
+        # Keep at most 25 in the persisted detail to stay compact.
+        result["failures_detail"] = [
+            {"section": f.get("section"), "row": f.get("row"),
+             "url": f.get("url"), "note": f.get("note")}
+            for f in failure_details[:25]
+        ]
+
+    # Trim the bulky intermediates from the persisted detail.
+    result.pop("section_lines", None)
     result.pop("section_labels", None)
+    result.pop("failure_details", None)
     return result
 
 

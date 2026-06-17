@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.20.0] — 2026-06-17
+
+### Added
+
+- **Richer fetchurls / job logging.** The fetchurls job now logs a per-section resolved/failed summary and a WARNING line for every failing URL (with its Excel row and the reason), and folds a compact `failures_detail` list into the `job_runs` record so the admin "Detail" column shows a concrete example instead of just a count. The `run()` result gained `section_summary` and `failure_details`.
+- **Actionable log format.** Application loggers (`kryten_webqueue.*`) now include the source `file:line` in each line via a dedicated formatter, while uvicorn keeps its leaner format.
+
+### Fixed
+
+- **SharePoint download failures lost their detail.** `download_sharepoint_xlsx` raised `SystemExit` (a `BaseException` the job manager's `except Exception` couldn't catch), so a failed download could bubble up uncaught with no recorded detail. It now raises `RuntimeError` with the HTTP status and a response excerpt, so the failure is caught, logged, and recorded in the job run.
+
+[0.20.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.20.0
+
 ## [0.19.0] — 2026-06-17
 
 ### Changed

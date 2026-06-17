@@ -321,6 +321,10 @@ function summarizeRunDetail(detail) {
         if (d.imported_playlists && d.imported_playlists.length) parts.push(`imported: ${d.imported_playlists.join(', ')}`);
         if (typeof d.resolved === 'number') parts.push(`resolved ${d.resolved}`);
         if (typeof d.failures === 'number' && d.failures) parts.push(`${d.failures} failed`);
+        if (d.failures_detail && d.failures_detail.length) {
+            const f = d.failures_detail[0];
+            parts.push(`e.g. [${f.section || '?'} row ${f.row || '?'}] ${f.note || ''}`.trim());
+        }
         if (typeof d.committed === 'number') parts.push(`committed ${d.committed}`);
         if (typeof d.added_to_playlist !== 'undefined' && d.added_to_playlist) parts.push(`→ playlist ${d.added_to_playlist}`);
         if (parts.length) return parts.join(' · ');

@@ -43,6 +43,12 @@ def build_log_config(log_level: str = "INFO", promo_log_level: str | None = None
                 "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
             },
+            # Application formatter includes the source file:line so every app
+            # log line is actionable (uvicorn keeps the leaner "default").
+            "app": {
+                "format": "%(asctime)s %(levelname)-8s %(name)s %(filename)s:%(lineno)d: %(message)s",
+                "datefmt": "%Y-%m-%d %H:%M:%S",
+            },
             "access": {
                 "format": "%(asctime)s %(levelname)-8s %(name)s: %(message)s",
                 "datefmt": "%Y-%m-%d %H:%M:%S",
@@ -52,6 +58,11 @@ def build_log_config(log_level: str = "INFO", promo_log_level: str | None = None
             "console": {
                 "class": "logging.StreamHandler",
                 "formatter": "default",
+                "stream": "ext://sys.stderr",
+            },
+            "appconsole": {
+                "class": "logging.StreamHandler",
+                "formatter": "app",
                 "stream": "ext://sys.stderr",
             },
             "access": {
@@ -64,14 +75,14 @@ def build_log_config(log_level: str = "INFO", promo_log_level: str | None = None
         "loggers": {
             "kryten_webqueue": {
                 "level": app_level,
-                "handlers": ["console"],
+                "handlers": ["appconsole"],
                 "propagate": False,
             },
             # Promo subsystem: independently tunable so operators can crank it to
             # DEBUG for a deep dive without flooding the rest of the app.
             "kryten_webqueue.promos": {
                 "level": promo_level,
-                "handlers": ["console"],
+                "handlers": ["appconsole"],
                 "propagate": False,
             },
             "uvicorn": {"level": "INFO", "handlers": ["console"], "propagate": False},

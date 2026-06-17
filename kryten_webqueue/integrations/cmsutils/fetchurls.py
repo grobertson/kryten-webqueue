@@ -345,9 +345,9 @@ def download_sharepoint_xlsx(token: str, sharing_url: str) -> tuple[bytes, str, 
     meta_url = f"{GRAPH_BASE}/shares/{encoded}/driveItem"
     r = requests.get(meta_url, headers=headers, timeout=REQUEST_TIMEOUT)
     if r.status_code != 200:
-        sys.exit(
-            f"ERROR: Could not resolve SharePoint file via Graph API "
-            f"(HTTP {r.status_code}).\n{r.text}"
+        raise RuntimeError(
+            f"Could not resolve SharePoint file via Graph API (HTTP {r.status_code}). "
+            f"Response: {r.text[:500]}"
         )
     item = r.json()
 
@@ -368,10 +368,17 @@ def download_sharepoint_xlsx(token: str, sharing_url: str) -> tuple[bytes, str, 
         if dl_r.status_code == 302:
             download_url = dl_r.headers["Location"]
         else:
-            sys.exit(f"ERROR: Could not get download URL (HTTP {dl_r.status_code})")
+            raise RuntimeError(
+                f"Could not get SharePoint download URL (HTTP {dl_r.status_code}). "
+                f"Response: {dl_r.text[:500]}"
+            )
 
     content_r = requests.get(download_url, timeout=60)
-    content_r.raise_for_status()
+    if not content_r.ok:
+        raise RuntimeError(
+            f"SharePoint file download failed (HTTP {content_r.status_code}). "
+            f"Response: {content_r.text[:500]}"
+        )
     return content_r.content, drive_id, item_id
 
 
@@ -1415,6 +1422,10 @@ def run(params: dict, *, config, progress=None) -> dict:
     section_lines: dict[str, list[str]] = {}
     section_labels: dict[str, str] = {}
     all_results: dict[str, list[ProcessResult]] = {}
+    # Per-section {resolved, failed} counts and a flat list of failed rows for
+    # actionable diagnostics (surfaced in the job log + job_runs detail).
+    section_summary: dict[str, dict] = {}
+    failure_details: list[dict] = []
 
     try:
         for slug, url_rows in sections.items():
@@ -1428,16 +1439,27 @@ def run(params: dict, *, config, progress=None) -> dict:
             all_results[slug] = results
             write_playlist(out_dir / f"{sheet_name}-{slug}.txt", results)
             lines = []
+            sec_resolved = 0
+            sec_failed = 0
             for r in results:
                 if r.success:
                     resolved += 1
+                    sec_resolved += 1
                     if r.resolved_url != r.original_url:
                         downloaded += 1
                     token = _extract_manifest_token(r.resolved_url)
                     lines.append(f"cm:{token}" if token else r.resolved_url)
                 else:
                     failures += 1
+                    sec_failed += 1
+                    failure_details.append({
+                        "section": label,
+                        "row": r.row_number,
+                        "url": r.original_url,
+                        "note": r.note,
+                    })
             section_lines[slug] = lines
+            section_summary[label] = {"resolved": sec_resolved, "failed": sec_failed}
         write_failures(out_dir / f"{sheet_name}-failures.txt", all_results)
     finally:
         run_fetch = original_run_fetch
@@ -1461,6 +1483,8 @@ def run(params: dict, *, config, progress=None) -> dict:
         "writeback": writeback_stats,
         "section_lines": section_lines,
         "section_labels": section_labels,
+        "section_summary": section_summary,
+        "failure_details": failure_details,
         "imported_playlists": [],  # filled in by the async job wrapper
         "dry_run": dry_run,
     }
