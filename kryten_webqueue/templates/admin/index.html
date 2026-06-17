@@ -199,7 +199,7 @@ async function loadJobs() {
                     <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}</span>
                     ${summary}
                     <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>
-                        ${j.running ? 'Running…' : (hasParams ? 'Run…' : 'Run')}
+                        ${j.running ? 'Running…' : (hasParams ? 'Begin…' : 'Run')}
                     </button>
                 </div>`;
             }).join('')

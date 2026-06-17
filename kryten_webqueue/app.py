@@ -163,12 +163,15 @@ async def lifespan(app: FastAPI):
     # Background workers
     async def _catalog_sync_loop():
         interval = config.catalog_sync_interval_hours * 3600
+        # Sync on the interval, NOT immediately on startup — a restart should
+        # not trigger a catalog sync. Admins can run it on demand from the
+        # "Sync Catalog" button.
         while True:
+            await asyncio.sleep(interval)
             try:
                 await catalog_sync.sync()
             except Exception as e:
                 logger.exception(f"Catalog sync error: {type(e).__name__}: {e}")
-            await asyncio.sleep(interval)
 
     async def _otp_cleanup_loop():
         while True:

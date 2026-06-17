@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.21.0] — 2026-06-17
+
+### Changed
+
+- **Catalog sync no longer runs on startup.** The background sync loop now waits a full interval before its first run instead of syncing immediately when the process starts, so a restart won't kick off a sync. Admins can still trigger it on demand with the "Sync Catalog" button.
+- **Friendlier job buttons.** Jobs that open a parameter dialog before running now show **"Begin…"** instead of "Run…", signalling that a dialog (with a Cancel) comes next rather than an immediate action. One-click jobs keep the plain **"Run"** label.
+
+[0.21.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.21.0
+
 ## [0.20.1] — 2026-06-17
 
 ### Fixed
