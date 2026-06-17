@@ -59,6 +59,36 @@ def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
     return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
 
 
+def _facet_filter(alias: str, category: str | None, tag: str | None) -> tuple[str, list]:
+    """SQL fragment (+ params) AND-filtering by a category slug and/or tag name.
+
+    Each filter is an ``AND friendly_token IN (...)`` subquery on the catalog row
+    under ``alias``; an absent filter contributes nothing. Shared by browse() and
+    search() so the two paths narrow results identically.
+    """
+    sql = ""
+    params: list = []
+    if category:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT cc.friendly_token FROM catalog_categories cc
+                JOIN categories cat ON cc.category_id = cat.id
+                WHERE cat.slug = ?
+            )
+        """
+        params.append(category)
+    if tag:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT ct.friendly_token FROM catalog_tags ct
+                JOIN tags t ON ct.tag_id = t.id
+                WHERE t.name = ?
+            )
+        """
+        params.append(tag)
+    return sql, params
+
+
 # Default quality-weighted ordering (see browse() for rationale).
 _DEFAULT_ORDER = """
     ORDER BY
@@ -446,7 +476,8 @@ class Database:
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
-    async def search(self, query_text: str, *, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
+    async def search(self, query_text: str, *, category: str | None = None, tag: str | None = None,
+                     page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
@@ -464,6 +495,11 @@ class Database:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+        # Category/tag facets AND with the text match (same subqueries browse()
+        # uses), so a search can be narrowed by the selected facets.
+        facet_sql, facet_params = _facet_filter("c", category, tag)
+        sql += facet_sql
+        params.extend(facet_params)
         # Relevance is the natural default for a text query; other sort keys let
         # the user reorder the matched set explicitly.
         sql += " ORDER BY rank " if (sort or "default") == "default" else _browse_order_clause(sort)
@@ -471,7 +507,8 @@ class Database:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(sql, params)
 
-    async def search_count(self, query_text: str, *, show_hidden: bool = False) -> int:
+    async def search_count(self, query_text: str, *, category: str | None = None, tag: str | None = None,
+                           show_hidden: bool = False) -> int:
         sql = """
             SELECT COUNT(*) as cnt
             FROM catalog_fts fts
@@ -488,6 +525,9 @@ class Database:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+        facet_sql, facet_params = _facet_filter("c", category, tag)
+        sql += facet_sql
+        params.extend(facet_params)
         row = await self._fetch_one(sql, params)
         return row["cnt"] if row else 0
 

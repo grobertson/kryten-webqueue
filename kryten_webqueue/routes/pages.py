@@ -107,6 +107,7 @@ async def catalog_browse_page(request: Request, category: str | None = None,
 
 @router.get("/catalog/search", response_class=HTMLResponse)
 async def catalog_search_page(request: Request, q: str = "", page: int = 1,
+                             category: str | None = None, tag: str | None = None,
                              show_hidden: int = 0, sort: str = "default"):
     user = _get_user_or_none(request)
     if not user:
@@ -117,8 +118,8 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
     sort = sort if sort in _VALID_SORTS else "default"
-    items = await db.search(q, page=page, show_hidden=show_hidden, sort=sort)
-    total = await db.search_count(q, show_hidden=show_hidden)
+    items = await db.search(q, category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort)
+    total = await db.search_count(q, category=category, tag=tag, show_hidden=show_hidden)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
@@ -130,8 +131,8 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
         "tags": tags,
         "page": page,
         "total_pages": total_pages,
-        "active_category": None,
-        "active_tag": None,
+        "active_category": category,
+        "active_tag": tag,
         "query": q,
         "is_admin": is_admin,
         "show_hidden": show_hidden,

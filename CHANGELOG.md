@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.17.0] — 2026-06-17
+
+### Added
+
+- **Search now combines with category/tag filters.** A free-text search ANDs with the selected category and/or tag instead of ignoring them. `db.search()` / `db.search_count()` accept `category` and `tag`; the `/catalog/search` page and JSON route pass them through and keep the dropdowns populated/selected; `applyFacets()` includes the active facets when a query is present. (Shared `_facet_filter()` SQL helper keeps browse and search behavior identical.)
+- **Clear empty-results messaging.** When a search and/or facet filter returns nothing, the catalog page now explains *why* — naming the active query and filters — and offers one-click escapes ("Search without filters", "Clear filters", "Back to browse") instead of a bare "No items found."
+
+[0.17.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.17.0
+
 ## [0.16.0] — 2026-06-17
 
 ### Added

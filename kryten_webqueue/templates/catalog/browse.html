@@ -101,13 +101,41 @@
     {% endfor %}
 </div>
 
+{% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
 {% if not items %}
 <div class="empty-state">
-    <p>No items found.</p>
+    {% if query and (active_category or active_tag) %}
+        <p>No results for "{{ query }}" within the selected filter{% if active_category and active_tag %}s{% endif %}.</p>
+        <p class="muted">
+            Active:
+            {% if active_category %}<strong>category</strong>{% endif %}
+            {% if active_category and active_tag %} and {% endif %}
+            {% if active_tag %}<strong>tag “{{ active_tag }}”</strong>{% endif %}.
+            Try widening your search.
+        </p>
+        <p>
+            <a class="btn btn-sm" href="/catalog/search?q={{ query | urlencode }}{{ sort_q }}">Search without filters</a>
+            <a class="btn btn-sm" href="/catalog/browse">Clear search</a>
+        </p>
+    {% elif query %}
+        <p>No results for "{{ query }}".</p>
+        <p class="muted">Check the spelling or try fewer / different words.</p>
+        <p><a class="btn btn-sm" href="/catalog/browse">Back to browse</a></p>
+    {% elif active_category or active_tag %}
+        <p>No items match the selected filter{% if active_category and active_tag %}s{% endif %}.</p>
+        <p class="muted">
+            Active:
+            {% if active_category %}<strong>category</strong>{% endif %}
+            {% if active_category and active_tag %} and {% endif %}
+            {% if active_tag %}<strong>tag “{{ active_tag }}”</strong>{% endif %}.
+        </p>
+        <p><a class="btn btn-sm" href="/catalog/browse">Clear filters</a></p>
+    {% else %}
+        <p>No items found.</p>
+    {% endif %}
 </div>
 {% endif %}
 
-{% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
 <div class="pagination">
     {% if page > 1 %}
         <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm">&larr; Prev</a>
@@ -141,13 +169,13 @@ function applyFacets() {
     const sort = document.getElementById('sort-select').value;
     try { localStorage.setItem('browse_sort', sort); } catch (e) { /* ignore */ }
     const params = new URLSearchParams();
-    // On a search results page, preserve the query and stay on /catalog/search.
+    // On a search results page keep the query AND apply the facets so search
+    // results are narrowed by category/tag (they AND together server-side).
     if (CURRENT_QUERY) {
         params.set('q', CURRENT_QUERY);
-    } else {
-        if (cat) params.set('category', cat);
-        if (tag) params.set('tag', tag);
     }
+    if (cat) params.set('category', cat);
+    if (tag) params.set('tag', tag);
     if (sort && sort !== 'default') params.set('sort', sort);
     const base = CURRENT_QUERY ? '/catalog/search' : '/catalog/browse';
     const qs = params.toString();
