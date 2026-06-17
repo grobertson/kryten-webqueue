@@ -42,6 +42,15 @@ async function loadActive() {
     if (!resp.ok) { banner.classList.add('hidden'); return; }
     const a = await resp.json();
     if (!a || !a.schedule_id) { banner.classList.add('hidden'); return; }
+    // Treat a well-past estimated end as ended even before the backend clears
+    // the row on its next poll, so the banner never lingers.
+    if (a.estimated_end_at) {
+        const end = new Date(a.estimated_end_at);
+        if (!isNaN(end) && (Date.now() - end.getTime()) > 5 * 60 * 1000) {
+            banner.classList.add('hidden');
+            return;
+        }
+    }
     const name = playlistMap[a.playlist_id] || `Playlist #${a.playlist_id}`;
     banner.classList.remove('hidden');
     const locked = a.is_immutable && !a.lock_disabled;
@@ -203,5 +212,11 @@ function showModal(html) {
 function closeModal() { const m = document.getElementById('admin-modal'); if (m) m.remove(); }
 
 loadSchedules();
+
+// Keep the active-event banner fresh without a reload: re-check every 15s while
+// the tab is visible (the backend clears the row once the event plays out).
+setInterval(() => {
+    if (document.visibilityState === 'visible') loadActive();
+}, 15000);
 </script>
 {% endblock %}

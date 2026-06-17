@@ -234,11 +234,7 @@ async function loadAdminData() {
     // Queue status
     const qResp = await fetch('/queue/state');
     if (qResp.ok) {
-        const state = await qResp.json();
-        document.getElementById('queue-status').innerHTML = `
-            <p>Items in queue: ${(state.items || []).length}</p>
-            <p>Now playing: ${state.now_playing ? escapeHtml(state.now_playing.title || 'Unknown') : 'Nothing'}</p>
-        `;
+        renderQueueStatus(await qResp.json());
     }
 
     // Sync logs
@@ -263,6 +259,46 @@ async function loadAdminData() {
             el.innerHTML = '<p>No sync logs yet</p>';
         }
     }
+}
+
+// Render the live queue-status block. Shared by the initial load and the
+// WebSocket so the count + now-playing stay current without a reload.
+function renderQueueStatus(state) {
+    const el = document.getElementById('queue-status');
+    if (!el) return;
+    const np = state && state.now_playing;
+    el.innerHTML = `
+        <p>Items in queue: ${((state && state.items) || []).length}</p>
+        <p>Now playing: ${np ? escapeHtml(np.title || 'Unknown') : 'Nothing'}</p>
+    `;
+}
+
+// Subscribe to the same /ws feed the public queue page uses, so queue size and
+// now-playing update live. Jobs are DB-polled (below) since they aren't
+// broadcast.
+let adminWs = null;
+let adminWsReconnect = null;
+function connectAdminWebSocket() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    adminWs = new WebSocket(`${proto}//${location.host}/ws`);
+    adminWs.onmessage = (event) => {
+        let msg;
+        try { msg = JSON.parse(event.data); } catch (e) { return; }
+        if (msg.type === 'queue_state' || msg.type === 'queue_update') {
+            renderQueueStatus(msg.data);
+        } else if (msg.type === 'schedule_fired') {
+            showToast(`Scheduled playlist loaded: ${msg.data.playlist_name}`);
+            loadJobs();
+        }
+    };
+    adminWs.onclose = () => {
+        adminWsReconnect = setTimeout(connectAdminWebSocket, 3000);
+    };
+    setInterval(() => {
+        if (adminWs && adminWs.readyState === WebSocket.OPEN) {
+            adminWs.send(JSON.stringify({type: 'ping'}));
+        }
+    }, 30000);
 }
 
 function escapeHtml(str) {
@@ -294,5 +330,12 @@ function summarizeRunDetail(detail) {
 
 loadAdminData();
 loadJobs();
+connectAdminWebSocket();
+
+// Jobs are DB-polled (not broadcast), so refresh them periodically while the
+// tab is visible to reflect running/finished status without a reload.
+setInterval(() => {
+    if (document.visibilityState === 'visible') loadJobs();
+}, 5000);
 </script>
 {% endblock %}

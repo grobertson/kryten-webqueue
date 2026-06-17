@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.18.0] — 2026-06-17
+
+### Fixed
+
+- **Active scheduled event lingered on the admin page after it ended.** The `active_schedule` row was only removed by the manual "Clear Active Schedule" button — the lock auto-lifted but the row (and its banner) stayed. The queue shadow now clears it automatically on the next poll once the event is genuinely over, via two signals: the last scheduled item has left the queue (event temp items auto-remove after playing), or the estimated end is more than 5 minutes in the past (safety net for a missed boundary or a restart mid-event). The schedules page also hides a well-past banner immediately and re-checks every 15s.
+
+### Added
+
+- **Live admin dashboard.** The admin page now subscribes to the same `/ws` feed as the public queue, so the queue item count and now-playing update without a reload. Job status refreshes every 5s while the tab is visible (jobs are DB-polled, not broadcast), and a fired schedule triggers an immediate jobs refresh.
+
+[0.18.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.18.0
+
 ## [0.17.0] — 2026-06-17
 
 ### Added

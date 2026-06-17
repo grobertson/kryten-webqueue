@@ -23,6 +23,19 @@ def _to_seconds(value) -> float:
         return 0.0
 
 
+def _parse_iso(value) -> datetime | None:
+    """Parse an ISO-8601 timestamp to an aware UTC datetime, or None."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(value))
+    except (ValueError, TypeError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    return dt
+
+
 class QueueShadow:
     """Local mirror of the CyTube playlist state."""
 
@@ -116,6 +129,7 @@ class QueueShadow:
             self._items = new_items
             await self._recalculate_estimated_starts()
             await self._maybe_lift_event_lock()
+            await self._maybe_expire_active_schedule()
 
     async def _maybe_lift_event_lock(self):
         """Auto-lift a scheduled-event lock once its last item begins playing.
@@ -141,6 +155,52 @@ class QueueShadow:
                 logger.info("Scheduled-event lock lifted: last scheduled item now playing")
         except (TypeError, ValueError):
             return
+
+    async def _maybe_expire_active_schedule(self):
+        """Clear the active-schedule row once the event is genuinely over.
+
+        The lock auto-lifts when the last scheduled item *starts* (see
+        :meth:`_maybe_lift_event_lock`), but the row itself used to linger so the
+        admin banner kept showing a finished event. This clears it via two
+        signals:
+
+        * **Event-driven (primary):** the last scheduled item has left the queue
+          (event items are temp and auto-remove after playing), and something is
+          still playing — so the event has played out.
+        * **Time safety net:** the estimated end is well in the past (covers a
+          missed boundary, a restart mid-event, or ``last_item_uid`` never being
+          captured).
+        """
+        active = await self._db.get_active_schedule()
+        if not active:
+            return
+
+        # Event-driven: last scheduled item is gone from the queue.
+        last_uid = active.get("last_item_uid")
+        if last_uid is not None and self._now_playing is not None:
+            try:
+                last_uid_int = int(last_uid)
+            except (TypeError, ValueError):
+                last_uid_int = None
+            if last_uid_int is not None:
+                present = False
+                for it in self._items:
+                    try:
+                        if int(it.get("uid")) == last_uid_int:
+                            present = True
+                            break
+                    except (TypeError, ValueError):
+                        continue
+                if not present:
+                    await self._db.clear_active_schedule()
+                    logger.info("Active schedule cleared: last scheduled item has played out")
+                    return
+
+        # Time safety net: estimated end well in the past.
+        end_dt = _parse_iso(active.get("estimated_end_at"))
+        if end_dt is not None and datetime.now(UTC) > end_dt + timedelta(minutes=5):
+            await self._db.clear_active_schedule()
+            logger.info("Active schedule cleared: estimated end passed (stale row)")
 
     def _now_playing_index(self) -> int | None:
         """Index of the currently-playing item within ``self._items``.

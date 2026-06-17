@@ -152,6 +152,52 @@ async def test_event_lock_stays_until_last_item(db):
     assert await db.is_event_lock_active() is True
 
 
+# --- active-schedule auto-expiry (v0.18.0) ---
+
+async def test_active_schedule_cleared_when_last_item_plays_out(db):
+    await _make_event(db, last_item_uid=3)
+    shadow = QueueShadow(db)
+    # The last scheduled item (uid=3) is still in the queue -> row kept.
+    await shadow.apply_poll_result(
+        [_polled(1), _polled(2), _polled(3)], {"uid": 2, "seconds": 100, "currentTime": 0}
+    )
+    assert (await db.get_active_schedule()) is not None
+    # uid=3 has now left the queue (played out, temp item removed) -> row cleared.
+    await shadow.apply_poll_result(
+        [_polled(4), _polled(5)], {"uid": 4, "seconds": 100, "currentTime": 0}
+    )
+    assert (await db.get_active_schedule()) is None
+
+
+async def test_active_schedule_not_cleared_when_nothing_playing(db):
+    await _make_event(db, last_item_uid=3)
+    shadow = QueueShadow(db)
+    # Last item absent but nothing is playing (transient empty poll) -> keep row.
+    await shadow.apply_poll_result([], None)
+    assert (await db.get_active_schedule()) is not None
+
+
+async def test_active_schedule_cleared_when_estimated_end_passed(db):
+    # last_item_uid is None so the event-driven path can't fire; rely on the
+    # time safety net with an estimated end well in the past.
+    pid = await db.create_saved_playlist(
+        name="Stale", description=None, is_immutable=True, created_by="admin"
+    )
+    sid = await db.create_schedule(
+        playlist_id=pid, label="Stale", fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1, created_by="admin",
+    )
+    past = datetime.now(UTC) - timedelta(hours=1)
+    await db.set_active_schedule(
+        schedule_id=sid, playlist_id=pid, is_immutable=True,
+        started_at=(past - timedelta(hours=1)).isoformat(),
+        estimated_end_at=past.isoformat(), last_item_uid=None,
+    )
+    shadow = QueueShadow(db)
+    await shadow.apply_poll_result([_polled(1)], {"uid": 1, "seconds": 100, "currentTime": 0})
+    assert (await db.get_active_schedule()) is None
+
+
 # --- #4 pre-fire lock override ---
 
 async def test_pre_fire_lock_can_be_disabled(db):
