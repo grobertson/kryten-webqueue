@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
+## [0.15.2] — 2026-06-17
+
+### Fixed
+
+- **Promos were inserted into immutable playlists during a schedule fire.** A scheduled event clears the queue and loads its items over several seconds (throttled adds + 422 retries), but the event lock that suppresses promos was only recorded *after* the entire load finished. Meanwhile the state poller (every ~3s) saw a partially-built queue with no lock and slotted a general promo between the freshly-added immutable items. `PromoDirector` now exposes a re-entrant `suppressed()` guard that `fire_schedule` (and manual playlist import) holds for the whole load — spanning through `set_active_schedule`, so for an immutable event the persistent lock is already live by the time suppression lifts (a clean handoff with no race window). When suppression releases, the next poll re-baselines now-playing instead of treating the bulk load as content advancing, so no promo fires on the wrong boundary. This also satisfies the general rule: never evaluate promos while a bulk queue insert/append is in progress, regardless of playlist type.
+
+[0.15.2]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.15.2
+
 ## [0.15.1] — 2026-06-17
 
 ### Fixed

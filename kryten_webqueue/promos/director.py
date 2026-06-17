@@ -22,6 +22,7 @@ director is a no-op while an immutable scheduled event is locking the queue.
 
 import logging
 import random
+from contextlib import contextmanager
 from datetime import datetime, UTC
 
 from ..queue.ordering import _now_playing_uid
@@ -83,6 +84,17 @@ class PromoDirector:
         self._last_clip_token: dict[str, str] = {}   # promo_type -> last clip media_id
         self._seq_index: dict[str, int] = {}          # promo_type -> next sequential index
 
+        # Suppression guard. Held (re-entrantly) by bulk live-queue loaders
+        # (schedule fire, playlist import) so promos are never inserted *into* a
+        # playlist while it is still being built. Without this, the poller runs
+        # every few seconds during the multi-second load and slots promos
+        # between freshly-added items — including immutable ones, because the
+        # event lock isn't recorded until the load finishes.
+        self._suppress_depth: int = 0
+        # Set when suppression lifts so the next poll re-baselines now-playing
+        # instead of treating the post-load discontinuity as content advancing.
+        self._needs_rebaseline: bool = False
+
         # Injectable for tests
         self._rng = random.Random()
         self._now = lambda: datetime.now(UTC)
@@ -96,6 +108,36 @@ class PromoDirector:
         """
         self._config = config
         logger.info("PromoDirector config updated (enabled=%s)", getattr(config, "enabled", None))
+
+    @property
+    def is_suppressed(self) -> bool:
+        """True while a bulk live-queue operation has paused promo insertion."""
+        return self._suppress_depth > 0
+
+    @contextmanager
+    def suppressed(self, reason: str):
+        """Pause promo insertion for the duration of a bulk queue operation.
+
+        Re-entrant: nested holders each bump a depth counter; promos resume only
+        once the outermost holder exits. Use around any operation that adds a
+        run of items to the *live* queue (schedule fire, playlist import) so the
+        director never inserts a promo into a playlist that is still loading.
+
+        On release the next poll re-baselines now-playing rather than counting
+        the load as content advancing, so a promo doesn't fire on the wrong
+        boundary immediately afterwards.
+        """
+        self._suppress_depth += 1
+        if self._suppress_depth == 1:
+            logger.info("Promo insertion suppressed: %s", reason)
+        try:
+            yield
+        finally:
+            self._suppress_depth -= 1
+            if self._suppress_depth <= 0:
+                self._suppress_depth = 0
+                self._needs_rebaseline = True
+                logger.info("Promo insertion resumed (after: %s)", reason)
 
     # --- Play-order helpers -------------------------------------------------
 
@@ -365,6 +407,13 @@ class PromoDirector:
         """
         if not self._config.enabled:
             return None
+        if self._suppress_depth > 0:
+            logger.debug(
+                "Viewer's-Choice skipped for paid uid=%s: insertion suppressed "
+                "(bulk queue operation in progress)",
+                content_uid,
+            )
+            return None
         items = self._shadow.items
         if self._has_lead_in(content_uid, items):
             logger.debug(
@@ -392,8 +441,30 @@ class PromoDirector:
         if not cfg.enabled:
             return
 
+        # Frozen while a bulk live-queue operation (schedule fire / playlist
+        # import) is loading items. Promos must never land *inside* a playlist
+        # that is still being built — this is what slips promos between immutable
+        # items before the event lock is recorded.
+        if self._suppress_depth > 0:
+            logger.debug(
+                "Promo on_poll skipped: insertion suppressed (bulk queue operation in progress)"
+            )
+            return
+
         np_uid = await _now_playing_uid(self._api_gate, self._shadow)
         np_is_promo = self._is_promo_uid(np_uid)
+
+        # After a bulk queue operation the playlist is discontinuous; re-baseline
+        # now-playing without counting it as content advancing so we don't fire a
+        # promo on the wrong boundary on the very next cycle.
+        if self._needs_rebaseline:
+            self._needs_rebaseline = False
+            self._last_np_uid = np_uid
+            self._last_np_is_promo = np_is_promo
+            logger.debug(
+                "Promo baseline reset after bulk queue operation (np_uid=%s)", np_uid
+            )
+            return
 
         # Advance detection: a finished *content* item bumps the cadence counter.
         if np_uid != self._last_np_uid:

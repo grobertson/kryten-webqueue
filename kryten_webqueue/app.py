@@ -147,6 +147,7 @@ async def lifespan(app: FastAPI):
         db=db, api_gate=api_gate, shadow=shadow, ws_manager=ws_manager,
         add_delay_sec=config.playlist_bulk_add_delay_sec,
         add_max_retries=config.playlist_bulk_add_max_retries,
+        promo_director=promo_director,
     )
     await scheduler.start()
     app.state.scheduler = scheduler

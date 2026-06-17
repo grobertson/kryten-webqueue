@@ -121,6 +121,7 @@ async def fire_now(request: Request, schedule_id: int, user: dict = Depends(requ
         ws_manager=request.app.state.ws_manager,
         add_delay_sec=config.playlist_bulk_add_delay_sec,
         add_max_retries=config.playlist_bulk_add_max_retries,
+        promo_director=getattr(request.app.state, "promo_director", None),
     )
     return {"success": True}
 

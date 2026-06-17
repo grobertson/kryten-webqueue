@@ -323,6 +323,80 @@ async def test_noop_during_immutable_event():
     assert _promo_items(shadow) == []
 
 
+async def test_noop_while_suppressed():
+    # While a bulk queue load holds the suppression guard, on_poll must insert
+    # nothing — even though a Feature-Presentation lead-in is otherwise due.
+    shadow = _FakeShadow([_content(10), _content(20, duration=3600)], now_playing={"uid": 10})
+    api = _FakeApiGate(now_playing={"uid": 10})
+    db = _FakeDb(pools={"feature_presentation": [_clip("fp1")]})
+    d = _director(api, shadow, db)
+
+    with d.suppressed("bulk load"):
+        assert d.is_suppressed is True
+        await d.on_poll()
+        assert _promo_items(shadow) == []
+        assert api.adds == []
+
+    # Guard released; depth back to zero.
+    assert d.is_suppressed is False
+
+
+async def test_suppression_is_reentrant():
+    shadow = _FakeShadow([_content(10), _content(20, duration=3600)], now_playing={"uid": 10})
+    api = _FakeApiGate(now_playing={"uid": 10})
+    db = _FakeDb(pools={"feature_presentation": [_clip("fp1")]})
+    d = _director(api, shadow, db)
+
+    with d.suppressed("outer"):
+        with d.suppressed("inner"):
+            assert d.is_suppressed is True
+            await d.on_poll()
+            assert _promo_items(shadow) == []
+        # Inner released, outer still holds.
+        assert d.is_suppressed is True
+        await d.on_poll()
+        assert _promo_items(shadow) == []
+    assert d.is_suppressed is False
+
+
+async def test_first_poll_after_suppression_rebaselines_without_inserting():
+    # When suppression lifts, the next poll re-baselines now-playing instead of
+    # treating the bulk load as content advancing — so no promo fires on that
+    # boundary. The following poll resumes normal behaviour.
+    shadow = _FakeShadow([_content(10), _content(20, duration=3600)], now_playing={"uid": 10})
+    api = _FakeApiGate(now_playing={"uid": 10})
+    db = _FakeDb(pools={"feature_presentation": [_clip("fp1")]})
+    d = _director(api, shadow, db)
+
+    with d.suppressed("bulk load"):
+        await d.on_poll()
+    assert _promo_items(shadow) == []
+
+    # First post-suppression poll: re-baseline only, no insertion.
+    await d.on_poll()
+    assert _promo_items(shadow) == []
+
+    # Second poll: normal evaluation resumes and the FP lead-in is inserted.
+    await d.on_poll()
+    promos = _promo_items(shadow)
+    assert len(promos) == 1
+    assert promos[0]["promo_type"] == "feature_presentation"
+
+
+async def test_suppression_released_on_exception():
+    shadow = _FakeShadow([_content(10), _content(20, duration=3600)], now_playing={"uid": 10})
+    api = _FakeApiGate(now_playing={"uid": 10})
+    db = _FakeDb(pools={"feature_presentation": [_clip("fp1")]})
+    d = _director(api, shadow, db)
+
+    try:
+        with d.suppressed("bulk load"):
+            raise RuntimeError("load failed")
+    except RuntimeError:
+        pass
+    assert d.is_suppressed is False
+
+
 async def test_disabled_director_noop():
     shadow = _FakeShadow([_content(10), _content(20, duration=3600)], now_playing={"uid": 10})
     api = _FakeApiGate(now_playing={"uid": 10})

@@ -112,6 +112,7 @@ async def import_to_live(request: Request, playlist_id: int, user: dict = Depend
         shadow=request.app.state.shadow,
         add_delay_sec=config.playlist_bulk_add_delay_sec,
         add_max_retries=config.playlist_bulk_add_max_retries,
+        promo_director=getattr(request.app.state, "promo_director", None),
     )
     result = await importer.import_playlist(playlist_id)
     return result
