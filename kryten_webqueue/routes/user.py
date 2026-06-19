@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..auth.session import get_current_user
 
@@ -29,7 +29,19 @@ class ColorUpdate(BaseModel):
 
 
 class ShoutoutRequest(BaseModel):
+    # Mirrors the economy's shoutout limits so a bypassed UI still gets a
+    # consistent, early rejection instead of forwarding arbitrary-length text.
     value: str
+
+    @field_validator("value")
+    @classmethod
+    def _validate_value(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Shoutout message is required.")
+        if len(v) > 200:
+            raise ValueError("Message too long (max 200 characters).")
+        return v
 
 
 @router.post("/vanity/greeting")

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Shoutout on the Vanity Items tab.** The dashboard's Vanity tab gains a third item — **Shoutout** — alongside Greeting and Chat color, each now with a short call-to-action. Sending a shoutout posts the user's message to public chat (`📢 <user>: …`) via the new `POST /user/vanity/shoutout` route, which proxies the api-gate `POST /economy/vanity/shoutout` endpoint. The message and cost come from the account summary; the username is always taken from the authenticated session.
+- **Shoutout on the Vanity Items tab.** The dashboard's Vanity tab gains a third item — **Shoutout** — alongside Greeting and Chat color, each now with a short call-to-action. Sending a shoutout posts the user's message to public chat (`📢 <user>: …`) via the new `POST /user/vanity/shoutout` route, which proxies the api-gate `POST /economy/vanity/shoutout` endpoint. The message is the user's own input (validated server-side: trimmed, non-empty, max 200 chars); the cost/availability come from the account summary; the username is always taken from the authenticated session.
 
 ## [0.21.0] — 2026-06-17
 

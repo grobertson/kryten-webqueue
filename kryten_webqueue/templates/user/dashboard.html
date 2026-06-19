@@ -236,12 +236,17 @@ function renderAccount(a) {
 
     const shoutEl = document.getElementById('vanity-shoutout');
     const shoutCost = costs.shoutout;
-    shoutEl.innerHTML = shoutCost
-        ? `Post a one-off message to chat for ${fmt(shoutCost, sym)}.`
-        : '<span class="vanity-unset">Unavailable</span>';
+    const shoutAvailable = enabled.shoutout !== false && shoutCost != null;
+    if (shoutAvailable) {
+        shoutEl.textContent = `Post a one-off message to chat for ${fmt(shoutCost, sym)}.`;
+        shoutEl.classList.remove('vanity-unset');
+    } else {
+        shoutEl.textContent = 'Unavailable';
+        shoutEl.classList.add('vanity-unset');
+    }
     const sBtn = document.getElementById('buy-shoutout');
-    sBtn.disabled = enabled.shoutout === false;
-    sBtn.title = shoutCost ? `${fmt(shoutCost, sym)} per shoutout` : '';
+    sBtn.disabled = !shoutAvailable;
+    sBtn.title = shoutAvailable ? `${fmt(shoutCost, sym)} per shoutout` : '';
 }
 
 // ── Vanity edit dialogs ────────────────────────────────────────
@@ -351,7 +356,13 @@ async function saveColor() {
 function buyShoutout() {
     if (!accountState) return;
     const sym = accountState.currency_symbol || 'Z';
-    const cost = (accountState.vanity_costs && accountState.vanity_costs.shoutout) || 0;
+    const costs = accountState.vanity_costs || {};
+    const enabled = accountState.vanity_enabled || {};
+    const cost = costs.shoutout;
+    if (enabled.shoutout === false || cost == null) {
+        showToast('Shoutouts are currently unavailable', 'error');
+        return;
+    }
     showModal(`
         <h3>Shoutout</h3>
         <p class="muted">The bot posts your message to public chat as <strong>📢 ${escapeHtml(accountState.username || 'you')}: …</strong>. Cost: ${fmt(cost, sym)} each.</p>
