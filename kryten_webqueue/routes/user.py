@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..auth.session import get_current_user
 
@@ -28,6 +28,22 @@ class ColorUpdate(BaseModel):
     value: str
 
 
+class ShoutoutRequest(BaseModel):
+    # Mirrors the economy's shoutout limits so a bypassed UI still gets a
+    # consistent, early rejection instead of forwarding arbitrary-length text.
+    value: str
+
+    @field_validator("value")
+    @classmethod
+    def _validate_value(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Shoutout message is required.")
+        if len(v) > 200:
+            raise ValueError("Message too long (max 200 characters).")
+        return v
+
+
 @router.post("/vanity/greeting")
 async def set_vanity_greeting(
     body: GreetingUpdate, request: Request, user: dict = Depends(get_current_user)
@@ -48,6 +64,18 @@ async def set_vanity_color(
     api_gate = request.app.state.api_gate
     try:
         return await api_gate.set_vanity_color(user["username"], body.value)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
+
+
+@router.post("/vanity/shoutout")
+async def set_vanity_shoutout(
+    body: ShoutoutRequest, request: Request, user: dict = Depends(get_current_user)
+):
+    """Purchase a shoutout — the bot posts the message to public chat."""
+    api_gate = request.app.state.api_gate
+    try:
+        return await api_gate.set_vanity_shoutout(user["username"], body.value)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
 

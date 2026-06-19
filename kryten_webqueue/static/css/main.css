@@ -975,6 +975,10 @@ a.np-chip {
     color: var(--text-secondary);
     font-style: italic;
 }
+.vanity-cta {
+    font-size: 0.78rem;
+    margin-top: 0.2rem;
+}
 .color-swatch {
     display: inline-block;
     width: 1rem;

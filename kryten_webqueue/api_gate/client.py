@@ -108,6 +108,12 @@ class ApiGateClient:
             "value": value,
         })
 
+    async def set_vanity_shoutout(self, username: str, value: str) -> dict:
+        return await self.post("/economy/vanity/shoutout", json={
+            "username": username,
+            "value": value,
+        })
+
     async def queue_preview(self, username: str, duration_sec: int, tier: str = "queue") -> dict:
         return await self.post("/economy/queue-preview", json={
             "username": username,
