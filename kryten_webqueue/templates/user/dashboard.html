@@ -48,13 +48,14 @@
             </div>
 
             <div class="tab-panel" id="tab-vanity" role="tabpanel" hidden>
-                <p class="muted">Personalize how the bot greets you and your chat color. Each update is a one-time purchase.</p>
+                <p class="muted">Personalize how the bot greets you, your chat color, and shout yourself out. Each update is a one-time purchase.</p>
                 <div class="vanity-item">
                     <div class="vanity-row">
                         <span class="vanity-label">Greeting</span>
                         <button class="btn btn-sm" id="edit-greeting" disabled>Edit</button>
                     </div>
                     <div class="vanity-value" id="vanity-greeting">—</div>
+                    <div class="vanity-cta muted" id="cta-greeting">The bot welcomes you by name when you join.</div>
                 </div>
                 <div class="vanity-item">
                     <div class="vanity-row">
@@ -62,6 +63,15 @@
                         <button class="btn btn-sm" id="edit-color" disabled>Edit</button>
                     </div>
                     <div class="vanity-value" id="vanity-color">—</div>
+                    <div class="vanity-cta muted" id="cta-color">Stand out — pick a custom color for your chat messages.</div>
+                </div>
+                <div class="vanity-item">
+                    <div class="vanity-row">
+                        <span class="vanity-label">Shoutout</span>
+                        <button class="btn btn-sm" id="buy-shoutout" disabled>Send</button>
+                    </div>
+                    <div class="vanity-value" id="vanity-shoutout">—</div>
+                    <div class="vanity-cta muted" id="cta-shoutout">Have the bot post your message to the whole channel.</div>
                 </div>
             </div>
         </div>
@@ -223,6 +233,15 @@ function renderAccount(a) {
     cBtn.disabled = enabled.custom_color === false;
     gBtn.title = costs.custom_greeting ? `${fmt(costs.custom_greeting, sym)} per update` : '';
     cBtn.title = costs.custom_color ? `${fmt(costs.custom_color, sym)} per update` : '';
+
+    const shoutEl = document.getElementById('vanity-shoutout');
+    const shoutCost = costs.shoutout;
+    shoutEl.innerHTML = shoutCost
+        ? `Post a one-off message to chat for ${fmt(shoutCost, sym)}.`
+        : '<span class="vanity-unset">Unavailable</span>';
+    const sBtn = document.getElementById('buy-shoutout');
+    sBtn.disabled = enabled.shoutout === false;
+    sBtn.title = shoutCost ? `${fmt(shoutCost, sym)} per shoutout` : '';
 }
 
 // ── Vanity edit dialogs ────────────────────────────────────────
@@ -324,6 +343,49 @@ async function saveColor() {
         loadAccount();
     } else {
         showToast(data.detail || 'Update failed', 'error');
+        btn.disabled = false;
+    }
+}
+
+// ── Shoutout dialog ────────────────────────────────────────────
+function buyShoutout() {
+    if (!accountState) return;
+    const sym = accountState.currency_symbol || 'Z';
+    const cost = (accountState.vanity_costs && accountState.vanity_costs.shoutout) || 0;
+    showModal(`
+        <h3>Shoutout</h3>
+        <p class="muted">The bot posts your message to public chat as <strong>📢 ${escapeHtml(accountState.username || 'you')}: …</strong>. Cost: ${fmt(cost, sym)} each.</p>
+        <label class="field"><span>Message (max 200 characters)</span>
+          <textarea id="shoutout-input" maxlength="200" rows="3" placeholder="Say something to the whole channel"></textarea></label>
+        <div class="modal-actions">
+          <button class="btn" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="shoutout-save">Send shoutout</button>
+        </div>`);
+    document.getElementById('shoutout-save').addEventListener('click', saveShoutout);
+}
+
+async function saveShoutout() {
+    const value = document.getElementById('shoutout-input').value.trim();
+    if (!value) { showToast('Message cannot be empty', 'error'); return; }
+    const btn = document.getElementById('shoutout-save');
+    btn.disabled = true;
+    let resp;
+    try {
+        resp = await fetch('/user/vanity/shoutout', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({value}),
+        });
+    } catch (e) {
+        showToast('Network error', 'error'); btn.disabled = false; return;
+    }
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+        showToast('Shoutout sent', 'success');
+        closeModal();
+        loadAccount();
+    } else {
+        showToast(data.detail || 'Shoutout failed', 'error');
         btn.disabled = false;
     }
 }
@@ -440,6 +502,7 @@ function closeModal() {
 // ── Init ───────────────────────────────────────────────────────
 document.getElementById('edit-greeting').addEventListener('click', editGreeting);
 document.getElementById('edit-color').addEventListener('click', editColor);
+document.getElementById('buy-shoutout').addEventListener('click', buyShoutout);
 document.querySelectorAll('.tx-toggle-btn').forEach(b => b.addEventListener('click', () => {
     document.querySelectorAll('.tx-toggle-btn').forEach(x => x.classList.remove('active'));
     b.classList.add('active');

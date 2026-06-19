@@ -28,6 +28,10 @@ class ColorUpdate(BaseModel):
     value: str
 
 
+class ShoutoutRequest(BaseModel):
+    value: str
+
+
 @router.post("/vanity/greeting")
 async def set_vanity_greeting(
     body: GreetingUpdate, request: Request, user: dict = Depends(get_current_user)
@@ -48,6 +52,18 @@ async def set_vanity_color(
     api_gate = request.app.state.api_gate
     try:
         return await api_gate.set_vanity_color(user["username"], body.value)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
+
+
+@router.post("/vanity/shoutout")
+async def set_vanity_shoutout(
+    body: ShoutoutRequest, request: Request, user: dict = Depends(get_current_user)
+):
+    """Purchase a shoutout — the bot posts the message to public chat."""
+    api_gate = request.app.state.api_gate
+    try:
+        return await api_gate.set_vanity_shoutout(user["username"], body.value)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=_economy_error(exc)) from exc
 
