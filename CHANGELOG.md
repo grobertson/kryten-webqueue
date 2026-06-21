@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.23.0] — 2026-06-21
+
+### Fixed
+
+- **Scheduled-event pre-fire lock lingered until midnight.** The pay-to-play pre-fire lock lives in `playlist_schedules` and was gated on `fire_at > datetime('now')`. `fire_at` is stored as a raw ISO string with a `T` separator (e.g. `2026-06-21T15:00:00+00:00`, or `…Z` from the admin UI) while SQLite's `datetime('now')` is space-separated, so the two were compared as **strings** — `'T'` sorts after `' '`, keeping the condition true from fire time until the calendar date rolled over. A 15-minute pre-fire lock effectively lasted until midnight, the queue stayed locked with no active-schedule row to show for it, and "Clear Active" couldn't lift it. The lock queries now wrap `fire_at` in `datetime(…)` so the comparison is over normalized timestamps and the lock releases exactly at `fire_at`. `get_next_schedule` shared the same flaw (already-fired events showed as "next" until midnight) and is fixed too.
+
+### Added
+
+- **Clear admin lockout indicator + one-click "End lockout now".** The admin Schedules page now shows a prominent banner whenever pay-to-play is closed — covering the pre-fire window (which has no active-schedule row and was previously invisible until a queue attempt failed) as well as an in-progress immutable event. A new `GET /admin/schedules/lock-status` reports the authoritative state, and `POST /admin/schedules/unlock` now lifts an in-progress event lock **and** every active pre-fire lock in a single action (it previously lifted only one), so one click reliably reopens the queue. Schedules stay armed — a recurring event re-locks on its next firing.
+
+[0.23.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.23.0
+
 ## [0.22.0] - 2026-06-19
 
 ### Added

@@ -1166,12 +1166,19 @@ class Database:
     # --- Pre-fire lock check ---
 
     async def is_pre_fire_lock_active(self) -> bool:
+        # NOTE: fire_at must be wrapped in datetime() on BOTH sides. fire_at is
+        # stored as a raw ISO string ('2026-06-21T15:00:00+00:00' or '...Z'),
+        # whose 'T' separator sorts lexically AFTER the space-separated string
+        # returned by datetime('now'). A bare `fire_at > datetime('now')` is a
+        # string comparison that stays true from fire time until the calendar
+        # day rolls over, so the lock lingered until midnight instead of
+        # releasing at fire_at.
         row = await self._fetch_one("""
             SELECT 1 FROM playlist_schedules
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
-              AND fire_at > datetime('now')
+              AND datetime(fire_at) > datetime('now')
             LIMIT 1
         """)
         return row is not None
@@ -1187,12 +1194,32 @@ class Database:
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
-              AND fire_at > datetime('now')
-            ORDER BY fire_at
+              AND datetime(fire_at) > datetime('now')
+            ORDER BY datetime(fire_at)
             LIMIT 1
         """)
 
+    async def disable_active_pre_fire_locks(self) -> int:
+        """Lift ALL currently-active pre-fire locks in a single operation.
+
+        Sets ``lock_disabled = 1`` for every schedule whose pre-fire window is
+        open right now, so one admin action ends the lockout even when more than
+        one schedule's window overlaps. Recurring schedules reset
+        ``lock_disabled`` to 0 when they re-arm, so future firings still lock.
+        Returns the number of schedules affected.
+        """
+        cursor = await self._db.execute("""
+            UPDATE playlist_schedules
+            SET lock_disabled = 1
+            WHERE is_active = 1
+              AND lock_disabled = 0
+              AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
+              AND datetime(fire_at) > datetime('now')
+        """)
+        await self._db.commit()
+        return cursor.rowcount
+
     async def get_next_schedule(self) -> dict | None:
         return await self._fetch_one(
-            "SELECT * FROM playlist_schedules WHERE is_active=1 AND fire_at > datetime('now') ORDER BY fire_at LIMIT 1"
+            "SELECT * FROM playlist_schedules WHERE is_active=1 AND datetime(fire_at) > datetime('now') ORDER BY datetime(fire_at) LIMIT 1"
         )

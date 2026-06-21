@@ -7,6 +7,7 @@
     <h1>Schedules</h1>
     <p><a href="/admin">&larr; Back to Admin</a></p>
 
+    <div id="lock-banner" class="lock-banner hidden"></div>
     <div id="active-banner" class="schedule-info hidden" style="margin-bottom:1.5rem;"></div>
 
     <div class="admin-section">
@@ -34,6 +35,58 @@ async function loadPlaylistsForSelect() {
     playlistRows = rows;
     rows.forEach(p => playlistMap[p.id] = p.name);
     return rows;
+}
+
+async function loadLockStatus() {
+    // Authoritative, server-side lock indicator. Unlike the active-schedule
+    // banner, this also surfaces a pre-fire lockout (which has no active_schedule
+    // row) — the case where the queue is locked with nothing obviously "running".
+    const banner = document.getElementById('lock-banner');
+    let st;
+    try {
+        const resp = await fetch('/admin/schedules/lock-status');
+        if (!resp.ok) { banner.classList.add('hidden'); return; }
+        st = await resp.json();
+    } catch { banner.classList.add('hidden'); return; }
+
+    if (!st || !st.locked) {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+        return;
+    }
+
+    const label = st.label ? escapeHtml(st.label) : 'a scheduled event';
+    let detail;
+    if (st.type === 'pre_fire') {
+        const when = st.fire_at ? formatLocalDateTime(st.fire_at) : null;
+        detail = `Pre-event lockout for <strong>${label}</strong>${when ? ` — fires ${when}` : ''}. Pay-to-play reopens when the event starts.`;
+    } else {
+        const when = st.estimated_end_at ? formatLocalDateTime(st.estimated_end_at) : null;
+        detail = `Event <strong>${label}</strong> is playing${when ? ` — ends ~${when}` : ''}. Pay-to-play reopens when the last scheduled item begins.`;
+    }
+
+    banner.classList.remove('hidden');
+    banner.innerHTML = `
+        <div class="lock-banner-row">
+            <span class="lock-banner-icon" aria-hidden="true">&#128274;</span>
+            <div class="lock-banner-text">
+                <strong>Queue locked &mdash; pay-to-play is closed.</strong>
+                <div class="muted">${detail}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="endLockout()">End lockout now</button>
+        </div>`;
+}
+
+async function endLockout() {
+    if (!confirm('End the pay-to-play lockout now? Users can queue items immediately. Schedules stay armed — a recurring event re-locks on its next firing.')) return;
+    let ok = false;
+    try {
+        const resp = await fetch('/admin/schedules/unlock', {method: 'POST'});
+        ok = resp.ok;
+    } catch { ok = false; }
+    showToast(ok ? 'Lockout ended' : 'Failed to end lockout', ok ? 'success' : 'error');
+    await loadLockStatus();
+    loadSchedules();
 }
 
 async function loadActive() {
@@ -69,6 +122,7 @@ async function unlockNow() {
     if (!confirm('Lift the pay-to-play lock now? Users will be able to queue items again. The schedule stays armed for future firings.')) return;
     const resp = await fetch('/admin/schedules/unlock', {method: 'POST'});
     showToast(resp.ok ? 'Lock lifted' : 'Failed', resp.ok ? 'success' : 'error');
+    await loadLockStatus();
     loadSchedules();
 }
 
@@ -76,11 +130,13 @@ async function clearActive() {
     if (!confirm('Clear the active schedule and return to free mode?')) return;
     const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
     showToast(resp.ok ? 'Cleared' : 'Failed', resp.ok ? 'success' : 'error');
+    await loadLockStatus();
     loadActive();
 }
 
 async function loadSchedules() {
     await loadPlaylistsForSelect();
+    await loadLockStatus();
     await loadActive();
     const resp = await fetch('/admin/schedules/');
     const el = document.getElementById('schedules-list');
@@ -213,10 +269,14 @@ function closeModal() { const m = document.getElementById('admin-modal'); if (m)
 
 loadSchedules();
 
-// Keep the active-event banner fresh without a reload: re-check every 15s while
-// the tab is visible (the backend clears the row once the event plays out).
+// Keep the lock indicator and active-event banner fresh without a reload:
+// re-check every 15s while the tab is visible (the backend lifts the lock at
+// fire time and clears the active row once the event plays out).
 setInterval(() => {
-    if (document.visibilityState === 'visible') loadActive();
+    if (document.visibilityState === 'visible') {
+        loadLockStatus();
+        loadActive();
+    }
 }, 15000);
 </script>
 {% endblock %}

@@ -1210,6 +1210,33 @@ a.np-chip {
     border-left: 3px solid var(--warning);
 }
 
+/* Pay-to-play lock banner (admin schedules) — deliberately prominent so a
+   lockout is never a surprise discovered only when a queue attempt fails. */
+.lock-banner {
+    background: rgba(225, 112, 85, 0.12);
+    border: 1px solid var(--danger);
+    border-left: 4px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 0.9rem 1.1rem;
+    margin-bottom: 1.5rem;
+}
+.lock-banner-row {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+}
+.lock-banner-icon {
+    font-size: 1.4rem;
+    line-height: 1;
+}
+.lock-banner-text {
+    flex: 1 1 240px;
+}
+.lock-banner-text > strong {
+    color: var(--danger);
+}
+
 /* Modal */
 .modal-overlay {
     position: fixed;

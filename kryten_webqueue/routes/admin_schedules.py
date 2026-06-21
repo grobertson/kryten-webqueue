@@ -134,24 +134,62 @@ async def clear_active(request: Request, user: dict = Depends(require_admin)):
     return {"success": True}
 
 
-@router.post("/unlock")
-async def unlock(request: Request, user: dict = Depends(require_admin)):
-    """Lift the currently-active pay-to-play lock without deleting the schedule.
+@router.get("/lock-status")
+async def lock_status(request: Request, user: dict = Depends(require_admin)):
+    """Authoritative pay-to-play lock state for the admin lock banner.
 
-    Targets the in-progress scheduled-event lock first (keeps the event banner
-    and any recurring schedule armed); otherwise lifts an active pre-fire lock
-    for its current occurrence only (a recurring schedule re-locks on its next
-    firing).
+    Reports *both* lock types so an admin always sees why the queue is closed
+    and can end it — whether a schedule is in its pre-fire window (no active
+    schedule row) or an immutable event is mid-play.
     """
     db = request.app.state.db
 
+    # Pre-fire window lives entirely in playlist_schedules (no active_schedule
+    # row), which is why "Clear Active" can't see or clear it.
+    if await db.is_pre_fire_lock_active():
+        lock = await db.get_active_pre_fire_lock() or {}
+        return {
+            "locked": True,
+            "type": "pre_fire",
+            "label": lock.get("label"),
+            "fire_at": lock.get("fire_at"),
+        }
+
+    # In-progress immutable scheduled event.
+    if await db.is_event_lock_active():
+        active = await db.get_active_schedule() or {}
+        label = None
+        if active.get("playlist_id"):
+            playlist = await db.get_saved_playlist(active["playlist_id"])
+            if playlist:
+                label = playlist.get("name")
+        return {
+            "locked": True,
+            "type": "event",
+            "label": label,
+            "estimated_end_at": active.get("estimated_end_at"),
+        }
+
+    return {"locked": False, "type": None}
+
+
+@router.post("/unlock")
+async def unlock(request: Request, user: dict = Depends(require_admin)):
+    """End the active pay-to-play lockout, whatever its source.
+
+    Lifts an in-progress event lock *and* every currently-active pre-fire lock
+    in a single action, so one click reliably reopens pay-to-play. The schedules
+    themselves stay armed: a recurring schedule re-locks on its next firing.
+    """
+    db = request.app.state.db
+    lifted: list[str] = []
+
     if await db.is_event_lock_active():
         await db.disable_active_lock()
-        return {"success": True, "lifted": "event"}
+        lifted.append("event")
 
-    prefire = await db.get_active_pre_fire_lock()
-    if prefire:
-        await db.update_schedule(prefire["id"], lock_disabled=1)
-        return {"success": True, "lifted": "pre_fire"}
+    pre_fire_count = await db.disable_active_pre_fire_locks()
+    if pre_fire_count:
+        lifted.append("pre_fire")
 
-    return {"success": True, "lifted": None}
+    return {"success": True, "lifted": lifted, "pre_fire_count": pre_fire_count}
