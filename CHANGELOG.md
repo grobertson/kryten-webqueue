@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [0.23.1] — 2026-06-21
+
+### Changed
+
+- **Release CI hardening (no runtime changes).** PyPI publishing was moved out of a reusable workflow into a top-level one. PyPI Trusted Publishing matches the OIDC `job_workflow_ref` claim — the filename of the workflow containing the running job — against the configured publisher (`python-publish.yml`); invoking that workflow via a reusable `uses:` call is unsupported by PyPI and raised a "workflow misconfiguration" warning. `python-publish.yml` now triggers via `workflow_run` after `release.yml` completes (keeping it top-level so the publisher filename stays `python-publish.yml`), and `release.yml` no longer calls it reusably. All GitHub Actions were bumped off the deprecated Node 20 runtime: `actions/checkout@v7`, `actions/setup-python@v6`, `actions/upload-artifact@v7`, `actions/download-artifact@v8`, and `astral-sh/setup-uv@v8.2.0`.
+
+[0.23.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.23.1
+
 ## [0.23.0] — 2026-06-21
 
 ### Fixed

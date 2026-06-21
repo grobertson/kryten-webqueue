@@ -1,6 +1,10 @@
 name: Release Automation
 
-# Automatically create GitHub releases when version in pyproject.toml changes
+# Automatically create GitHub releases when version in pyproject.toml changes.
+# Publishing to PyPI is handled separately by python-publish.yml, which triggers
+# on this workflow's completion (see its workflow_run trigger). Publishing is
+# intentionally NOT inlined here: PyPI Trusted Publishing matches the OIDC
+# job_workflow_ref filename, which is configured as python-publish.yml.
 on:
   push:
     branches:
@@ -11,8 +15,6 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
-  id-token: write
 
 jobs:
   create-release:
@@ -20,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # Full history for changelog
       
@@ -93,11 +95,3 @@ jobs:
         if: steps.check_tag.outputs.exists == 'true'
         run: |
           echo "ℹ️ Release ${{ steps.version.outputs.tag }} already exists - skipping"
-
-  publish-to-pypi:
-    name: Publish to PyPI
-    needs: [create-release]
-    uses: ./.github/workflows/python-publish.yml
-    permissions:
-      id-token: write
-      contents: read

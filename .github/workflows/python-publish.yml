@@ -1,7 +1,19 @@
 name: Publish Python Package to PyPI
 
+# Builds and publishes to PyPI. This workflow MUST run top-level (never invoked
+# via a reusable `uses:` call). PyPI Trusted Publishing matches the OIDC
+# `job_workflow_ref` claim — the filename of the workflow that contains the
+# running job — against the configured publisher (python-publish.yml). Running
+# this as a reusable workflow would change that filename and break publishing
+# (and is explicitly unsupported by PyPI).
 on:
-  workflow_call:
+  # Primary automated path: fire after "Release Automation" (release.yml)
+  # finishes creating the tag + GitHub Release. workflow_run keeps this workflow
+  # top-level, unlike a reusable `uses:` invocation.
+  workflow_run:
+    workflows: ["Release Automation"]
+    types: [completed]
+  # Manual fallbacks: publishing a GitHub Release by hand, or pushing a tag.
   release:
     types: [published]
   push:
@@ -11,24 +23,30 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   release-build:
     name: Build distribution packages
     runs-on: ubuntu-latest
+    # When triggered by release.yml's completion, only proceed on success.
+    # release/tag triggers aren't workflow_run events, so they always build.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
+        with:
+          # For a workflow_run trigger, build the exact commit release.yml
+          # processed; otherwise build the tag/release commit.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v8.2.0
         with:
           version: "latest"
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -39,7 +57,7 @@ jobs:
           ls -lh dist/
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-dists
           path: dist/
@@ -56,7 +74,7 @@ jobs:
 
     steps:
       - name: Retrieve release distributions
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-dists
           path: dist/
