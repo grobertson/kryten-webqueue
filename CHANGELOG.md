@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.26.0] — 2026-06-22
+
+### Changed
+
+- **Race view is now smooth, with cars, drivers, and live commentary.** The economy now ships the whole race as a precomputed timeline (economy 0.13.0), so the `/race` view animates it client-side with `requestAnimationFrame` + interpolation — cars glide continuously and re-sync to the server clock instead of jumping between polls. Visual overhaul: each racer is a little CSS race **car** (cabin + wheels) that drives down a striped track from a colour start-cap to a checkered finish, with the **driver's name** (e.g. *Manuel Transmission*) under its colour, a live **position** column, and bet totals. A **commentary banner** above the field shows play-by-play (start, driver-named lead changes, close-finish, winner call) with the newest line replacing the last. Now shows all **6** cars.
+- **Race WebSocket bandwidth cut.** The heavy position timeline is broadcast only once per race; subsequent frames carry just the server `elapsed` re-sync hint (the browser self-animates), so per-tick traffic stays tiny even with many spectators. Late-joiners still receive the full timeline on connect.
+
+[0.26.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.26.0
+
 ## [0.25.0] — 2026-06-22
 
 ### Added

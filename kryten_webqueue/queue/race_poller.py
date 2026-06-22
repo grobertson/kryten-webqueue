@@ -31,6 +31,9 @@ class RacePoller:
         self._idle_interval = idle_interval
         self._task: asyncio.Task | None = None
         self._last_frame: dict | None = None
+        # race_id whose heavy timeline has already been broadcast; subsequent
+        # frames for the same race are sent "light" (timeline body stripped).
+        self._bcast_race_id: str | None = None
 
     @property
     def last_frame(self) -> dict | None:
@@ -67,17 +70,43 @@ class RacePoller:
 
         active = bool(result.get("active")) and result.get("frame") is not None
         if active:
-            self._last_frame = result["frame"]
+            frame = result["frame"]
+            self._last_frame = frame
             await self._ws_manager.broadcast(
-                {"type": "race_frame", "data": self._last_frame}
+                {"type": "race_frame", "data": self._strip_repeat_timeline(frame)}
             )
             return self._active_interval
 
         # Not active. If we were showing a race, tell spectators to clear once.
         if self._last_frame is not None:
             self._last_frame = None
+            self._bcast_race_id = None
             await self._ws_manager.broadcast({"type": "race_clear"})
         return self._idle_interval
+
+    def _strip_repeat_timeline(self, frame: dict) -> dict:
+        """Drop the heavy timeline body after its first broadcast per race.
+
+        The browser caches the timeline and self-animates, so resending ~100
+        position frames every poll is pure waste (especially with many
+        spectators). The first racing frame for a race carries the full
+        timeline; later frames keep only ``elapsed`` (a tiny re-sync hint).
+        Betting/finished frames and new-race frames always pass through whole.
+        """
+        rid = frame.get("race_id")
+        tl = frame.get("timeline")
+        if tl is None:
+            # No timeline (betting/finished) — pass through, reset on new race.
+            if frame.get("phase") != "racing":
+                self._bcast_race_id = None if frame.get("phase") == "finished" else self._bcast_race_id
+            return frame
+        if rid == self._bcast_race_id:
+            light = dict(frame)
+            light["timeline"] = {"elapsed": tl.get("elapsed", 0)}
+            return light
+        # First racing frame for this race — send full timeline, then mark sent.
+        self._bcast_race_id = rid
+        return frame
 
     async def _loop(self):
         while True:

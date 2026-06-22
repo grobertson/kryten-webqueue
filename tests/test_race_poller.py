@@ -100,3 +100,64 @@ async def test_error_backs_off_without_clearing():
     # spectator still sees the race in progress.
     assert poller.last_frame == {"phase": "racing"}
     assert [m["type"] for m in ws.messages] == ["race_frame"]
+
+
+def _racing_frame(race_id, elapsed, n_frames=3):
+    return {
+        "active": True,
+        "frame": {
+            "race_id": race_id,
+            "phase": "racing",
+            "timeline": {
+                "frame_dt": 0.3,
+                "duration": 1.0,
+                "elapsed": elapsed,
+                "frames": [[0.0]] * n_frames,
+                "commentary": [{"t": 0.0, "text": "go"}],
+            },
+        },
+    }
+
+
+async def test_full_timeline_sent_once_then_stripped():
+    """First racing frame carries the full timeline; later frames for the same
+    race carry only ``elapsed`` (the browser self-animates)."""
+    ws = _FakeWs()
+    poller = RacePoller(
+        api_gate=_FakeApiGate([
+            _racing_frame("race-A", 0.0),
+            _racing_frame("race-A", 0.3),
+            _racing_frame("race-A", 0.6),
+        ]),
+        ws_manager=ws,
+    )
+    await poller._poll_once()
+    await poller._poll_once()
+    await poller._poll_once()
+
+    first = ws.messages[0]["data"]["timeline"]
+    assert "frames" in first and len(first["frames"]) == 3  # full
+
+    for later in ws.messages[1:]:
+        tl = later["data"]["timeline"]
+        assert tl == {"elapsed": tl["elapsed"]}  # light: elapsed only
+    assert [m["data"]["timeline"]["elapsed"] for m in ws.messages] == [0.0, 0.3, 0.6]
+    # last_frame retains the FULL frame for late-joiner bootstrap.
+    assert "frames" in poller.last_frame["timeline"]
+
+
+async def test_new_race_resends_full_timeline():
+    """A different race_id resets the strip state — full timeline again."""
+    ws = _FakeWs()
+    poller = RacePoller(
+        api_gate=_FakeApiGate([
+            _racing_frame("race-A", 0.0),
+            _racing_frame("race-B", 0.0),
+        ]),
+        ws_manager=ws,
+    )
+    await poller._poll_once()
+    await poller._poll_once()
+    assert "frames" in ws.messages[0]["data"]["timeline"]
+    assert "frames" in ws.messages[1]["data"]["timeline"]
+

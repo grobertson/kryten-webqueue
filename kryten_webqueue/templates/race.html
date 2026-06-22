@@ -4,50 +4,90 @@
 
 {% block head %}
 <style>
-  .race-wrap { max-width: 900px; margin: 0 auto; }
+  .race-wrap { max-width: 960px; margin: 0 auto; }
   .race-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
   .race-head h1 { font-family: 'Sora', sans-serif; margin: 0; }
-  .race-status { font-weight: 600; opacity: 0.85; }
-  .race-status .pill { padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.8rem; }
+  .race-status { font-weight: 600; opacity: 0.9; }
+  .race-status .pill { padding: 0.18rem 0.7rem; border-radius: 999px; font-size: 0.82rem; }
   .pill-betting { background: #1f6feb33; color: #79c0ff; }
   .pill-racing  { background: #2ea04333; color: #7ee787; }
   .pill-finished{ background: #d2992233; color: #f0c674; }
   .pill-idle    { background: #6e768166; color: #c9d1d9; }
 
-  .race-track { margin: 1.25rem 0; display: flex; flex-direction: column; gap: 0.55rem; }
-  .lane {
-    position: relative; display: grid; grid-template-columns: 2.4rem 1fr auto;
-    align-items: center; gap: 0.6rem; padding: 0.35rem 0.5rem; border-radius: 10px;
-    background: #11141a; border: 1px solid #232a33;
+  /* Commentary feed — newest line, fades on change. */
+  .race-commentary {
+    margin: 0.9rem 0 0.4rem; min-height: 1.9rem; display: flex; align-items: center;
+    gap: 0.5rem; padding: 0.5rem 0.85rem; border-radius: 10px;
+    background: linear-gradient(90deg, #161b22, #0d1117);
+    border: 1px solid #232a33; font-size: 1.02rem; font-weight: 500;
   }
-  .lane.win { border-color: #f0c674; box-shadow: 0 0 0 1px #f0c67455, 0 0 18px #f0c67433; }
-  .lane-pos { font-weight: 700; text-align: center; opacity: 0.8; font-variant-numeric: tabular-nums; }
-  .lane-rail { position: relative; height: 26px; background: #0c0e12; border-radius: 6px; overflow: hidden; }
-  .lane-fill {
-    position: absolute; inset: 0 auto 0 0; width: 0%;
-    background: linear-gradient(90deg, #1f6feb44, #1f6feb22);
-    transition: width 1.4s linear; border-right: 2px solid #ffffff22;
-  }
-  .lane-runner {
-    position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%);
-    font-size: 1.15rem; transition: left 1.4s linear; will-change: left;
-    text-shadow: 0 1px 2px #000a;
-  }
-  .lane-meta { display: flex; align-items: baseline; gap: 0.5rem; }
-  .lane-name { font-weight: 600; }
-  .lane-odds { font-size: 0.8rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
-  .lane-trait { font-size: 0.72rem; opacity: 0.6; }
-  .lane-amt { font-size: 0.75rem; opacity: 0.7; font-variant-numeric: tabular-nums; }
+  .race-commentary .mic { opacity: 0.7; }
+  .race-commentary .txt { transition: opacity 0.25s ease; }
+  .race-commentary .txt.swap { opacity: 0; }
 
-  .race-side { display: flex; gap: 1.5rem; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
-  .race-side .stat b { font-size: 1.1rem; }
-  .race-winner { margin: 1rem 0; padding: 0.75rem 1rem; border-radius: 10px;
+  .race-track { margin: 0.6rem 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
+  .lane {
+    position: relative; display: grid; grid-template-columns: 2.2rem 12.5rem 1fr auto;
+    align-items: center; gap: 0.7rem; padding: 0.4rem 0.55rem; border-radius: 11px;
+    background: #11141a; border: 1px solid #232a33; transition: border-color 0.3s, box-shadow 0.3s;
+  }
+  .lane.win { border-color: #f0c674; box-shadow: 0 0 0 1px #f0c67455, 0 0 22px #f0c67433; }
+  .lane-pos {
+    font-weight: 800; text-align: center; font-variant-numeric: tabular-nums;
+    color: #c9d1d9; font-size: 0.95rem;
+  }
+  .lane-pos.p1 { color: #f0c674; }
+  .lane-label { display: flex; flex-direction: column; line-height: 1.15; min-width: 0; }
+  .lane-color { display: flex; align-items: center; gap: 0.4rem; font-weight: 700; font-size: 0.92rem; }
+  .lane-swatch { width: 0.8rem; height: 0.8rem; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 1px #0006 inset; }
+  .lane-driver { font-size: 0.78rem; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lane-meta { text-align: right; font-variant-numeric: tabular-nums; }
+  .lane-odds { font-weight: 700; font-size: 0.9rem; }
+  .lane-amt { font-size: 0.74rem; opacity: 0.72; }
+
+  /* Track rail with start/finish color markers and a moving car. */
+  .lane-rail {
+    position: relative; height: 30px; border-radius: 8px;
+    background: repeating-linear-gradient(90deg, #0c0e12 0 18px, #0e1117 18px 36px);
+    border: 1px solid #1c222b; overflow: hidden;
+  }
+  .rail-cap { position: absolute; top: 0; bottom: 0; width: 5px; opacity: 0.85; }
+  .rail-cap.start { left: 0; border-radius: 8px 0 0 8px; }
+  .rail-cap.finish {
+    right: 0; border-radius: 0 8px 8px 0;
+    background-image: repeating-linear-gradient(45deg, #fff 0 4px, #000 4px 8px) !important;
+    opacity: 0.55; width: 8px;
+  }
+  .car {
+    position: absolute; top: 50%; left: 0; transform: translate(-50%, -50%);
+    width: 30px; height: 15px; border-radius: 5px 7px 4px 4px;
+    box-shadow: 0 1px 3px #000a, inset 0 -3px 4px #0004; will-change: left;
+  }
+  .car::before {  /* cabin */
+    content: ''; position: absolute; left: 6px; top: -4px; width: 12px; height: 7px;
+    border-radius: 4px 4px 0 0; background: #ffffffcc;
+  }
+  .car::after {   /* wheels */
+    content: ''; position: absolute; left: 3px; right: 3px; bottom: -3px; height: 5px;
+    background:
+      radial-gradient(circle at 5px 50%, #111 0 3px, transparent 3px),
+      radial-gradient(circle at calc(100% - 5px) 50%, #111 0 3px, transparent 3px);
+  }
+
+  .race-side { display: flex; gap: 1.6rem; flex-wrap: wrap; font-variant-numeric: tabular-nums; opacity: 0.92; }
+  .race-side .stat b { font-size: 1.12rem; }
+  .race-winner { margin: 1rem 0; padding: 0.8rem 1.05rem; border-radius: 11px;
     background: #d2992218; border: 1px solid #f0c67455; }
-  .race-winner h2 { margin: 0 0 0.35rem; font-family: 'Sora', sans-serif; }
-  .race-payouts { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+  .race-winner h2 { margin: 0 0 0.4rem; font-family: 'Sora', sans-serif; }
+  .race-payouts { margin: 0.3rem 0 0; padding-left: 1.15rem; }
+  .race-payouts li { margin: 0.1rem 0; }
   .race-idle { text-align: center; opacity: 0.7; padding: 3rem 1rem; }
-  .race-finish-flag { position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-    font-size: 0.95rem; opacity: 0.5; }
+
+  @media (max-width: 640px) {
+    .lane { grid-template-columns: 1.7rem 1fr auto; }
+    .lane-rail { grid-column: 1 / -1; order: 5; }
+    .lane-driver { white-space: normal; }
+  }
 </style>
 {% endblock %}
 
@@ -56,6 +96,10 @@
   <div class="race-head">
     <h1>🏁 Live Race</h1>
     <div class="race-status" id="race-status"><span class="pill pill-idle">Connecting…</span></div>
+  </div>
+
+  <div class="race-commentary" id="race-commentary" hidden>
+    <span class="mic">📣</span><span class="txt" id="commentary-txt"></span>
   </div>
 
   <div id="race-body">
@@ -70,137 +114,257 @@
 {% block scripts %}
 <script>
 (function () {
+  const COLORS = {
+    Blue: '#3b82f6', Red: '#ef4444', Green: '#22c55e',
+    Yellow: '#eab308', Purple: '#a855f7', Orange: '#f97316',
+  };
+  const colorOf = (c) => COLORS[c] || '#9aa4af';
+
   const statusEl = document.getElementById('race-status');
   const idleEl   = document.getElementById('race-idle');
   const trackEl  = document.getElementById('race-track');
   const sideEl   = document.getElementById('race-side');
   const winnerEl = document.getElementById('race-winner');
+  const commEl   = document.getElementById('race-commentary');
+  const commTxt  = document.getElementById('commentary-txt');
 
-  const lanes = new Map();   // color -> { row, fill, runner, pos, amt }
-  let laneSig = '';          // signature of the current racer set (to detect changes)
+  const lanes = new Map();   // color -> { row, car, pos, amt }
+  let laneSig = '';
+  let raceId = null;
+
+  // playback state
+  let timeline = null;       // {frame_dt, duration, frames, commentary, elapsed}
+  let currentColors = [];
+  let playbackStart = 0;     // performance.now() baseline
+  let rafId = 0;
+  let commentaryShown = -1;
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, c => (
       { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]
     ));
   }
-
   function setStatus(kind, text) {
     statusEl.innerHTML = '<span class="pill pill-' + kind + '">' + esc(text) + '</span>';
+  }
+  function setCommentary(text) {
+    if (!text) return;
+    commEl.hidden = false;
+    if (commTxt.textContent === text) return;
+    commTxt.classList.add('swap');
+    setTimeout(() => { commTxt.textContent = text; commTxt.classList.remove('swap'); }, 130);
   }
 
   function buildLanes(racers) {
     trackEl.innerHTML = '';
     lanes.clear();
     for (const r of racers) {
+      const col = colorOf(r.color);
       const row = document.createElement('div');
       row.className = 'lane';
       row.innerHTML =
         '<div class="lane-pos"></div>' +
+        '<div class="lane-label">' +
+          '<span class="lane-color"><span class="lane-swatch" style="background:' + col + '"></span>' + esc(r.color) + '</span>' +
+          '<span class="lane-driver">' + esc(r.name || '') + '</span>' +
+        '</div>' +
         '<div class="lane-rail">' +
-          '<div class="lane-fill"></div>' +
-          '<span class="lane-runner">' + esc(r.emoji || '🏃') + '</span>' +
-          '<span class="race-finish-flag">🏁</span>' +
+          '<span class="rail-cap start" style="background:' + col + '"></span>' +
+          '<span class="rail-cap finish"></span>' +
+          '<span class="car" style="background:' + col + '"></span>' +
         '</div>' +
         '<div class="lane-meta">' +
-          '<span class="lane-name">' + esc(r.color) + '</span>' +
-          '<span class="lane-odds">' + esc(r.odds || '') + '</span>' +
-          (r.trait ? '<span class="lane-trait">' + esc(r.trait) + '</span>' : '') +
-          '<span class="lane-amt"></span>' +
+          '<div class="lane-odds">' + esc(r.odds || '') + '</div>' +
+          '<div class="lane-amt"></div>' +
         '</div>';
       trackEl.appendChild(row);
       lanes.set(r.color, {
         row,
-        fill: row.querySelector('.lane-fill'),
-        runner: row.querySelector('.lane-runner'),
+        car: row.querySelector('.car'),
         pos: row.querySelector('.lane-pos'),
         amt: row.querySelector('.lane-amt'),
       });
     }
   }
 
-  function render(frame) {
-    idleEl.hidden = true;
-    trackEl.hidden = false;
-    sideEl.hidden = false;
+  // Place a car along its rail (pct 0..100 → left 3%..97% so it stays on track).
+  function placeCar(color, pct) {
+    const lane = lanes.get(color);
+    if (!lane) return;
+    const left = 3 + Math.max(0, Math.min(100, pct)) * 0.94;
+    lane.car.style.left = left + '%';
+  }
 
-    // Rebuild lanes only when the racer set changes (keeps CSS transitions smooth).
-    const sig = frame.racers.map(r => r.color).join('|');
-    if (sig !== laneSig) { buildLanes(frame.racers); laneSig = sig; }
+  function updateRanking(colors, values) {
+    const order = colors
+      .map((c, i) => [c, values[i]])
+      .sort((a, b) => b[1] - a[1]);
+    order.forEach(([c], idx) => {
+      const lane = lanes.get(c);
+      if (!lane) return;
+      lane.pos.textContent = '#' + (idx + 1);
+      lane.pos.classList.toggle('p1', idx === 0);
+    });
+  }
 
-    const finished = frame.phase === 'finished';
-    const winnerColor = frame.winner && frame.winner.color;
-    const betsByColor = frame.bets_by_color || {};
-
-    for (const r of frame.racers) {
-      const lane = lanes.get(r.color);
-      if (!lane) continue;
-      const pct = Math.max(0, Math.min(100, r.pct || 0));
-      lane.fill.style.width = pct + '%';
-      lane.runner.style.left = pct + '%';
-      lane.pos.textContent = r.position ? ('#' + r.position) : '';
-      const bet = betsByColor[r.color];
-      lane.amt.textContent = bet ? ('💰 ' + bet.amount.toLocaleString()) : '';
-      lane.row.classList.toggle('win', finished && r.color === winnerColor);
+  function applyBets(frame) {
+    const bets = frame.bets_by_color || {};
+    for (const [color, lane] of lanes) {
+      const b = bets[color];
+      lane.amt.textContent = b ? ('💰 ' + b.amount.toLocaleString()) : '';
     }
+  }
 
-    // Status line
-    if (frame.phase === 'betting') {
-      setStatus('betting', 'Betting open — ' + (frame.betting_closes_in || 0) + 's left');
-    } else if (frame.phase === 'racing') {
-      setStatus('racing', 'Racing! Leader: ' + (frame.leader || '—'));
-    } else if (finished) {
-      setStatus('finished', 'Finished');
-    }
-
-    // Side stats
+  function sideStats(frame) {
     const sym = frame.symbol || '';
+    sideEl.hidden = false;
     sideEl.innerHTML =
       '<div class="stat">Pool <b>' + (frame.pool || 0).toLocaleString() + ' ' + esc(sym) + '</b></div>' +
       '<div class="stat">Bettors <b>' + (frame.bettor_count || 0) + '</b></div>' +
       (frame.phase === 'betting'
         ? '<div class="stat">Min bet <b>' + (frame.min_bet || 0).toLocaleString() + ' ' + esc(sym) + '</b></div>'
         : '');
+  }
 
-    // Winner banner + payouts
-    if (finished && frame.winner) {
-      const payouts = (frame.payouts || []).slice(0, 5)
+  // ── Timeline playback (smooth, rAF + interpolation) ────────
+  function posAt(t) {
+    const { frame_dt, frames } = timeline;
+    const pos = t / frame_dt;
+    let i = Math.floor(pos);
+    if (i >= frames.length - 1) return frames[frames.length - 1].slice();
+    const frac = pos - i;
+    const a = frames[i], b = frames[i + 1];
+    return a.map((v, j) => v + (b[j] - v) * frac);
+  }
+
+  function showCommentaryUpTo(t) {
+    if (!timeline.commentary) return;
+    let idx = commentaryShown;
+    for (let k = commentaryShown + 1; k < timeline.commentary.length; k++) {
+      if (timeline.commentary[k].t <= t) idx = k; else break;
+    }
+    if (idx !== commentaryShown) {
+      commentaryShown = idx;
+      setCommentary(timeline.commentary[idx].text);
+    }
+  }
+
+  function frameTick(now) {
+    if (!timeline) return;
+    let t = (now - playbackStart) / 1000;
+    if (t < 0) t = 0;
+    const done = t >= timeline.duration;
+    if (done) t = timeline.duration;
+
+    const row = posAt(t);
+    currentColors.forEach((c, j) => placeCar(c, row[j]));
+    updateRanking(currentColors, row);
+    showCommentaryUpTo(t);
+
+    if (!done) rafId = requestAnimationFrame(frameTick);
+  }
+
+  function startPlayback(frame) {
+    timeline = frame.timeline;
+    currentColors = frame.racers.map(r => r.color);
+    commentaryShown = -1;
+    const elapsed = Math.max(0, timeline.elapsed || 0);
+    playbackStart = performance.now() - elapsed * 1000;
+    cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(frameTick);
+  }
+
+  function resync(frame) {
+    // Gently correct drift (e.g. after a backgrounded tab) without jumping.
+    const elapsed = Math.max(0, frame.timeline.elapsed || 0);
+    const localT = (performance.now() - playbackStart) / 1000;
+    if (Math.abs(localT - elapsed) > 1.2) {
+      playbackStart = performance.now() - elapsed * 1000;
+    }
+    timeline.commentary = frame.timeline.commentary || timeline.commentary;
+  }
+
+  // ── Frame router ───────────────────────────────────────────
+  function render(frame) {
+    idleEl.hidden = true;
+    trackEl.hidden = false;
+
+    const sig = frame.racers.map(r => r.color).join('|');
+    const isNewRace = frame.race_id !== raceId || sig !== laneSig;
+    if (isNewRace) {
+      buildLanes(frame.racers);
+      laneSig = sig;
+      raceId = frame.race_id;
+      timeline = null;
+      cancelAnimationFrame(rafId);
+    }
+    applyBets(frame);
+    sideStats(frame);
+
+    if (frame.phase === 'betting') {
+      cancelAnimationFrame(rafId); timeline = null;
+      frame.racers.forEach(r => placeCar(r.color, 0));
+      updateRanking(frame.racers.map(r => r.color), frame.racers.map(() => 0));
+      winnerEl.hidden = true;
+      setStatus('betting', 'Betting open — ' + (frame.betting_closes_in || 0) + 's left');
+      setCommentary('Place your bets! ' + frame.racers.length + ' cars on the grid.');
+    } else if (frame.phase === 'racing') {
+      winnerEl.hidden = true;
+      setStatus('racing', 'They\u2019re off!');
+      if (frame.timeline) {
+        const hasFrames = Array.isArray(frame.timeline.frames) && frame.timeline.frames.length;
+        if (!timeline && hasFrames) startPlayback(frame);
+        else if (timeline) resync(frame);
+        // else: a light sync arrived before the full timeline — wait for it.
+      }
+    } else if (frame.phase === 'finished') {
+      cancelAnimationFrame(rafId); timeline = null;
+      showFinished(frame);
+    }
+  }
+
+  function showFinished(frame) {
+    setStatus('finished', 'Finished');
+    const winnerColor = frame.winner && frame.winner.color;
+    frame.racers.forEach(r => placeCar(r.color, r.pct || 0));
+    updateRanking(frame.racers.map(r => r.color), frame.racers.map(r => r.pct || 0));
+    for (const [c, lane] of lanes) lane.row.classList.toggle('win', c === winnerColor);
+
+    const sym = frame.symbol || '';
+    if (frame.winner) {
+      const w = frame.winner;
+      const driver = w.name ? (' — ' + esc(w.name)) : '';
+      const payouts = (frame.payouts || []).slice(0, 6)
         .map(p => '<li>' + esc(p.username) + ' <b>+' + (p.net || 0).toLocaleString() + ' ' + esc(sym) + '</b></li>')
         .join('');
       winnerEl.hidden = false;
       winnerEl.innerHTML =
-        '<h2>' + esc(frame.winner.emoji || '🏆') + ' ' + esc(frame.winner.color) + ' wins!</h2>' +
-        (payouts ? '<ul class="race-payouts">' + payouts + '</ul>'
-                 : '<div>No winning bets this race.</div>');
-    } else {
-      winnerEl.hidden = true;
+        '<h2><span class="lane-swatch" style="display:inline-block;vertical-align:middle;background:' + colorOf(w.color) + '"></span> ' +
+          esc(w.color) + ' wins!' + driver + '</h2>' +
+        (payouts ? '<ul class="race-payouts">' + payouts + '</ul>' : '<div>No winning bets this race.</div>');
+      setCommentary('🏆 ' + esc(w.color) + (w.name ? ' (' + esc(w.name) + ')' : '') + ' takes the checkered flag!');
     }
   }
 
   function showIdle() {
-    laneSig = '';
+    laneSig = ''; raceId = null; timeline = null;
+    cancelAnimationFrame(rafId);
     lanes.clear();
-    trackEl.hidden = true;
-    sideEl.hidden = true;
-    winnerEl.hidden = true;
+    trackEl.hidden = true; sideEl.hidden = true; winnerEl.hidden = true;
+    commEl.hidden = true;
     idleEl.hidden = false;
     setStatus('idle', 'No race running');
   }
 
   // ── WebSocket with auto-reconnect ──────────────────────────
   let ws = null, retry = 0, pingTimer = null;
-
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     ws = new WebSocket(proto + '://' + location.host + '/ws/race');
-
     ws.onopen = () => {
-      retry = 0;
-      setStatus('idle', 'Connected');
+      retry = 0; setStatus('idle', 'Connected');
       clearInterval(pingTimer);
-      pingTimer = setInterval(() => {
-        try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {}
-      }, 25000);
+      pingTimer = setInterval(() => { try { ws.send(JSON.stringify({ type: 'ping' })); } catch (e) {} }, 25000);
     };
     ws.onmessage = (ev) => {
       let m; try { m = JSON.parse(ev.data); } catch (e) { return; }
@@ -215,6 +379,14 @@
     };
     ws.onerror = () => { try { ws.close(); } catch (e) {} };
   }
+
+  // Re-sync playback when returning to a backgrounded tab.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && timeline) {
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(frameTick);
+    }
+  });
 
   showIdle();
   connect();
