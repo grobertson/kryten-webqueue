@@ -71,6 +71,13 @@ async def login_page(request: Request):
     return templates.TemplateResponse(request, "auth/login.html", {"user": None})
 
 
+@router.get("/race", response_class=HTMLResponse)
+async def race_view(request: Request):
+    """Public race spectator view — no auth. Streams frames over /ws/race."""
+    user = _get_user_or_none(request)
+    return templates.TemplateResponse(request, "race.html", {"user": user})
+
+
 @router.get("/catalog/browse", response_class=HTMLResponse)
 async def catalog_browse_page(request: Request, category: str | None = None,
                               tag: str | None = None, page: int = 1,

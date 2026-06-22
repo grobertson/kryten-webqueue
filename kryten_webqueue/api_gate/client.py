@@ -47,6 +47,16 @@ class ApiGateClient:
     async def get_user(self, username: str) -> dict:
         return await self.get(f"/state/user/{username}")
 
+    # --- Economy: race view ---
+
+    async def get_race_state(self) -> dict:
+        """Live race snapshot for the web race view.
+
+        Returns ``{"active": bool, "frame": {...}|None}`` from api-gate's
+        ``GET /economy/race`` (which proxies the economy ``race.state`` command).
+        """
+        return await self.get("/economy/race")
+
     # --- Playlist CRUD ---
 
     async def playlist_add(self, media_type: str, media_id: str, *, position: str = "end", temp: bool = True) -> dict:

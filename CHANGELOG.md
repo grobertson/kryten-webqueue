@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.25.0] — 2026-06-22
+
+### Added
+
+- **Live web race view at `/race`.** The economy's racing game play-by-play moved off public chat (which flooded the channel) and onto a visual web view anyone can watch — no login required. A new public page animates the race in real time: each racer glides along its lane toward the finish, with live positions, odds, the betting countdown, per-colour bet totals, and a winner banner + payouts when it ends. A background `RacePoller` polls api-gate's `GET /economy/race` adaptively (fast while a race is live, backing off when idle) and pushes frames to spectators over a dedicated public `/ws/race` WebSocket; a newly-opened view is immediately shown a race already in progress. The race WebSocket carries only race frames (no user or queue data), and a “Race” link was added to the nav.
+
+[0.25.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.25.0
+
 ## [0.24.0] — 2026-06-21
 
 ### Added

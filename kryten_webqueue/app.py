@@ -16,6 +16,7 @@ from .jobs import JobManager
 from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
+from .queue.race_poller import RacePoller
 from .queue.presence import PresenceRefundMonitor
 from .promos.director import PromoDirector
 from .ws.manager import WebSocketManager
@@ -113,6 +114,13 @@ async def lifespan(app: FastAPI):
     # WebSocket manager
     ws_manager = WebSocketManager()
     app.state.ws_manager = ws_manager
+
+    # Public race-view WebSocket manager (anonymous spectators) + poller.
+    race_ws_manager = WebSocketManager()
+    app.state.race_ws_manager = race_ws_manager
+    race_poller = RacePoller(api_gate=api_gate, ws_manager=race_ws_manager)
+    await race_poller.start()
+    app.state.race_poller = race_poller
 
     # Queue shadow
     shadow = QueueShadow(db)
@@ -218,6 +226,7 @@ async def lifespan(app: FastAPI):
     for task in bg_tasks:
         task.cancel()
     await poller.stop()
+    await race_poller.stop()
     await scheduler.stop()
     await presence_monitor.stop()
     await catalog_sync.close()
