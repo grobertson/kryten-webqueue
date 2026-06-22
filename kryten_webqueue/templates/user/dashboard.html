@@ -293,15 +293,92 @@ async function saveGreeting() {
     }
 }
 
+// ── Chat-color readability scoring (mirrors kryten-economy contrast.py) ──
+// The economy server is authoritative and re-checks on purchase; this gives
+// instant local preview/feedback. Defaults match the economy config defaults.
+const CONTRAST_BG = '#111111';
+const CONTRAST_MIN = 30.0;   // reject below this combined score
+const CONTRAST_WARN = 40.0;  // warn below this
+const CHROMA_KNEE = 160;     // green+blue at which the red penalty clears
+
+function _hexRgb(h) {
+    let s = h.replace('#', '');
+    if (s.length === 3) s = s.split('').map(c => c + c).join('');
+    return [parseInt(s.slice(0,2),16), parseInt(s.slice(2,4),16), parseInt(s.slice(4,6),16)];
+}
+function _screenY(h) {
+    const [r,g,b] = _hexRgb(h);
+    return 0.2126729*Math.pow(r/255,2.4) + 0.7151522*Math.pow(g/255,2.4) + 0.0721750*Math.pow(b/255,2.4);
+}
+function _apcaLc(textHex, bgHex) {
+    let yt = _screenY(textHex), yb = _screenY(bgHex);
+    if (yt <= 0.022) yt += Math.pow(0.022 - yt, 1.414);
+    if (yb <= 0.022) yb += Math.pow(0.022 - yb, 1.414);
+    if (Math.abs(yb - yt) < 0.0005) return 0;
+    let out;
+    if (yb > yt) { const s = (Math.pow(yb,0.56)-Math.pow(yt,0.57))*1.14; out = s < 0.1 ? 0 : s - 0.027; }
+    else { const s = (Math.pow(yb,0.65)-Math.pow(yt,0.62))*1.14; out = s > -0.1 ? 0 : s + 0.027; }
+    return Math.abs(out * 100);
+}
+function _chromaFactor(h) {
+    const [, g, b] = _hexRgb(h);
+    return Math.min(g + b, CHROMA_KNEE) / CHROMA_KNEE;
+}
+function classifyColor(hex) {
+    const lc = _apcaLc(hex, CONTRAST_BG);
+    const score = Math.round(lc * _chromaFactor(hex) * 10) / 10;
+    let level;
+    if (score < CONTRAST_MIN) level = 'reject';
+    else if (score < CONTRAST_WARN) level = 'warn';
+    else level = 'ok';
+    return { score, level };
+}
+
+function updateColorPreview(hex) {
+    const msg = document.getElementById('cp-msg');
+    const sw = document.getElementById('color-input');
+    const badge = document.getElementById('contrast-badge');
+    const save = document.getElementById('color-save');
+    const valid = /^#[0-9A-Fa-f]{6}$/.test(hex);
+    if (msg) msg.style.color = valid ? hex : '#FFFFFF';
+    if (!valid || !badge || !save) return;
+    const { score, level } = classifyColor(hex);
+    if (level === 'reject') {
+        badge.className = 'contrast-badge cb-reject';
+        badge.innerHTML = '<span class="cb-icon">⛔</span><span>Too hard to read on the dark chat background. ' +
+            'Try a lighter shade, or add some green/blue (e.g. pink instead of pure red).</span>';
+        save.disabled = true;
+        save.title = 'This color is too low-contrast to use';
+    } else if (level === 'warn') {
+        badge.className = 'contrast-badge cb-warn';
+        badge.innerHTML = '<span class="cb-icon">⚠️</span><span>Readable, but low-contrast — viewers with vision ' +
+            'issues may struggle to read your chat lines.</span>';
+        save.disabled = false;
+        save.title = '';
+    } else {
+        badge.className = 'contrast-badge cb-ok';
+        badge.innerHTML = '<span class="cb-icon">✅</span><span>Good contrast on the chat background.</span>';
+        save.disabled = false;
+        save.title = '';
+    }
+}
+
 function editColor() {
     if (!accountState) return;
     const sym = accountState.currency_symbol || 'Z';
     const cur = (accountState.vanity && accountState.vanity.custom_color) || '';
     const cost = (accountState.vanity_costs && accountState.vanity_costs.custom_color) || 0;
     const seed = /^#[0-9A-Fa-f]{6}$/.test(cur) ? cur : '#6C5CE7';
+    const uname = (accountState.username) || 'You';
     showModal(`
         <h3>Chat color</h3>
         <p class="muted">Pick a color for your chat messages. Cost: ${fmt(cost, sym)} per update.</p>
+        <div class="color-preview">
+          <span class="cp-ts">[12:34:56]</span>
+          <span class="cp-name" id="cp-name">${escapeHtml(uname)}:</span>
+          <span class="cp-msg" id="cp-msg">This is how your chat messages will look.</span>
+        </div>
+        <div class="contrast-badge cb-ok" id="contrast-badge"></div>
         <div class="color-picker-row">
           <input type="color" id="color-input" value="${seed}">
           <input type="text" id="color-hex" class="color-hex" value="${escapeHtml(cur || seed)}" maxlength="7" placeholder="#RRGGBB">
@@ -312,14 +389,25 @@ function editColor() {
         </div>`);
     const picker = document.getElementById('color-input');
     const hex = document.getElementById('color-hex');
-    picker.addEventListener('input', () => { hex.value = picker.value.toUpperCase(); });
+    const normalize = (v) => {
+        v = v.trim();
+        if (!v.startsWith('#')) v = '#' + v;
+        return v.toUpperCase();
+    };
+    picker.addEventListener('input', () => {
+        hex.value = picker.value.toUpperCase();
+        updateColorPreview(picker.value.toUpperCase());
+    });
     hex.addEventListener('input', () => {
         const val = hex.value.trim();
         if (/^#?[0-9A-Fa-f]{6}$/.test(val)) {
-            picker.value = (val.startsWith('#') ? '' : '#') + val;
+            const norm = normalize(val);
+            picker.value = norm;
+            updateColorPreview(norm);
         }
     });
     document.getElementById('color-save').addEventListener('click', saveColor);
+    updateColorPreview(normalize(cur || seed));
 }
 
 async function saveColor() {
@@ -329,6 +417,12 @@ async function saveColor() {
         return;
     }
     if (!value.startsWith('#')) value = '#' + value;
+    value = value.toUpperCase();
+    // Block locally on reject (the server enforces this too).
+    if (classifyColor(value).level === 'reject') {
+        showToast('That color is too low-contrast to use on the chat background', 'error');
+        return;
+    }
     const btn = document.getElementById('color-save');
     btn.disabled = true;
     let resp;

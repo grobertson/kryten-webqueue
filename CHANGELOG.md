@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.24.0] — 2026-06-21
+
+### Added
+
+- **Live readability preview for the chat-color picker.** The dashboard's chat-color editor now previews the chosen color exactly as it renders in chat — a sample chat line (gray timestamp, username, message) on the near-black chat background (`#111`) — and scores it as you pick, mirroring kryten-economy's server-side guard (combined APCA lightness contrast × red-chroma penalty). A contrast badge reports **ok / warn / reject**: colors that fail the readability threshold (very dark colors and harsh pure reds) show a **reject** badge and the **Save button is disabled**, so users can't buy a color the server would refuse; borderline colors get a non-blocking **warn**. The thresholds (`reject < 30`, `warn < 40`) and background match the economy service so the dashboard and server always agree.
+
+[0.24.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.24.0
+
 ## [0.23.1] — 2026-06-21
 
 ### Changed
