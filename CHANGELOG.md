@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.0] — 2026-06-23
+
+### Added
+
+- **Viewer feedback + "Suggest a Title".** A new **Feedback** page (login required, linked in the nav) lets viewers contribute to Channel-Z in two tabs. *Feedback* is a simple text box — submit and get an instant thank-you. *Suggest a Title* resolves what you type against our movie databases (TMDB + OMDB) and shows the candidate matches so you can confirm the right one; pick a match and it's recorded for the team. A title we can't match is still accepted (stored as **unresolved**), and if we already have it you're told right away with a link to watch it now.
+- **Admin triage queues for feedback & suggestions.** Both feeds land in the admin dashboard with the same lightweight workflow: mark entries **read/unread** and **delete** stale ones, with a per-tab unread badge and an "unread only" filter. Suggestion rows show the resolved match (title/year/source), whether we **already have it in the catalog** (with a direct link to the item), or that it's unresolved.
+
+### Changed
+
+- **Admin dashboard is now tabbed**, mirroring the user profile page. The at-a-glance sections (Overview, Jobs, Sync Logs) plus the new Feedback and Suggestions queues are organized into tabs; the Playlists / Schedules / Queue Management / Promos pages remain linked as before.
+- **Race odds column is now a fixed width.** The odds/bet-total column on the `/race` view no longer auto-sizes to each entry's bet total, so the lanes (and the track rails) line up cleanly instead of staggering as bets come in.
+- **Race view now supports 8 cars.** Added Brown and White lane colours to match the economy's expanded 8-car grid.
+
+[0.27.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.27.0
+
 ## [0.26.0] — 2026-06-22
 
 ### Changed

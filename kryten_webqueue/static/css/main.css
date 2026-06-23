@@ -1516,3 +1516,127 @@ a.np-chip {
 .import-errors { font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.5rem; }
 .import-errors code { color: var(--warning); }
 
+/* ── Feedback page + admin feedback/suggestion triage queues ────── */
+
+/* Shared tab container (admin dashboard + feedback page) */
+.admin-tabs-card,
+.feedback-card {
+    background: var(--bg-card);
+    border-radius: var(--radius);
+    padding: 1.5rem;
+}
+.feedback-container { max-width: 760px; margin: 0 auto; }
+.feedback-container > h1 { margin-bottom: 0.25rem; }
+
+/* "new" count badge on a tab button */
+.tab-badge {
+    display: inline-block;
+    min-width: 1.1rem;
+    padding: 0 0.35rem;
+    margin-left: 0.3rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 999px;
+    vertical-align: middle;
+}
+
+/* Feedback / suggest forms */
+.feedback-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-top: 0.25rem;
+}
+.char-count { font-size: 0.78rem; color: var(--text-secondary); }
+.suggest-search-row { display: flex; gap: 0.5rem; }
+.suggest-search-row input { flex: 1; }
+.suggest-hint { margin-top: 0.5rem; }
+
+/* Confirmation / thank-you panel */
+.feedback-done { text-align: center; padding: 1.5rem 0.5rem; }
+.feedback-done .thanks-icon {
+    width: 3rem; height: 3rem; line-height: 3rem; margin: 0 auto 0.75rem;
+    font-size: 1.5rem; color: #fff; background: var(--success);
+    border-radius: 50%;
+}
+.feedback-done p { margin: 0 auto 1rem; max-width: 36rem; }
+.feedback-done-actions { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+
+/* Suggestion candidate grid */
+.candidate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0;
+}
+.candidate {
+    display: flex;
+    gap: 0.6rem;
+    padding: 0.6rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+}
+.cand-poster {
+    width: 60px; height: 90px; object-fit: cover; flex-shrink: 0;
+    border-radius: 4px; background: var(--bg-card);
+}
+.cand-poster-empty {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; color: var(--text-secondary); text-align: center;
+}
+.cand-body { display: flex; flex-direction: column; gap: 0.35rem; min-width: 0; }
+.cand-title { font-weight: 600; font-size: 0.9rem; }
+.cand-year { color: var(--text-secondary); font-weight: 400; }
+.cand-meta { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+.cand-pick { margin-top: auto; align-self: flex-start; }
+.cand-source {
+    display: inline-block; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.03em;
+    padding: 0.08rem 0.4rem; border-radius: 999px;
+    background: var(--bg-card); border: 1px solid var(--border); color: var(--text-secondary);
+}
+.cand-source-tmdb { color: #01b4e4; border-color: #01b4e4; }
+.cand-source-omdb { color: var(--warning); border-color: var(--warning); }
+.cand-have { font-size: 0.75rem; color: var(--success); text-decoration: none; }
+.cand-have:hover { text-decoration: underline; }
+.suggest-fallback { margin-top: 0.5rem; }
+
+/* Admin triage queue entries (feedback + suggestions) */
+.queue-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; flex-wrap: wrap;
+}
+.queue-head-actions { display: flex; align-items: center; gap: 0.75rem; }
+.queue-filter { display: flex; align-items: center; gap: 0.35rem; font-size: 0.82rem; color: var(--text-secondary); cursor: pointer; }
+.queue-entry {
+    padding: 0.75rem 0.9rem;
+    margin-top: 0.6rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-left: 3px solid transparent;
+    border-radius: var(--radius);
+}
+.queue-entry.is-unread { border-left-color: var(--accent); }
+.qe-head { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.82rem; }
+.qe-user { font-weight: 600; color: var(--text-primary); }
+.qe-time { color: var(--text-secondary); }
+.qe-new {
+    font-size: 0.65rem; font-weight: 700; letter-spacing: 0.04em;
+    color: #fff; background: var(--accent); padding: 0.08rem 0.4rem; border-radius: 999px;
+}
+.qe-body { margin: 0.5rem 0; white-space: pre-wrap; word-break: break-word; }
+.qe-matched { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem; }
+.qe-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+.res-badge {
+    font-size: 0.68rem; font-weight: 700; padding: 0.1rem 0.45rem; border-radius: 999px;
+    border: 1px solid var(--border);
+}
+.res-have { color: var(--success); border-color: var(--success); background: rgba(0, 184, 148, 0.12); }
+.res-ok { color: var(--accent); border-color: var(--accent); background: rgba(108, 92, 231, 0.15); }
+.res-unresolved { color: var(--warning); border-color: var(--warning); background: rgba(253, 203, 110, 0.12); }
+

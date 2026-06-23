@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+{% block title %}Feedback{% endblock %}
+{% block body_class %}feedback-page{% endblock %}
+
+{% block content %}
+<div class="feedback-container">
+    <h1>Feedback</h1>
+    <p class="muted">Tell us what you think, or suggest a movie or show you'd love to see on Channel-Z.</p>
+
+    <div class="feedback-card">
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-tab="feedback" role="tab" aria-selected="true">Feedback</button>
+            <button class="tab-btn" data-tab="suggest" role="tab" aria-selected="false">Suggest a Title</button>
+        </div>
+
+        <!-- Feedback tab -->
+        <div class="tab-panel" id="tab-feedback" role="tabpanel">
+            <div id="feedback-form">
+                <label class="field">
+                    <span>Your feedback</span>
+                    <textarea id="feedback-input" rows="6" maxlength="2000"
+                              placeholder="Share your thoughts, report a problem, or request a feature…"></textarea>
+                </label>
+                <div class="feedback-actions">
+                    <span class="char-count" id="feedback-count">0 / 2000</span>
+                    <button class="btn btn-primary" id="feedback-submit">Send feedback</button>
+                </div>
+            </div>
+            <div id="feedback-done" class="feedback-done" hidden></div>
+        </div>
+
+        <!-- Suggest a Title tab -->
+        <div class="tab-panel" id="tab-suggest" role="tabpanel" hidden>
+            <div id="suggest-form">
+                <label class="field">
+                    <span>Movie or show title</span>
+                    <div class="suggest-search-row">
+                        <input type="text" id="suggest-input" maxlength="200" placeholder="e.g. The Thing (1982)">
+                        <button class="btn btn-primary" id="suggest-search">Search</button>
+                    </div>
+                </label>
+                <p class="muted suggest-hint">We'll look it up in our movie databases so you can confirm the right
+                    match. Can't find it? You can still suggest it.</p>
+                <div id="suggest-results"></div>
+            </div>
+            <div id="suggest-done" class="feedback-done" hidden></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Tabs ───────────────────────────────────────────────────────
+function showTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        const on = b.dataset.tab === tab;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    document.querySelectorAll('.tab-panel').forEach(p => {
+        p.hidden = p.id !== `tab-${tab}`;
+    });
+}
+document.querySelectorAll('.tab-btn').forEach(b => {
+    b.addEventListener('click', () => showTab(b.dataset.tab));
+});
+
+function errMsg(data, fallback) {
+    return (data && typeof data.detail === 'string') ? data.detail : fallback;
+}
+
+// ── Feedback ───────────────────────────────────────────────────
+const fbInput = document.getElementById('feedback-input');
+const fbCount = document.getElementById('feedback-count');
+fbInput.addEventListener('input', () => { fbCount.textContent = `${fbInput.value.length} / 2000`; });
+document.getElementById('feedback-submit').addEventListener('click', submitFeedback);
+
+async function submitFeedback() {
+    const body = fbInput.value.trim();
+    if (!body) { showToast('Please enter some feedback first', 'error'); return; }
+    const btn = document.getElementById('feedback-submit');
+    btn.disabled = true;
+    let resp;
+    try {
+        resp = await fetch('/feedback/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ body }),
+        });
+    } catch (e) { showToast('Network error', 'error'); btn.disabled = false; return; }
+    const data = await resp.json().catch(() => ({}));
+    if (resp.ok) {
+        document.getElementById('feedback-form').hidden = true;
+        const done = document.getElementById('feedback-done');
+        done.hidden = false;
+        done.innerHTML = `<div class="thanks-icon">✓</div>
+            <p>${escapeHtml(data.message || 'Thanks for your feedback!')}</p>
+            <div class="feedback-done-actions">
+                <button class="btn btn-sm" id="feedback-again">Send more feedback</button>
+            </div>`;
+        document.getElementById('feedback-again').addEventListener('click', resetFeedback);
+    } else {
+        showToast(errMsg(data, 'Could not send feedback'), 'error');
+        btn.disabled = false;
+    }
+}
+
+function resetFeedback() {
+    fbInput.value = '';
+    fbCount.textContent = '0 / 2000';
+    document.getElementById('feedback-done').hidden = true;
+    document.getElementById('feedback-form').hidden = false;
+    document.getElementById('feedback-submit').disabled = false;
+}
+
+// ── Suggest a Title ────────────────────────────────────────────
+const sgInput = document.getElementById('suggest-input');
+let lastQuery = '';
+let lastCandidates = [];
+
+document.getElementById('suggest-search').addEventListener('click', searchTitles);
+sgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); searchTitles(); }
+});
+
+async function searchTitles() {
+    const query = sgInput.value.trim();
+    if (!query) { showToast('Enter a title to search', 'error'); return; }
+    lastQuery = query;
+    const btn = document.getElementById('suggest-search');
+    const results = document.getElementById('suggest-results');
+    btn.disabled = true;
+    results.innerHTML = '<p class="muted">Searching…</p>';
+    let resp;
+    try {
+        resp = await fetch('/feedback/suggest/resolve', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query }),
+        });
+    } catch (e) { results.innerHTML = ''; showToast('Network error', 'error'); btn.disabled = false; return; }
+    btn.disabled = false;
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        results.innerHTML = '';
+        showToast(errMsg(data, 'Search failed'), 'error');
+        return;
+    }
+    lastCandidates = data.candidates || [];
+    renderCandidates(lastCandidates);
+}
+
+function renderCandidates(candidates) {
+    const results = document.getElementById('suggest-results');
+    let html = '';
+    if (candidates.length) {
+        html += '<p class="muted">Pick the match you meant:</p><div class="candidate-grid">';
+        html += candidates.map((c, i) => {
+            const year = c.year ? ` <span class="cand-year">(${escapeHtml(c.year)})</span>` : '';
+            const poster = c.poster_url
+                ? `<img class="cand-poster" src="${escapeHtml(c.poster_url)}" alt="" loading="lazy">`
+                : `<div class="cand-poster cand-poster-empty">No art</div>`;
+            const have = c.catalog_token
+                ? `<a class="cand-have" href="/catalog/item/${encodeURIComponent(c.catalog_token)}" target="_blank" rel="noopener">Already on Channel-Z ↗</a>`
+                : '';
+            const src = (c.source || '').toLowerCase();
+            const badge = src ? `<span class="cand-source cand-source-${escapeHtml(src)}">${escapeHtml(src.toUpperCase())}</span>` : '';
+            return `<div class="candidate">
+                    ${poster}
+                    <div class="cand-body">
+                        <div class="cand-title">${escapeHtml(c.title || '')}${year}</div>
+                        <div class="cand-meta">${badge}${have}</div>
+                        <button class="btn btn-sm btn-primary cand-pick" data-idx="${i}">Suggest this</button>
+                    </div>
+                </div>`;
+        }).join('');
+        html += '</div>';
+    } else {
+        html += '<p class="muted">No database matches found — but you can still suggest it below.</p>';
+    }
+    html += `<div class="suggest-fallback">
+            <button class="btn btn-sm" id="suggest-unresolved">Can't find it — suggest "<span id="uq"></span>" anyway</button>
+        </div>`;
+    results.innerHTML = html;
+    document.getElementById('uq').textContent = lastQuery;
+    results.querySelectorAll('.cand-pick').forEach(b => {
+        b.addEventListener('click', () => submitSuggestion(candidates[Number(b.dataset.idx)]));
+    });
+    document.getElementById('suggest-unresolved').addEventListener('click', () => submitSuggestion(null));
+}
+
+async function submitSuggestion(choice) {
+    const payload = choice
+        ? {
+            query: lastQuery,
+            choice: {
+                source: choice.source, id: choice.id, title: choice.title,
+                year: choice.year, media_type: choice.media_type, poster_url: choice.poster_url,
+            },
+        }
+        : { query: lastQuery, unresolved: true };
+    let resp;
+    try {
+        resp = await fetch('/feedback/suggest/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+    } catch (e) { showToast('Network error', 'error'); return; }
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        showToast(errMsg(data, 'Could not submit suggestion'), 'error');
+        return;
+    }
+    document.getElementById('suggest-form').hidden = true;
+    const done = document.getElementById('suggest-done');
+    done.hidden = false;
+    let extra = '';
+    if (data.resolution === 'already_have' && data.catalog_token) {
+        extra = `<a class="btn btn-sm btn-primary" href="/catalog/item/${encodeURIComponent(data.catalog_token)}">Watch it now</a> `;
+    }
+    done.innerHTML = `<div class="thanks-icon">✓</div>
+        <p>${escapeHtml(data.message || 'Thanks for the suggestion!')}</p>
+        <div class="feedback-done-actions">${extra}<button class="btn btn-sm" id="suggest-again">Suggest another</button></div>`;
+    document.getElementById('suggest-again').addEventListener('click', resetSuggest);
+}
+
+function resetSuggest() {
+    sgInput.value = '';
+    lastCandidates = [];
+    document.getElementById('suggest-results').innerHTML = '';
+    document.getElementById('suggest-done').hidden = true;
+    document.getElementById('suggest-form').hidden = false;
+}
+
+showTab('feedback');
+</script>
+{% endblock %}

@@ -184,6 +184,15 @@ async def user_dashboard_page(request: Request):
     return templates.TemplateResponse(request, "user/dashboard.html", {"user": user})
 
 
+@router.get("/feedback", response_class=HTMLResponse)
+async def feedback_page(request: Request):
+    """Public feedback + 'Suggest a Title' page (login required)."""
+    user = _get_user_or_none(request)
+    if not user:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "feedback/index.html", {"user": user})
+
+
 @router.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request):
     user = _get_user_or_none(request)

@@ -27,7 +27,7 @@
 
   .race-track { margin: 0.6rem 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
   .lane {
-    position: relative; display: grid; grid-template-columns: 2.2rem 12.5rem 1fr auto;
+    position: relative; display: grid; grid-template-columns: 2.2rem 12.5rem 1fr 6rem;
     align-items: center; gap: 0.7rem; padding: 0.4rem 0.55rem; border-radius: 11px;
     background: #11141a; border: 1px solid #232a33; transition: border-color 0.3s, box-shadow 0.3s;
   }
@@ -41,9 +41,9 @@
   .lane-color { display: flex; align-items: center; gap: 0.4rem; font-weight: 700; font-size: 0.92rem; }
   .lane-swatch { width: 0.8rem; height: 0.8rem; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 0 1px #0006 inset; }
   .lane-driver { font-size: 0.78rem; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .lane-meta { text-align: right; font-variant-numeric: tabular-nums; }
-  .lane-odds { font-weight: 700; font-size: 0.9rem; }
-  .lane-amt { font-size: 0.74rem; opacity: 0.72; }
+  .lane-meta { width: 6rem; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; }
+  .lane-odds { font-weight: 700; font-size: 0.9rem; white-space: nowrap; }
+  .lane-amt { font-size: 0.74rem; opacity: 0.72; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* Track rail with start/finish color markers and a moving car. */
   .lane-rail {
@@ -84,7 +84,8 @@
   .race-idle { text-align: center; opacity: 0.7; padding: 3rem 1rem; }
 
   @media (max-width: 640px) {
-    .lane { grid-template-columns: 1.7rem 1fr auto; }
+    .lane { grid-template-columns: 1.7rem 1fr 5rem; }
+    .lane-meta { width: 5rem; }
     .lane-rail { grid-column: 1 / -1; order: 5; }
     .lane-driver { white-space: normal; }
   }
@@ -117,6 +118,7 @@
   const COLORS = {
     Blue: '#3b82f6', Red: '#ef4444', Green: '#22c55e',
     Yellow: '#eab308', Purple: '#a855f7', Orange: '#f97316',
+    Brown: '#b45309', White: '#e5e7eb',
   };
   const colorOf = (c) => COLORS[c] || '#9aa4af';
 

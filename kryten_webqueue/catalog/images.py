@@ -201,6 +201,109 @@ class CoverArtResolver:
                 logger.warning(f"OMDB search error for {t!r}: {e}")
         return None
 
+    # --- Title suggestion resolution ---------------------------------------
+    # These return *candidate matches* (title/year/poster/id) rather than a
+    # single poster URL, so the "Suggest a Title" UI can let the user confirm
+    # which match they meant. An empty list = unresolved (no keys, or no hits).
+
+    async def search_titles(self, query: str, *, limit: int = 8) -> list[dict]:
+        """Search TMDB + OMDB for title candidates matching ``query``.
+
+        Returns up to ``limit`` candidate dicts, most-relevant first:
+        ``{source, id, title, year, media_type, poster_url}``. TMDB (movie + TV)
+        is primary and ranked by popularity; OMDB supplements when configured.
+        An empty list means "unresolved" — no API keys, or no matches.
+        """
+        query = (query or "").strip()
+        if not query:
+            return []
+
+        candidates: list[dict] = []
+        if self._tmdb_key:
+            candidates.extend(await self._tmdb_candidates(query))
+        if self._omdb_key:
+            candidates.extend(await self._omdb_candidates(query))
+
+        # Dedupe by (lowercased title, year), keeping the most popular instance.
+        seen: dict[tuple, dict] = {}
+        for c in candidates:
+            key = (c["title"].strip().lower(), c["year"] or "")
+            prev = seen.get(key)
+            if prev is None or c["_popularity"] > prev["_popularity"]:
+                seen[key] = c
+        # Stable sort preserves provider order (TMDB before OMDB) within ties.
+        merged = sorted(seen.values(), key=lambda c: c["_popularity"], reverse=True)
+        for c in merged:
+            c.pop("_popularity", None)
+        return merged[:limit]
+
+    async def _tmdb_candidates(self, query: str) -> list[dict]:
+        movie_task = asyncio.create_task(self._tmdb_search_candidates("movie", query))
+        tv_task = asyncio.create_task(self._tmdb_search_candidates("tv", query))
+        movie_hits, tv_hits = await asyncio.gather(movie_task, tv_task)
+        return [*movie_hits, *tv_hits]
+
+    async def _tmdb_search_candidates(self, media_type: str, query: str) -> list[dict]:
+        params = {"api_key": self._tmdb_key, "query": query, "include_adult": "false"}
+        try:
+            resp = await self._client.get(
+                f"https://api.themoviedb.org/3/search/{media_type}", params=params
+            )
+            if resp.status_code != 200:
+                logger.warning(f"TMDB {media_type} suggest search returned {resp.status_code} for {query!r}")
+                return []
+            results = resp.json().get("results", [])
+        except (httpx.HTTPError, ValueError) as e:
+            logger.warning(f"TMDB {media_type} suggest search error for {query!r}: {e}")
+            return []
+        out: list[dict] = []
+        for r in results[:8]:
+            title = (r.get("title") or r.get("name") or "").strip()
+            if not title:
+                continue
+            date = r.get("release_date") or r.get("first_air_date") or ""
+            poster = r.get("poster_path")
+            out.append({
+                "source": "tmdb",
+                "id": str(r.get("id") or ""),
+                "title": title,
+                "year": (date[:4] or None),
+                "media_type": "tv" if media_type == "tv" else "movie",
+                "poster_url": (f"https://image.tmdb.org/t/p/w185{poster}" if poster else None),
+                "_popularity": float(r.get("popularity") or 0.0),
+            })
+        return out
+
+    async def _omdb_candidates(self, query: str) -> list[dict]:
+        cleaned, year = _clean_title(query)
+        params: dict = {"apikey": self._omdb_key, "s": query}
+        if year:
+            params["y"] = year
+        try:
+            resp = await self._client.get("https://www.omdbapi.com/", params=params)
+            if resp.status_code != 200:
+                return []
+            data = resp.json()
+        except (httpx.HTTPError, ValueError) as e:
+            logger.warning(f"OMDB suggest search error for {query!r}: {e}")
+            return []
+        out: list[dict] = []
+        for r in (data.get("Search") or [])[:8]:
+            title = (r.get("Title") or "").strip()
+            if not title:
+                continue
+            poster = r.get("Poster")
+            out.append({
+                "source": "omdb",
+                "id": str(r.get("imdbID") or ""),
+                "title": title,
+                "year": ((r.get("Year") or "")[:4] or None),
+                "media_type": (r.get("Type") or "movie"),
+                "poster_url": (poster if poster and poster != "N/A" else None),
+                "_popularity": 0.0,
+            })
+        return out
+
     async def _save_responsive(self, friendly_token: str, data: bytes, source: str, db) -> str:
         """Save image in multiple responsive widths."""
         token_hash = hashlib.md5(friendly_token.encode()).hexdigest()[:8]

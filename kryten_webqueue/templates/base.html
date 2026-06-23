@@ -36,6 +36,7 @@
             <a href="/queue">Queue</a>
             <a href="/race">Race</a>
             {% if user %}
+                <a href="/feedback">Feedback</a>
                 <a href="/user/dashboard">{{ user.username }}</a>
                 {% if user.rank >= 3 %}
                     <a href="/admin">Admin</a>
