@@ -1553,8 +1553,14 @@ a.np-chip {
     margin-top: 0.25rem;
 }
 .char-count { font-size: 0.78rem; color: var(--text-secondary); }
-.suggest-search-row { display: flex; gap: 0.5rem; }
-.suggest-search-row input { flex: 1; }
+/* Keep the Search button pinned to the right end of the input on one row.
+   The input inherits `.field input { width: 100% }`, which fights `flex: 1`
+   in some engines (notably Blink/Opera at wide widths) and makes the input
+   claim the whole row so the button overlaps it. Neutralize that width and
+   let the input shrink; pin the button to its natural size. */
+.suggest-search-row { display: flex; flex-wrap: nowrap; align-items: stretch; gap: 0.5rem; }
+.suggest-search-row input { flex: 1 1 auto; width: auto; min-width: 0; }
+.suggest-search-row .btn { flex: 0 0 auto; white-space: nowrap; }
 .suggest-hint { margin-top: 0.5rem; }
 
 /* Confirmation / thank-you panel */
@@ -1573,6 +1579,15 @@ a.np-chip {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 0.75rem;
     margin: 0.75rem 0;
+}
+/* The feedback form is intentionally a narrow, readable column, but the search
+   results should use the wide screen. Break the results out of the 760px form
+   column and center them on the viewport so more cards fit per row. */
+#suggest-results {
+    width: min(94vw, 1100px);
+    position: relative;
+    left: 50%;
+    transform: translateX(-50%);
 }
 .candidate {
     display: flex;

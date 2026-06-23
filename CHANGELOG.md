@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.27.1] — 2026-06-23
+
+### Fixed
+
+- **"Suggest a Title" search row layout.** The Search button is now reliably pinned to the right end of the title input on the same row, instead of overlapping it on wide viewports (seen in Opera/Blink). The input inherited a `width: 100%` that conflicted with its flex sizing; the row now sizes the input with `flex` + `min-width: 0` and gives the button a fixed natural width.
+- **Suggestion results now use the full width on wide screens.** The candidate cards were confined to the narrow ~760px form column and stacked into many short rows. The results grid now breaks out of the form column and centers on the viewport (up to 1100px), so wide screens show up to four cards per row; it still collapses to fewer columns (and a single column on mobile) as the viewport narrows, with no horizontal overflow.
+
+[0.27.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.27.1
+
 ## [0.27.0] — 2026-06-23
 
 ### Added
