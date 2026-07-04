@@ -96,14 +96,25 @@ class CatalogSync:
 
             await self._db.finish_sync_log(log_id, stats, "completed")
             logger.info(f"Catalog sync complete: {stats} ({page} pages)")
+        except asyncio.CancelledError:
+            # Server is shutting down — propagate cleanly so JobManager can
+            # record the cancelled status while the DB is still open.
+            logger.info("Catalog sync cancelled (shutdown in progress)")
+            raise
         except httpx.TransportError as exc:
             logger.error(_describe_httpx_error(exc, f"{self._url}/api/v1/media"))
             stats["errors"] += 1
-            await self._db.finish_sync_log(log_id, stats, "error")
+            try:
+                await self._db.finish_sync_log(log_id, stats, "error")
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not persist sync error status (DB unavailable)")
         except Exception as exc:
             logger.exception(f"Catalog sync failed: {type(exc).__name__}: {exc}")
             stats["errors"] += 1
-            await self._db.finish_sync_log(log_id, stats, "error")
+            try:
+                await self._db.finish_sync_log(log_id, stats, "error")
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not persist sync error status (DB unavailable)")
 
     async def _process_item(self, media: dict, stats: dict):
         token = media.get("friendly_token")

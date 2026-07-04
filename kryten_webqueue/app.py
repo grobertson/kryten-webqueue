@@ -227,9 +227,11 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
+    # Shutdown — order matters: cancel in-flight work before closing resources.
     for task in bg_tasks:
         task.cancel()
+    await asyncio.gather(*bg_tasks, return_exceptions=True)
+    await job_manager.stop()  # cancel running jobs while DB/client still open
     await poller.stop()
     await race_poller.stop()
     await scheduler.stop()

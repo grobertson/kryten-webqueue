@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.30.0] — 2026-07-04
+
+### Fixed
+
+- **Clean shutdown when a catalog sync (or other job) is in progress.** Previously, shutting the server down while a background job was running caused a cascade of WARNING/ERROR log lines as the database connection and HTTP client were closed underneath the still-running job task. Three changes fix this:
+  - `JobManager` gains a `stop()` method that cancels all in-flight task and awaits them.
+  - The lifespan shutdown now calls `job_manager.stop()` *before* closing the database, HTTP clients, or any other shared resource, so the cancelled tasks can still record their final status cleanly.
+  - Background loop tasks (`bg_tasks`) are now properly awaited after cancellation, preventing "Task exception was never retrieved" warnings.
+  - `JobManager._execute` wraps every database write in a defensive `try/except` so that a race between task teardown and resource teardown never produces an unhandled exception or spurious ERROR log.
+  - `CatalogSync.sync` adds an explicit `asyncio.CancelledError` handler that logs a clean info message and re-raises (letting `JobManager` record the `cancelled` status), and wraps the error-path `finish_sync_log` calls defensively for the same reason.
+
+[0.30.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.30.0
+
 ## [0.29.0] — 2026-07-04
 
 ### Changed

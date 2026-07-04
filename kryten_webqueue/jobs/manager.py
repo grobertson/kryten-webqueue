@@ -158,6 +158,20 @@ class JobManager:
     def is_running(self, name: str) -> bool:
         return name in self._running
 
+    async def stop(self) -> None:
+        """Cancel all running job tasks and wait for them to finish.
+
+        Call this during application shutdown *before* closing shared resources
+        (database, HTTP clients) so that in-progress tasks receive
+        ``CancelledError`` while those resources are still usable.
+        """
+        if not self._running:
+            return
+        logger.info("Stopping %d running job(s) for shutdown", len(self._running))
+        for task in list(self._running.values()):
+            task.cancel()
+        await asyncio.gather(*self._running.values(), return_exceptions=True)
+
     async def run(self, name: str, *, triggered_by: str | None = None,
                   params: dict | None = None) -> dict:
         """Start a job in the background. Returns immediately.
@@ -191,19 +205,28 @@ class JobManager:
             detail = json.dumps(result) if result is not None else None
             await self._db.finish_job_run(run_id, "completed", detail)
         except asyncio.CancelledError:
-            await self._db.finish_job_run(run_id, "cancelled", None)
+            try:
+                await self._db.finish_job_run(run_id, "cancelled", None)
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not persist 'cancelled' status for job '%s' (DB unavailable)", name)
             raise
         except JobError as exc:
             # Expected, user-facing failure (bad input/config): record a clean
             # message and log without a stack trace.
             logger.warning("Job '%s' failed: %s", name, exc)
-            await self._db.finish_job_run(
-                run_id, "failed", json.dumps({"error": str(exc)})
-            )
+            try:
+                await self._db.finish_job_run(
+                    run_id, "failed", json.dumps({"error": str(exc)})
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not persist 'failed' status for job '%s' (DB unavailable)", name)
         except Exception as exc:  # noqa: BLE001 - record any failure
             logger.exception("Job '%s' failed", name)
-            await self._db.finish_job_run(
-                run_id, "failed", json.dumps({"error": f"{type(exc).__name__}: {exc}"})
-            )
+            try:
+                await self._db.finish_job_run(
+                    run_id, "failed", json.dumps({"error": f"{type(exc).__name__}: {exc}"})
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("Could not persist 'failed' status for job '%s' (DB unavailable)", name)
         finally:
             self._running.pop(name, None)
