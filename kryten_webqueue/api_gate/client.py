@@ -145,3 +145,73 @@ class ApiGateClient:
             "request_id": request_id,
             "reason": reason,
         })
+
+    # --- Moderator service status ---
+
+    async def moderator_ping(self) -> dict:
+        return await self.get("/moderator/ping")
+
+    async def moderator_health(self) -> dict:
+        return await self.get("/moderator/health")
+
+    async def moderator_stats(self) -> dict:
+        return await self.get("/moderator/stats")
+
+    # --- Moderation entries ---
+
+    async def mod_list_entries(self, channel: str, action_filter: str | None = None) -> dict:
+        params: dict = {}
+        if action_filter:
+            params["filter"] = action_filter
+        return await self.get(f"/channels/{channel}/moderation", **params)
+
+    async def mod_add_entry(
+        self,
+        channel: str,
+        username: str,
+        action: str,
+        reason: str | None = None,
+        moderator: str | None = None,
+    ) -> dict:
+        body: dict = {"username": username, "action": action}
+        if reason:
+            body["reason"] = reason
+        if moderator:
+            body["moderator"] = moderator
+        return await self.post(f"/channels/{channel}/moderation", json=body)
+
+    async def mod_remove_entry(self, channel: str, username: str) -> dict:
+        return await self.delete(f"/channels/{channel}/moderation/{username}")
+
+    # --- Patterns ---
+
+    async def mod_list_patterns(self, channel: str) -> dict:
+        return await self.get(f"/channels/{channel}/patterns")
+
+    async def mod_add_pattern(
+        self,
+        channel: str,
+        pattern: str,
+        is_regex: bool = False,
+        action: str = "ban",
+        description: str | None = None,
+        added_by: str | None = None,
+    ) -> dict:
+        body: dict = {"pattern": pattern, "is_regex": is_regex, "action": action}
+        if description:
+            body["description"] = description
+        if added_by:
+            body["added_by"] = added_by
+        return await self.post(f"/channels/{channel}/patterns", json=body)
+
+    async def mod_remove_pattern(self, channel: str, pattern: str) -> dict:
+        from urllib.parse import quote
+        encoded = quote(pattern, safe="")
+        return await self.delete(f"/channels/{channel}/patterns/{encoded}")
+
+    # --- Recent users ---
+
+    async def mod_recent_users(self, channel: str, window_minutes: float = 60.0) -> dict:
+        return await self.get(
+            f"/channels/{channel}/users/recent", window_minutes=window_minutes
+        )

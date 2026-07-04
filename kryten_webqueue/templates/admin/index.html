@@ -24,6 +24,7 @@
             <button class="tab-btn" data-tab="sync" role="tab" aria-selected="false">Sync Logs</button>
             <button class="tab-btn" data-tab="feedback" role="tab" aria-selected="false">Feedback <span class="tab-badge" id="feedback-badge" hidden></span></button>
             <button class="tab-btn" data-tab="suggestions" role="tab" aria-selected="false">Suggestions <span class="tab-badge" id="suggestions-badge" hidden></span></button>
+            <button class="tab-btn" data-tab="moderation" role="tab" aria-selected="false">Moderation</button>
         </div>
 
         <div class="tab-panel" id="tab-overview" role="tabpanel">
@@ -81,6 +82,98 @@
                 </div>
                 <div id="suggestions-list">Loading…</div>
             </div>
+        </div>
+
+        <div class="tab-panel" id="tab-moderation" role="tabpanel" hidden>
+
+            <!-- Service status ------------------------------------------------>
+            <div class="admin-section">
+                <div class="queue-head">
+                    <h2>Service Status</h2>
+                    <button class="btn btn-sm" id="mod-status-refresh">Refresh</button>
+                </div>
+                <div id="mod-status-content">Loading…</div>
+            </div>
+
+            <!-- Moderation entries --------------------------------------------->
+            <div class="admin-section">
+                <div class="queue-head">
+                    <h2>Moderation List</h2>
+                    <div class="queue-head-actions">
+                        <div class="mod-filter-btns">
+                            <button class="btn btn-sm mod-filter-btn active" data-filter="">All</button>
+                            <button class="btn btn-sm mod-filter-btn" data-filter="ban">Ban</button>
+                            <button class="btn btn-sm mod-filter-btn" data-filter="smute">SMute</button>
+                            <button class="btn btn-sm mod-filter-btn" data-filter="mute">Mute</button>
+                        </div>
+                        <button class="btn btn-sm" id="mod-entries-refresh">Refresh</button>
+                    </div>
+                </div>
+                <div id="mod-entries-list">Loading…</div>
+                <details class="mod-add-details">
+                    <summary class="btn btn-sm">Add entry…</summary>
+                    <div class="mod-add-form">
+                        <label class="field"><span>Username</span>
+                            <input type="text" id="mod-add-username" placeholder="username" autocomplete="off">
+                        </label>
+                        <label class="field"><span>Action</span>
+                            <select id="mod-add-action">
+                                <option value="ban">Ban</option>
+                                <option value="smute">Soft mute (smute)</option>
+                                <option value="mute">Mute</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Reason (optional)</span>
+                            <input type="text" id="mod-add-reason" placeholder="reason" autocomplete="off">
+                        </label>
+                        <button class="btn btn-primary" onclick="submitAddModEntry()">Add</button>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Patterns -------------------------------------------------------->
+            <div class="admin-section">
+                <div class="queue-head">
+                    <h2>Username Patterns</h2>
+                    <button class="btn btn-sm" id="mod-patterns-refresh">Refresh</button>
+                </div>
+                <div id="mod-patterns-list">Loading…</div>
+                <details class="mod-add-details">
+                    <summary class="btn btn-sm">Add pattern…</summary>
+                    <div class="mod-add-form">
+                        <label class="field"><span>Pattern</span>
+                            <input type="text" id="mod-pat-pattern" placeholder="e.g. spam|hate or ^bot\d+" autocomplete="off">
+                        </label>
+                        <label class="check"><input type="checkbox" id="mod-pat-regex"> Treat as regex</label>
+                        <label class="field"><span>Action</span>
+                            <select id="mod-pat-action">
+                                <option value="ban">Ban</option>
+                                <option value="smute">Soft mute (smute)</option>
+                                <option value="mute">Mute</option>
+                            </select>
+                        </label>
+                        <label class="field"><span>Description (optional)</span>
+                            <input type="text" id="mod-pat-desc" placeholder="e.g. Nazi hate symbol" autocomplete="off">
+                        </label>
+                        <button class="btn btn-primary" onclick="submitAddModPattern()">Add</button>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Recent users ----------------------------------------------------->
+            <div class="admin-section">
+                <div class="queue-head">
+                    <h2>Recent Users</h2>
+                    <div class="queue-head-actions mod-recent-window-row">
+                        <span>Window:</span>
+                        <input type="number" id="mod-recent-window" value="60" min="1" max="10080">
+                        <span>min</span>
+                        <button class="btn btn-sm" onclick="loadRecentUsers()">Load</button>
+                    </div>
+                </div>
+                <div id="mod-recent-list"><p class="empty-state">Click Load to fetch recent users.</p></div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -512,12 +605,13 @@ async function deleteSuggestion(id) {
 }
 
 // ── Tabs (lazy-load feedback/suggestions on first view) ────────
-const adminTabLoaded = { overview: true, jobs: true, sync: true, feedback: false, suggestions: false };
+const adminTabLoaded = { overview: true, jobs: true, sync: true, feedback: false, suggestions: false, moderation: false };
 function loadAdminTabOnce(tab) {
     if (adminTabLoaded[tab]) return;
     adminTabLoaded[tab] = true;
     if (tab === 'feedback') loadFeedback();
     else if (tab === 'suggestions') loadSuggestions();
+    else if (tab === 'moderation') loadModerationTab();
 }
 function showAdminTab(tab) {
     document.querySelectorAll('.admin-tabs-card .tab-btn').forEach(b => {
@@ -537,6 +631,279 @@ document.getElementById('feedback-refresh').addEventListener('click', loadFeedba
 document.getElementById('feedback-unread-only').addEventListener('change', loadFeedback);
 document.getElementById('suggestions-refresh').addEventListener('click', loadSuggestions);
 document.getElementById('suggestions-unread-only').addEventListener('change', loadSuggestions);
+
+// ── Moderation tab ──────────────────────────────────────────────────────────
+async function loadModerationTab() {
+    await Promise.all([loadModStatus(), loadModEntries(), loadModPatterns()]);
+}
+
+// -- Service status --
+async function loadModStatus() {
+    const el = document.getElementById('mod-status-content');
+    el.innerHTML = 'Loading…';
+    try {
+        const resp = await fetch('/admin/moderation/status');
+        if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load status</p>'; return; }
+        renderModStatus(el, await resp.json());
+    } catch (e) { el.innerHTML = '<p class="empty-state">Failed to load status</p>'; }
+}
+
+function renderModStatus(el, data) {
+    const p = data.ping || {};
+    const h = data.health || {};
+    const s = data.stats || {};
+    const ok = h.status === 'healthy' || p.pong === true;
+    const statusColor = ok ? 'var(--success)' : 'var(--danger)';
+    function fmt(val) { return val != null ? escapeHtml(String(val)) : '—'; }
+    function fmtUptime(sec) {
+        if (sec == null) return '—';
+        const hh = Math.floor(sec / 3600), mm = Math.floor((sec % 3600) / 60);
+        return hh ? `${hh}h ${mm}m` : `${mm}m`;
+    }
+    const version = h.version || p.version;
+    const uptime = h.uptime_seconds != null ? h.uptime_seconds : p.uptime_seconds;
+    el.innerHTML = `<div class="mod-status-grid">
+        <div class="mod-stat">
+            <span class="mod-stat-label">Status</span>
+            <span class="mod-stat-value" style="color:${statusColor}">${ok ? 'healthy' : (h.status ? escapeHtml(h.status) : 'unknown')}</span>
+        </div>
+        <div class="mod-stat">
+            <span class="mod-stat-label">Version</span>
+            <span class="mod-stat-value">${fmt(version)}</span>
+        </div>
+        <div class="mod-stat">
+            <span class="mod-stat-label">Uptime</span>
+            <span class="mod-stat-value">${fmtUptime(uptime)}</span>
+        </div>
+        <div class="mod-stat">
+            <span class="mod-stat-label">Users tracked</span>
+            <span class="mod-stat-value">${fmt(s.users_tracked)}</span>
+        </div>
+        <div class="mod-stat">
+            <span class="mod-stat-label">Bans enforced</span>
+            <span class="mod-stat-value">${fmt(s.bans_enforced)}</span>
+        </div>
+        <div class="mod-stat">
+            <span class="mod-stat-label">Mutes enforced</span>
+            <span class="mod-stat-value">${fmt(s.mutes_enforced)}</span>
+        </div>
+    </div>`;
+}
+
+document.getElementById('mod-status-refresh').addEventListener('click', loadModStatus);
+
+// -- Moderation entries --
+let _modEntriesFilter = '';
+
+async function loadModEntries() {
+    const el = document.getElementById('mod-entries-list');
+    el.innerHTML = 'Loading…';
+    try {
+        const qs = _modEntriesFilter ? `?filter=${encodeURIComponent(_modEntriesFilter)}` : '';
+        const resp = await fetch(`/admin/moderation/entries${qs}`);
+        if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; return; }
+        renderModEntries(el, (await resp.json()).entries || []);
+    } catch (e) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; }
+}
+
+function renderModEntries(el, entries) {
+    if (!entries.length) { el.innerHTML = '<p class="empty-state">No moderation entries.</p>'; return; }
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>Username</th><th>Action</th><th>Reason</th><th>Moderator</th><th>Added</th><th></th></tr>
+        ${entries.map(e => `<tr>
+            <td>${escapeHtml(e.username || '')}</td>
+            <td><span class="mod-action mod-action-${escapeHtml(e.action || '')}">${escapeHtml(e.action || '')}</span></td>
+            <td>${escapeHtml(e.reason || '—')}</td>
+            <td>${escapeHtml(e.moderator || '—')}</td>
+            <td>${e.added_at ? formatLocalDateTime(e.added_at) : '—'}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="removeModEntry(${JSON.stringify(e.username)})">Remove</button></td>
+        </tr>`).join('')}
+    </table>`;
+}
+
+async function removeModEntry(username) {
+    if (!confirm(`Remove moderation for "${username}"?`)) return;
+    const resp = await fetch(`/admin/moderation/entries/${encodeURIComponent(username)}`, { method: 'DELETE' });
+    showToast(resp.ok ? `Removed ${username}` : 'Failed to remove', resp.ok ? 'success' : 'error');
+    if (resp.ok) loadModEntries();
+}
+
+async function submitAddModEntry() {
+    const username = document.getElementById('mod-add-username').value.trim();
+    const action = document.getElementById('mod-add-action').value;
+    const reason = document.getElementById('mod-add-reason').value.trim();
+    if (!username) { showToast('Username required', 'error'); return; }
+    const resp = await fetch('/admin/moderation/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, action, reason: reason || null }),
+    });
+    if (resp.ok) {
+        showToast(`${action} applied to ${username}`, 'success');
+        document.getElementById('mod-add-username').value = '';
+        document.getElementById('mod-add-reason').value = '';
+        loadModEntries();
+    } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || 'Failed', 'error');
+    }
+}
+
+document.getElementById('mod-entries-refresh').addEventListener('click', loadModEntries);
+document.querySelectorAll('.mod-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.mod-filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        _modEntriesFilter = btn.dataset.filter;
+        loadModEntries();
+    });
+});
+
+// -- Patterns --
+async function loadModPatterns() {
+    const el = document.getElementById('mod-patterns-list');
+    el.innerHTML = 'Loading…';
+    try {
+        const resp = await fetch('/admin/moderation/patterns');
+        if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; return; }
+        renderModPatterns(el, (await resp.json()).patterns || []);
+    } catch (e) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; }
+}
+
+function renderModPatterns(el, patterns) {
+    if (!patterns.length) { el.innerHTML = '<p class="empty-state">No patterns configured.</p>'; return; }
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>Pattern</th><th>Regex</th><th>Action</th><th>Description</th><th>Added by</th><th></th></tr>
+        ${patterns.map(p => `<tr>
+            <td><code>${escapeHtml(p.pattern || '')}</code></td>
+            <td>${p.is_regex ? '✓' : ''}</td>
+            <td><span class="mod-action mod-action-${escapeHtml(p.action || '')}">${escapeHtml(p.action || '')}</span></td>
+            <td>${escapeHtml(p.description || '—')}</td>
+            <td>${escapeHtml(p.added_by || '—')}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="removeModPattern(${JSON.stringify(p.pattern)})">Remove</button></td>
+        </tr>`).join('')}
+    </table>`;
+}
+
+async function removeModPattern(pattern) {
+    if (!confirm(`Remove pattern "${pattern}"?`)) return;
+    const resp = await fetch(`/admin/moderation/patterns/${encodeURIComponent(pattern)}`, { method: 'DELETE' });
+    showToast(resp.ok ? 'Pattern removed' : 'Failed to remove', resp.ok ? 'success' : 'error');
+    if (resp.ok) loadModPatterns();
+}
+
+async function submitAddModPattern() {
+    const pattern = document.getElementById('mod-pat-pattern').value.trim();
+    const isRegex = document.getElementById('mod-pat-regex').checked;
+    const action = document.getElementById('mod-pat-action').value;
+    const description = document.getElementById('mod-pat-desc').value.trim();
+    if (!pattern) { showToast('Pattern required', 'error'); return; }
+    const resp = await fetch('/admin/moderation/patterns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern, is_regex: isRegex, action, description: description || null }),
+    });
+    if (resp.ok) {
+        showToast('Pattern added', 'success');
+        document.getElementById('mod-pat-pattern').value = '';
+        document.getElementById('mod-pat-desc').value = '';
+        document.getElementById('mod-pat-regex').checked = false;
+        loadModPatterns();
+    } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || 'Failed', 'error');
+    }
+}
+
+document.getElementById('mod-patterns-refresh').addEventListener('click', loadModPatterns);
+
+// -- Recent users --
+async function loadRecentUsers() {
+    const el = document.getElementById('mod-recent-list');
+    const minutes = parseFloat(document.getElementById('mod-recent-window').value) || 60;
+    el.innerHTML = 'Loading…';
+    try {
+        const resp = await fetch(`/admin/moderation/recent?window_minutes=${encodeURIComponent(minutes)}`);
+        if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; return; }
+        renderRecentUsers(el, (await resp.json()).users || []);
+    } catch (e) { el.innerHTML = '<p class="empty-state">Failed to load</p>'; }
+}
+
+function renderRecentUsers(el, users) {
+    if (!users.length) { el.innerHTML = '<p class="empty-state">No recent users in this window.</p>'; return; }
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>Username</th><th>First seen</th><th>Last seen</th><th>Sessions</th><th>Status</th><th></th></tr>
+        ${users.map(u => {
+            const modBadge = u.moderation_action
+                ? `<span class="mod-action mod-action-${escapeHtml(u.moderation_action)}">${escapeHtml(u.moderation_action)}</span>`
+                : '<span class="muted">—</span>';
+            const actionBtn = u.moderation_action
+                ? ''
+                : `<button class="btn btn-sm" onclick="openModUserModal(${JSON.stringify(u.username)})">Moderate…</button>`;
+            return `<tr>
+                <td>${escapeHtml(u.username || '')}</td>
+                <td>${u.first_seen ? formatLocalDateTime(u.first_seen) : '—'}</td>
+                <td>${u.last_seen ? formatLocalDateTime(u.last_seen) : '—'}</td>
+                <td>${u.session_count != null ? u.session_count : '—'}</td>
+                <td>${modBadge}</td>
+                <td>${actionBtn}</td>
+            </tr>`;
+        }).join('')}
+    </table>`;
+}
+
+function openModUserModal(username) {
+    const existing = document.getElementById('mod-user-modal');
+    if (existing) existing.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'mod-user-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>Moderate: ${escapeHtml(username)}</h3>
+            <label class="field"><span>Action</span>
+                <select id="mod-user-action">
+                    <option value="ban">Ban</option>
+                    <option value="smute">Soft mute (smute)</option>
+                    <option value="mute">Mute</option>
+                </select>
+            </label>
+            <label class="field"><span>Reason (optional)</span>
+                <input type="text" id="mod-user-reason" placeholder="e.g. spamming">
+            </label>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                <button class="btn btn-danger" data-action="apply">Apply</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', async (e) => {
+        if (e.target === overlay) { overlay.remove(); return; }
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') { overlay.remove(); return; }
+        if (action === 'apply') await _submitModUser(username, overlay);
+    });
+    document.body.appendChild(overlay);
+    document.getElementById('mod-user-reason').focus();
+}
+
+async function _submitModUser(username, overlay) {
+    const action = document.getElementById('mod-user-action').value;
+    const reason = document.getElementById('mod-user-reason').value.trim();
+    overlay.remove();
+    const resp = await fetch('/admin/moderation/entries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, action, reason: reason || null }),
+    });
+    if (resp.ok) {
+        showToast(`${action} applied to ${username}`, 'success');
+        loadRecentUsers();
+        loadModEntries();
+    } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || 'Failed', 'error');
+    }
+}
 
 loadAdminData();
 loadJobs();

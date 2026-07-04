@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.28.0] — 2026-07-04
+
+### Added
+
+- **Moderation tab on the admin dashboard.** A new "Moderation" tab provides full-coverage access to the kryten-moderator service without leaving the admin panel. Four sections are lazy-loaded on first open:
+  - *Service Status* — compact stat grid showing live health, version, uptime, users tracked, bans enforced, and mutes enforced (with a Refresh button).
+  - *Moderation List* — filterable table (All / Ban / SMute / Mute) of active entries, showing username, action badge, reason, issuing moderator, and timestamp. Entries can be removed individually (with confirmation); new entries are added via an inline "Add entry…" collapsible form (username, action, optional reason). The logged-in admin's username is recorded as the moderator automatically.
+  - *Username Patterns* — table of banned username patterns with regex indicator, action badge, description, and who added them. Patterns can be removed individually; new ones are added via an inline "Add pattern…" form with a regex toggle.
+  - *Recent Users* — configurable look-back window (minutes) loads a table of users recently seen in the channel, sorted by last-seen descending. Unmoderated users show a "Moderate…" button that opens a modal to pick an action and optional reason, immediately adding a moderation entry and refreshing both the recent-users and moderation-list tables.
+- New `GET|POST|DELETE /admin/moderation/entries[/{username}]`, `GET|POST|DELETE /admin/moderation/patterns[/{pattern}]`, `GET /admin/moderation/recent`, and `GET /admin/moderation/status` proxy endpoints (admin-only); the configured `channel` is resolved server-side so it never needs to be specified in the UI.
+
+### Changed
+
+- **`catalog/db.py` split into `catalog/db/` package.** The monolithic database module has been broken into four focused mixins (`_CatalogMixin`, `_PlaylistsMixin`, `_QueueMixin`, `_FeedbackMixin`) wired together in a single `Database` class. Public API is unchanged.
+
+[0.28.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.28.0
+
 ## [0.27.1] — 2026-06-23
 
 ### Fixed

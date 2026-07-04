@@ -33,6 +33,7 @@ from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
 from .routes.admin_catalog import router as admin_catalog_router
 from .routes.admin_promos import router as admin_promos_router
+from .routes.admin_moderation import router as admin_moderation_router
 from .routes.feedback import router as feedback_router
 from .routes.admin_feedback import router as admin_feedback_router
 from .routes.pages import router as pages_router
@@ -260,6 +261,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_jobs_router)
     app.include_router(admin_catalog_router)
     app.include_router(admin_promos_router)
+    app.include_router(admin_moderation_router)
     app.include_router(feedback_router)
     app.include_router(admin_feedback_router)
     app.include_router(ws_router)

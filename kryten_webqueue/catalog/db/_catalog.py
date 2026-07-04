@@ -1,0 +1,619 @@
+import aiosqlite
+import re
+from datetime import datetime, UTC
+
+
+# Categories and tags whose items are hidden from the public catalog (dropdowns
+# and search results). Admins can opt to reveal them. Matched by exact name.
+HIDDEN_CATEGORY_NAMES = [
+    "Z Channel Promos",
+    "Z Event Movies",
+    "Weekday Z Promos",
+]
+HIDDEN_TAG_NAMES = [
+    "grindhousebumper",
+    "commercialsforbumpers",
+    "bumpers",
+    "channelz",
+    "grindhousetrailer",
+    "publicaccess",
+    "religioustv",
+    "kryten-hidden",
+]
+
+# Tag applied by the admin "Hide Item" action. Source of truth is MediaCMS;
+# this is mirrored into the local catalog_tags join so the hidden-tag filter
+# applies immediately (before the next sync confirms it).
+HIDDEN_ITEM_TAG = "kryten-hidden"
+
+
+def _slugify(text: str) -> str:
+    """Derive a URL-safe slug from a category title."""
+    s = (text or "").strip().lower()
+    s = re.sub(r"[^\w\s-]", "", s)
+    s = re.sub(r"[\s_-]+", "-", s)
+    return s.strip("-") or "untitled"
+
+
+def _normalize_title(title: str) -> str:
+    """Normalize a media title for equality comparison.
+
+    Lowercases, drops parenthetical/bracketed chunks and any 4-digit year, and
+    collapses remaining non-alphanumerics to single spaces. Lets a clean
+    database title ("The Matrix") match a catalog title ("The Matrix (1999)").
+    """
+    s = (title or "").lower()
+    s = re.sub(r"[\(\[][^\)\]]*[\)\]]", " ", s)
+    s = re.sub(r"\b(?:19|20)\d{2}\b", " ", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return " ".join(s.split())
+
+
+def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
+    """SQL fragment (+ params) excluding items in hidden categories/tags.
+
+    The fragment is prefixed with ``AND`` so it can be appended to an existing
+    WHERE clause that references the catalog row under ``alias``.
+    """
+    cat_ph = ",".join("?" * len(HIDDEN_CATEGORY_NAMES))
+    tag_ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
+    sql = f"""
+            AND {alias}.friendly_token NOT IN (
+                SELECT cc.friendly_token FROM catalog_categories cc
+                JOIN categories cat ON cc.category_id = cat.id
+                WHERE cat.name IN ({cat_ph})
+            )
+            AND {alias}.friendly_token NOT IN (
+                SELECT ct.friendly_token FROM catalog_tags ct
+                JOIN tags t ON ct.tag_id = t.id
+                WHERE t.name IN ({tag_ph})
+            )
+    """
+    return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
+
+
+def _facet_filter(alias: str, category: str | None, tag: str | None) -> tuple[str, list]:
+    """SQL fragment (+ params) AND-filtering by a category slug and/or tag name.
+
+    Each filter is an ``AND friendly_token IN (...)`` subquery on the catalog row
+    under ``alias``; an absent filter contributes nothing. Shared by browse() and
+    search() so the two paths narrow results identically.
+    """
+    sql = ""
+    params: list = []
+    if category:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT cc.friendly_token FROM catalog_categories cc
+                JOIN categories cat ON cc.category_id = cat.id
+                WHERE cat.slug = ?
+            )
+        """
+        params.append(category)
+    if tag:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT ct.friendly_token FROM catalog_tags ct
+                JOIN tags t ON ct.tag_id = t.id
+                WHERE t.name = ?
+            )
+        """
+        params.append(tag)
+    return sql, params
+
+
+# Default quality-weighted ordering (see browse() for rationale).
+_DEFAULT_ORDER = """
+    ORDER BY
+        (c.cover_art_source IN ('tmdb', 'omdb')) DESC,
+        (CASE WHEN c.title GLOB '[A-Za-z]*' THEN 0 ELSE 1 END) ASC,
+        c.title ASC
+"""
+
+# Map a user-facing sort key to an ORDER BY clause referencing the catalog row
+# under alias ``c``. Unknown keys fall back to the default quality ordering.
+_SORT_CLAUSES = {
+    "default": _DEFAULT_ORDER,
+    "title_asc": " ORDER BY c.title ASC ",
+    "title_desc": " ORDER BY c.title DESC ",
+    "newest": " ORDER BY c.added_at DESC, c.synced_at DESC ",
+    "oldest": " ORDER BY c.added_at ASC, c.synced_at ASC ",
+}
+
+
+def _browse_order_clause(sort: str | None) -> str:
+    return _SORT_CLAUSES.get(sort or "default", _DEFAULT_ORDER)
+
+
+class _CatalogMixin:
+    """Catalog browse/search, sync log, job runs, and OTP methods."""
+
+    # --- Catalog ---
+
+    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
+        query = """
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
+            FROM catalog c
+            WHERE c.friendly_token NOT IN (
+                SELECT spi.media_id FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+            )
+        """
+        params: list = []
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            query += excl_sql
+            params.extend(excl_params)
+        if category:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cc.friendly_token FROM catalog_categories cc
+                    JOIN categories cat ON cc.category_id = cat.id
+                    WHERE cat.slug = ?
+                )
+            """
+            params.append(category)
+        if tag:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT ct.friendly_token FROM catalog_tags ct
+                    JOIN tags t ON ct.tag_id = t.id
+                    WHERE t.name = ?
+                )
+            """
+            params.append(tag)
+        # Quality-weighted ordering so the landing page leads with presentable
+        # items instead of alphabetical junk. No curation required — every signal
+        # is derived from existing data:
+        #   1. Items with REAL box art first. The strong signal is a poster match
+        #      from TMDB/OMDB (cover_art_source), NOT mere presence of a
+        #      cover_art_path/thumbnail_url — almost every item carries a MediaCMS
+        #      thumbnail, and the resolver also caches that thumbnail as a
+        #      last-resort cover (cover_art_source = 'thumbnail'). A genuine
+        #      poster match also implies a well-formed, matchable title.
+        #   2. Titles beginning with a letter before number/symbol-prefixed
+        #      "02 - Episode" style entries.
+        #   3. Finally alphabetical for a stable, predictable tail.
+        query += _browse_order_clause(sort)
+        query += " LIMIT ? OFFSET ?"
+        params.extend([per_page, (page - 1) * per_page])
+        return await self._fetch_all(query, params)
+
+    async def browse_count(self, *, category: str | None = None, tag: str | None = None, show_hidden: bool = False) -> int:
+        query = """
+            SELECT COUNT(*) as cnt FROM catalog c
+            WHERE c.friendly_token NOT IN (
+                SELECT spi.media_id FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+            )
+        """
+        params: list = []
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            query += excl_sql
+            params.extend(excl_params)
+        if category:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cc.friendly_token FROM catalog_categories cc
+                    JOIN categories cat ON cc.category_id = cat.id
+                    WHERE cat.slug = ?
+                )
+            """
+            params.append(category)
+        if tag:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT ct.friendly_token FROM catalog_tags ct
+                    JOIN tags t ON ct.tag_id = t.id
+                    WHERE t.name = ?
+                )
+            """
+            params.append(tag)
+        row = await self._fetch_one(query, params)
+        return row["cnt"] if row else 0
+
+    async def search(self, query_text: str, *, category: str | None = None, tag: str | None = None,
+                     page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
+        sql = """
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
+                   rank AS relevance
+            FROM catalog_fts fts
+            JOIN catalog c ON c.rowid = fts.rowid
+            WHERE catalog_fts MATCH ?
+              AND c.friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+              )
+        """
+        params: list = [query_text]
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            sql += excl_sql
+            params.extend(excl_params)
+        # Category/tag facets AND with the text match (same subqueries browse()
+        # uses), so a search can be narrowed by the selected facets.
+        facet_sql, facet_params = _facet_filter("c", category, tag)
+        sql += facet_sql
+        params.extend(facet_params)
+        # Relevance is the natural default for a text query; other sort keys let
+        # the user reorder the matched set explicitly.
+        sql += " ORDER BY rank " if (sort or "default") == "default" else _browse_order_clause(sort)
+        sql += " LIMIT ? OFFSET ? "
+        params.extend([per_page, (page - 1) * per_page])
+        return await self._fetch_all(sql, params)
+
+    async def search_count(self, query_text: str, *, category: str | None = None, tag: str | None = None,
+                           show_hidden: bool = False) -> int:
+        sql = """
+            SELECT COUNT(*) as cnt
+            FROM catalog_fts fts
+            JOIN catalog c ON c.rowid = fts.rowid
+            WHERE catalog_fts MATCH ?
+              AND c.friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+              )
+        """
+        params: list = [query_text]
+        if not show_hidden:
+            excl_sql, excl_params = _hidden_exclusion("c")
+            sql += excl_sql
+            params.extend(excl_params)
+        facet_sql, facet_params = _facet_filter("c", category, tag)
+        sql += facet_sql
+        params.extend(facet_params)
+        row = await self._fetch_one(sql, params)
+        return row["cnt"] if row else 0
+
+    async def get_item(self, friendly_token: str) -> dict | None:
+        sql = """
+            SELECT * FROM catalog
+            WHERE friendly_token = ?
+              AND friendly_token NOT IN (
+                  SELECT spi.media_id FROM saved_playlist_items spi
+                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+              )
+        """
+        return await self._fetch_one(sql, [friendly_token])
+
+    async def get_item_admin(self, friendly_token: str) -> dict | None:
+        return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
+
+    async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
+        """Return a lookup of catalog metadata keyed by BOTH friendly_token and
+        manifest_url, for enriching queue-shadow items that may only carry one.
+        """
+        keys = [k for k in ({*tokens} | {*manifest_urls}) if k]
+        if not keys:
+            return {}
+        placeholders = ",".join("?" * len(keys))
+        rows = await self._fetch_all(
+            "SELECT friendly_token, manifest_url, title, duration_sec, "
+            "cover_art_path, thumbnail_url FROM catalog "
+            f"WHERE friendly_token IN ({placeholders}) OR manifest_url IN ({placeholders})",
+            keys + keys,
+        )
+        lookup: dict[str, dict] = {}
+        for row in rows:
+            data = dict(row)
+            if data.get("friendly_token"):
+                lookup[data["friendly_token"]] = data
+            if data.get("manifest_url"):
+                lookup[data["manifest_url"]] = data
+        return lookup
+
+    async def get_item_facets(self, friendly_token: str) -> dict:
+        """Return description + category/tag names for a single catalog item.
+
+        Used to enrich the now-playing card. Returns empty values when the
+        token is unknown.
+        """
+        if not friendly_token:
+            return {"description": None, "categories": [], "tags": []}
+        row = await self._fetch_one(
+            "SELECT description FROM catalog WHERE friendly_token = ?", [friendly_token]
+        )
+        cats = await self._fetch_all(
+            "SELECT cat.name, cat.slug FROM categories cat "
+            "JOIN catalog_categories cc ON cc.category_id = cat.id "
+            "WHERE cc.friendly_token = ? ORDER BY cat.name",
+            [friendly_token],
+        )
+        tags = await self._fetch_all(
+            "SELECT t.name FROM tags t "
+            "JOIN catalog_tags ct ON ct.tag_id = t.id "
+            "WHERE ct.friendly_token = ? ORDER BY t.name",
+            [friendly_token],
+        )
+        return {
+            "description": (row or {}).get("description"),
+            "categories": [{"name": c["name"], "slug": c["slug"]} for c in cats],
+            "tags": [t["name"] for t in tags],
+        }
+
+    async def is_restricted(self, friendly_token: str) -> bool:
+        sql = """
+            SELECT 1 FROM saved_playlist_items spi
+            JOIN saved_playlists sp ON spi.playlist_id = sp.id
+            WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL)
+              AND spi.media_type = 'cm'
+              AND spi.media_id = ?
+            LIMIT 1
+        """
+        row = await self._fetch_one(sql, [friendly_token])
+        return row is not None
+
+    async def get_categories(self, *, show_hidden: bool = False) -> list[dict]:
+        """Distinct categories that have at least one catalog item, for facets."""
+        sql = """
+            SELECT c.id, c.name, c.slug, COUNT(cc.friendly_token) AS cnt
+            FROM categories c
+            JOIN catalog_categories cc ON cc.category_id = c.id
+        """
+        params: list = []
+        if not show_hidden:
+            ph = ",".join("?" * len(HIDDEN_CATEGORY_NAMES))
+            sql += f" WHERE c.name NOT IN ({ph})"
+            params.extend(HIDDEN_CATEGORY_NAMES)
+        sql += """
+            GROUP BY c.id, c.name, c.slug
+            ORDER BY c.name
+        """
+        return await self._fetch_all(sql, params)
+
+    async def get_tags(self, *, limit: int = 100, show_hidden: bool = False) -> list[dict]:
+        """Most-used tags that have at least one catalog item, for facets."""
+        sql = """
+            SELECT t.id, t.name, COUNT(ct.friendly_token) AS cnt
+            FROM tags t
+            JOIN catalog_tags ct ON ct.tag_id = t.id
+        """
+        params: list = []
+        if not show_hidden:
+            ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
+            sql += f" WHERE t.name NOT IN ({ph})"
+            params.extend(HIDDEN_TAG_NAMES)
+        sql += """
+            GROUP BY t.id, t.name
+            ORDER BY cnt DESC, t.name ASC
+            LIMIT ?
+        """
+        params.append(limit)
+        return await self._fetch_all(sql, params)
+
+    async def upsert_category(self, name: str) -> int:
+        """Insert a category by name (deriving a unique slug) and return its id."""
+        existing = await self._fetch_one("SELECT id FROM categories WHERE name = ?", [name])
+        if existing:
+            return existing["id"]
+        base = _slugify(name)
+        slug, n = base, 1
+        while await self._fetch_one("SELECT 1 FROM categories WHERE slug = ?", [slug]):
+            n += 1
+            slug = f"{base}-{n}"
+        cursor = await self._db.execute(
+            "INSERT INTO categories (name, slug) VALUES (?, ?)", [name, slug]
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def upsert_tag(self, name: str) -> int:
+        """Insert a tag by name and return its id."""
+        existing = await self._fetch_one("SELECT id FROM tags WHERE name = ?", [name])
+        if existing:
+            return existing["id"]
+        cursor = await self._db.execute("INSERT INTO tags (name) VALUES (?)", [name])
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def set_catalog_categories(self, friendly_token: str, category_ids: list[int]):
+        """Replace the category memberships for a catalog item."""
+        await self._db.execute(
+            "DELETE FROM catalog_categories WHERE friendly_token = ?", [friendly_token]
+        )
+        for cid in category_ids:
+            await self._db.execute(
+                "INSERT OR IGNORE INTO catalog_categories (friendly_token, category_id) VALUES (?, ?)",
+                [friendly_token, cid],
+            )
+        await self._db.commit()
+
+    async def set_catalog_tags(self, friendly_token: str, tag_ids: list[int]):
+        """Replace the tag memberships for a catalog item."""
+        await self._db.execute(
+            "DELETE FROM catalog_tags WHERE friendly_token = ?", [friendly_token]
+        )
+        for tid in tag_ids:
+            await self._db.execute(
+                "INSERT OR IGNORE INTO catalog_tags (friendly_token, tag_id) VALUES (?, ?)",
+                [friendly_token, tid],
+            )
+        await self._db.commit()
+
+    async def add_catalog_tag(self, friendly_token: str, tag_name: str):
+        """Add a single tag to a catalog item (idempotent), creating it if new."""
+        tag_id = await self.upsert_tag(tag_name)
+        await self._db.execute(
+            "INSERT OR IGNORE INTO catalog_tags (friendly_token, tag_id) VALUES (?, ?)",
+            [friendly_token, tag_id],
+        )
+        await self._db.commit()
+
+    async def remove_catalog_tag(self, friendly_token: str, tag_name: str):
+        """Remove a single tag from a catalog item (no-op if absent)."""
+        await self._db.execute(
+            "DELETE FROM catalog_tags WHERE friendly_token = ? AND tag_id IN "
+            "(SELECT id FROM tags WHERE name = ?)",
+            [friendly_token, tag_name],
+        )
+        await self._db.commit()
+
+    async def insert_catalog(self, row: dict):
+        sql = """
+            INSERT INTO catalog (friendly_token, title, description, duration_sec,
+                                 manifest_url, thumbnail_url, added_at, synced_at)
+            VALUES (:friendly_token, :title, :description, :duration_sec,
+                    :manifest_url, :thumbnail_url, :added_at, :synced_at)
+        """
+        row = {"added_at": row.get("synced_at"), **row}
+        await self._db.execute(sql, row)
+        # Update FTS index
+        await self._db.execute(
+            "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
+            "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
+            [row["friendly_token"]],
+        )
+        await self._db.commit()
+
+    async def update_catalog(self, friendly_token: str, row: dict):
+        sql = """
+            UPDATE catalog SET title=:title, description=:description,
+                   duration_sec=:duration_sec, manifest_url=:manifest_url,
+                   thumbnail_url=:thumbnail_url,
+                   added_at=COALESCE(:added_at, added_at),
+                   synced_at=:synced_at, updated_at=:synced_at
+            WHERE friendly_token=:friendly_token
+        """
+        row = {"added_at": None, **row}
+        await self._db.execute(sql, row)
+        # Rebuild FTS for this row
+        await self._db.execute(
+            "DELETE FROM catalog_fts WHERE friendly_token = ?", [friendly_token]
+        )
+        await self._db.execute(
+            "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
+            "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
+            [friendly_token],
+        )
+        await self._db.commit()
+
+    async def update_cover_art(self, friendly_token: str, path: str, source: str):
+        await self._execute(
+            "UPDATE catalog SET cover_art_path=?, cover_art_source=? WHERE friendly_token=?",
+            [path, source, friendly_token],
+        )
+
+    async def find_catalog_by_title(self, title: str) -> dict | None:
+        """Best-effort lookup of a catalog item whose title matches ``title``.
+
+        Used to tell a user we already have a suggested movie. Runs an FTS
+        phrase match to gather candidates, then confirms with a normalized
+        (year/punctuation-stripped, case-insensitive) equality check so loose
+        token overlaps don't produce false "already have" hits. Returns
+        ``{friendly_token, title}`` of the best match, or None.
+        """
+        norm_target = _normalize_title(title)
+        if not norm_target:
+            return None
+        phrase = '"' + (title or "").replace('"', '""') + '"'
+        try:
+            rows = await self._fetch_all(
+                "SELECT c.friendly_token, c.title FROM catalog_fts fts "
+                "JOIN catalog c ON c.rowid = fts.rowid "
+                "WHERE catalog_fts MATCH ? LIMIT 25",
+                [phrase],
+            )
+        except aiosqlite.Error:
+            rows = []
+        for row in rows:
+            if _normalize_title(row["title"]) == norm_target:
+                return {"friendly_token": row["friendly_token"], "title": row["title"]}
+        return None
+
+    # --- Sync log ---
+
+    async def start_sync_log(self) -> int:
+        cursor = await self._db.execute(
+            "INSERT INTO sync_log (started_at, status) VALUES (?, 'running')",
+            [datetime.now(UTC).isoformat()],
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def finish_sync_log(self, log_id: int, stats: dict, status: str):
+        await self._execute(
+            "UPDATE sync_log SET ended_at=?, items_seen=?, items_new=?, items_updated=?, errors=?, status=? WHERE id=?",
+            [datetime.now(UTC).isoformat(), stats["seen"], stats["new"], stats["updated"], stats["errors"], status, log_id],
+        )
+
+    async def get_sync_logs(self, limit: int = 10) -> list[dict]:
+        return await self._fetch_all(
+            "SELECT * FROM sync_log ORDER BY id DESC LIMIT ?", [limit]
+        )
+
+    # --- Generic job runs ---
+
+    async def start_job_run(self, job_name: str, triggered_by: str | None = None,
+                            params: str | None = None) -> int:
+        cursor = await self._db.execute(
+            "INSERT INTO job_runs (job_name, started_at, status, triggered_by, params) "
+            "VALUES (?, ?, 'running', ?, ?)",
+            [job_name, datetime.now(UTC).isoformat(), triggered_by, params],
+        )
+        await self._db.commit()
+        return cursor.lastrowid
+
+    async def finish_job_run(self, run_id: int, status: str, detail: str | None = None):
+        await self._execute(
+            "UPDATE job_runs SET ended_at=?, status=?, detail=? WHERE id=?",
+            [datetime.now(UTC).isoformat(), status, detail, run_id],
+        )
+
+    async def update_job_run_detail(self, run_id: int, detail: str | None):
+        """Update only a running job's detail column (used for live progress)."""
+        await self._execute(
+            "UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id]
+        )
+
+    async def get_job_runs(self, job_name: str | None = None, limit: int = 10) -> list[dict]:
+        if job_name:
+            return await self._fetch_all(
+                "SELECT * FROM job_runs WHERE job_name=? ORDER BY id DESC LIMIT ?",
+                [job_name, limit],
+            )
+        return await self._fetch_all(
+            "SELECT * FROM job_runs ORDER BY id DESC LIMIT ?", [limit]
+        )
+
+    async def reconcile_orphaned_job_runs(self) -> int:
+        """Mark any job run still flagged ``running`` as ``interrupted``.
+
+        The ``running`` flag lives only in memory on the JobManager, so a
+        service restart (or a killed worker) mid-run leaves the row stuck at
+        ``running`` forever. Called once on startup to clean up such orphans.
+        Returns the number of rows reconciled.
+        """
+        cursor = await self._db.execute(
+            "UPDATE job_runs SET status='interrupted', "
+            "ended_at = COALESCE(ended_at, ?) WHERE status='running'",
+            [datetime.now(UTC).isoformat()],
+        )
+        await self._db.commit()
+        return cursor.rowcount or 0
+
+    # --- OTP ---
+
+    async def store_otp(self, username: str, code: str, expires_at: str):
+        await self._execute(
+            "INSERT INTO otps (username, code, expires_at) VALUES (?, ?, ?)",
+            [username, code, expires_at],
+        )
+
+    async def verify_otp(self, username: str, code: str) -> bool:
+        row = await self._fetch_one(
+            "SELECT rowid FROM otps WHERE username=? AND code=? AND used=0 AND expires_at > datetime('now')",
+            [username, code],
+        )
+        if row:
+            await self._execute("UPDATE otps SET used=1 WHERE rowid=?", [row["rowid"]])
+            return True
+        return False
+
+    async def cleanup_expired_otps(self):
+        await self._execute("DELETE FROM otps WHERE expires_at < datetime('now') OR used=1")
