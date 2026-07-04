@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.31.0] — 2026-07-04
+
+### Fixed
+
+- **Moderation list "Remove" button now works.** The button was rendered with `onclick="removeModEntry(${JSON.stringify(e.username)})"` — `JSON.stringify` wraps the value in double quotes that immediately terminate the `onclick="…"` attribute, so browsers reported *"unexpected end of input at admin:1:16"* and the function was never called. The button now uses a `data-mod-rm-username` attribute with a delegated `click` listener on the stable `#mod-entries-list` container, consistent with how the "Moderate…" buttons in the Recent Users table work. The existing `confirm()` dialog inside `removeModEntry` is unaffected and will now prompt as intended.
+
+[0.31.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.31.0
+
 ## [0.30.0] — 2026-07-04
 
 ### Fixed

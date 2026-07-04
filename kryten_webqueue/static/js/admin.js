@@ -527,7 +527,7 @@ function renderModEntries(el, entries) {
             <td>${escapeHtml(e.reason || '—')}</td>
             <td>${escapeHtml(e.moderator || '—')}</td>
             <td>${e.added_at ? formatLocalDateTime(e.added_at) : '—'}</td>
-            <td><button class="btn btn-sm btn-danger" onclick="removeModEntry(${JSON.stringify(e.username)})">Remove</button></td>
+            <td><button class="btn btn-sm btn-danger" data-mod-rm-username="${escapeHtml(e.username)}">Remove</button></td>
         </tr>`).join('')}
     </table>`;
 }
@@ -561,6 +561,11 @@ async function submitAddModEntry() {
 }
 
 document.getElementById('mod-entries-refresh').addEventListener('click', loadModEntries);
+
+document.getElementById('mod-entries-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-mod-rm-username]');
+    if (btn) removeModEntry(btn.dataset.modRmUsername);
+});
 document.querySelectorAll('.mod-filter-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('.mod-filter-btn').forEach(b => b.classList.remove('active'));
