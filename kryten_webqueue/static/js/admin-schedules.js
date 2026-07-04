@@ -1,0 +1,244 @@
+let playlistMap = {};
+let playlistRows = [];
+
+async function loadPlaylistsForSelect() {
+    const resp = await fetch('/admin/playlists/');
+    if (!resp.ok) return [];
+    const rows = await resp.json();
+    playlistMap = {};
+    playlistRows = rows;
+    rows.forEach(p => playlistMap[p.id] = p.name);
+    return rows;
+}
+
+async function loadLockStatus() {
+    // Authoritative, server-side lock indicator. Unlike the active-schedule
+    // banner, this also surfaces a pre-fire lockout (which has no active_schedule
+    // row) — the case where the queue is locked with nothing obviously "running".
+    const banner = document.getElementById('lock-banner');
+    let st;
+    try {
+        const resp = await fetch('/admin/schedules/lock-status');
+        if (!resp.ok) { banner.classList.add('hidden'); return; }
+        st = await resp.json();
+    } catch { banner.classList.add('hidden'); return; }
+
+    if (!st || !st.locked) {
+        banner.classList.add('hidden');
+        banner.innerHTML = '';
+        return;
+    }
+
+    const label = st.label ? escapeHtml(st.label) : 'a scheduled event';
+    let detail;
+    if (st.type === 'pre_fire') {
+        const when = st.fire_at ? formatLocalDateTime(st.fire_at) : null;
+        detail = `Pre-event lockout for <strong>${label}</strong>${when ? ` — fires ${when}` : ''}. Pay-to-play reopens when the event starts.`;
+    } else {
+        const when = st.estimated_end_at ? formatLocalDateTime(st.estimated_end_at) : null;
+        detail = `Event <strong>${label}</strong> is playing${when ? ` — ends ~${when}` : ''}. Pay-to-play reopens when the last scheduled item begins.`;
+    }
+
+    banner.classList.remove('hidden');
+    banner.innerHTML = `
+        <div class="lock-banner-row">
+            <span class="lock-banner-icon" aria-hidden="true">&#128274;</span>
+            <div class="lock-banner-text">
+                <strong>Queue locked &mdash; pay-to-play is closed.</strong>
+                <div class="muted">${detail}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="endLockout()">End lockout now</button>
+        </div>`;
+}
+
+async function endLockout() {
+    if (!confirm('End the pay-to-play lockout now? Users can queue items immediately. Schedules stay armed — a recurring event re-locks on its next firing.')) return;
+    let ok = false;
+    try {
+        const resp = await fetch('/admin/schedules/unlock', {method: 'POST'});
+        ok = resp.ok;
+    } catch { ok = false; }
+    showToast(ok ? 'Lockout ended' : 'Failed to end lockout', ok ? 'success' : 'error');
+    await loadLockStatus();
+    loadSchedules();
+}
+
+async function loadActive() {
+    const banner = document.getElementById('active-banner');
+    const resp = await fetch('/admin/schedules/active');
+    if (!resp.ok) { banner.classList.add('hidden'); return; }
+    const a = await resp.json();
+    if (!a || !a.schedule_id) { banner.classList.add('hidden'); return; }
+    // Treat a well-past estimated end as ended even before the backend clears
+    // the row on its next poll, so the banner never lingers.
+    if (a.estimated_end_at) {
+        const end = new Date(a.estimated_end_at);
+        if (!isNaN(end) && (Date.now() - end.getTime()) > 5 * 60 * 1000) {
+            banner.classList.add('hidden');
+            return;
+        }
+    }
+    const name = playlistMap[a.playlist_id] || `Playlist #${a.playlist_id}`;
+    banner.classList.remove('hidden');
+    const locked = a.is_immutable && !a.lock_disabled;
+    banner.innerHTML = `
+        <strong>Active schedule running:</strong> ${escapeHtml(name)}
+        ${a.is_immutable ? '<span class="badge badge-warn">Non-preemptable</span>' : ''}
+        ${locked ? '<span class="badge badge-warn">Pay-to-play locked</span>' : '<span class="badge">Unlocked</span>'}
+        ${a.estimated_end_at ? `<div class="muted">Ends ~${formatLocalDateTime(a.estimated_end_at)}</div>` : ''}
+        <div style="margin-top:0.5rem;">
+            ${locked ? '<button class="btn btn-sm" onclick="unlockNow()">Unlock now</button> ' : ''}
+            <button class="btn btn-sm btn-danger" onclick="clearActive()">Clear Active</button>
+        </div>`;
+}
+
+async function unlockNow() {
+    if (!confirm('Lift the pay-to-play lock now? Users will be able to queue items again. The schedule stays armed for future firings.')) return;
+    const resp = await fetch('/admin/schedules/unlock', {method: 'POST'});
+    showToast(resp.ok ? 'Lock lifted' : 'Failed', resp.ok ? 'success' : 'error');
+    await loadLockStatus();
+    loadSchedules();
+}
+
+async function clearActive() {
+    if (!confirm('Clear the active schedule and return to free mode?')) return;
+    const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
+    showToast(resp.ok ? 'Cleared' : 'Failed', resp.ok ? 'success' : 'error');
+    await loadLockStatus();
+    loadActive();
+}
+
+async function loadSchedules() {
+    await loadPlaylistsForSelect();
+    await loadLockStatus();
+    await loadActive();
+    const resp = await fetch('/admin/schedules/');
+    const el = document.getElementById('schedules-list');
+    if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load.</p>'; return; }
+    const rows = await resp.json();
+    if (!rows.length) { el.innerHTML = '<p class="empty-state">No schedules yet.</p>'; return; }
+    const now = Date.now();
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>Label</th><th>Playlist</th><th>Fires</th><th>Lock</th><th>Status</th><th></th></tr>
+        ${rows.map(s => {
+            const fired = s.fired_at ? 'fired' : (new Date(s.fire_at).getTime() < now ? 'past' : 'pending');
+            const fireMs = new Date(s.fire_at).getTime();
+            const lockMin = s.pre_fire_lock_minutes ?? 15;
+            const inPreFire = s.is_active && !isNaN(fireMs)
+                && now >= fireMs - lockMin * 60000 && now < fireMs;
+            const preFireLocked = inPreFire && !s.lock_disabled;
+            return `<tr>
+                <td>${escapeHtml(s.label)}${s.is_recurring ? ' <span class="badge">↻</span>' : ''}</td>
+                <td>${escapeHtml(playlistMap[s.playlist_id] || ('#' + s.playlist_id))}${s.fallback_playlist_id ? `<div class="muted">then: ${escapeHtml(playlistMap[s.fallback_playlist_id] || ('#' + s.fallback_playlist_id))}</div>` : ''}</td>
+                <td>${formatLocalDateTime(s.fire_at)}</td>
+                <td>${lockMin}m${preFireLocked ? ' <button class="btn btn-xs" onclick="unlockNow()" title="Lift the active pre-fire lock now">Unlock</button>' : (inPreFire && s.lock_disabled ? ' <span class="muted">(unlocked)</span>' : '')}</td>
+                <td><span class="job-status job-status-${fired === 'pending' ? 'running' : (fired === 'fired' ? 'completed' : 'cancelled')}">${s.is_active ? fired : 'disabled'}</span></td>
+                <td class="row-actions">
+                    <button class="btn btn-sm" onclick="fireNow(${s.id}, '${escapeHtml(s.label)}')">Fire Now</button>
+                    <button class="btn btn-sm" onclick="editSchedule(${s.id})">Edit</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id}, '${escapeHtml(s.label)}')">Delete</button>
+                </td>
+            </tr>`;
+        }).join('')}
+    </table>`;
+}
+
+function scheduleForm(s) {
+    s = s || {};
+    const opts = Object.entries(playlistMap).map(([id, name]) =>
+        `<option value="${id}" ${s.playlist_id == id ? 'selected' : ''}>${escapeHtml(name)}</option>`).join('');
+    // Fallback options: mutable (non-immutable) playlists only, plus a "none" choice.
+    const mutable = playlistRows.filter(p => !p.is_immutable);
+    const fallbackOpts = '<option value="">— none (leave queue empty) —</option>' +
+        mutable.map(p =>
+            `<option value="${p.id}" ${s.fallback_playlist_id == p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('');
+    // fire_at → datetime-local value (local tz)
+    let dtLocal = '';
+    if (s.fire_at) {
+        const d = new Date(s.fire_at);
+        if (!isNaN(d)) dtLocal = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    }
+    return `
+        <h3>${s.id ? 'Edit' : 'New'} Schedule</h3>
+        <label class="field"><span>Label</span><input type="text" id="s-label" value="${escapeHtml(s.label || '')}"></label>
+        <label class="field"><span>Playlist</span><select id="s-playlist">${opts}</select></label>
+        <label class="field"><span>Fallback playlist</span><select id="s-fallback">${fallbackOpts}</select></label>
+        <p class="muted" style="font-size:0.8rem;margin-top:-0.25rem;">Plays after the scheduled playlist is exhausted, so the queue isn't left empty. Only mutable playlists can be used.</p>
+        <label class="field"><span>Fire at</span><input type="datetime-local" id="s-fireat" value="${dtLocal}"></label>
+        <label class="field"><span>Pre-fire lock (min)</span><input type="number" id="s-lock" min="0" value="${s.pre_fire_lock_minutes ?? 15}"></label>
+        <label class="check"><input type="checkbox" id="s-recur" ${s.is_recurring ? 'checked' : ''}> Recurring</label>
+        <label class="field"><span>RRULE (optional)</span><input type="text" id="s-rrule" value="${escapeHtml(s.rrule || '')}" placeholder="FREQ=WEEKLY;BYDAY=FR"></label>
+        ${s.id ? `<label class="check"><input type="checkbox" id="s-active" ${s.is_active ? 'checked' : ''}> Active</label>` : ''}
+        <div class="modal-actions">
+            <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="saveSchedule(${s.id || 'null'})">Save</button>
+        </div>`;
+}
+
+function showScheduleModal() {
+    if (!Object.keys(playlistMap).length) { showToast('Create a playlist first', 'error'); return; }
+    showModal(scheduleForm(null));
+}
+
+async function editSchedule(id) {
+    const resp = await fetch(`/admin/schedules/${id}`);
+    if (!resp.ok) { showToast('Load failed', 'error'); return; }
+    showModal(scheduleForm(await resp.json()));
+}
+
+function collectSchedule() {
+    const label = document.getElementById('s-label').value.trim();
+    const playlist_id = parseInt(document.getElementById('s-playlist').value, 10);
+    const fireLocal = document.getElementById('s-fireat').value;
+    if (!label || !playlist_id || !fireLocal) { showToast('Label, playlist and fire time required', 'error'); return null; }
+    const body = {
+        label,
+        playlist_id,
+        fire_at: new Date(fireLocal).toISOString(),
+        pre_fire_lock_minutes: parseInt(document.getElementById('s-lock').value, 10) || 0,
+        is_recurring: document.getElementById('s-recur').checked,
+        rrule: document.getElementById('s-rrule').value.trim() || null,
+    };
+    const fallbackVal = document.getElementById('s-fallback').value;
+    body.fallback_playlist_id = fallbackVal ? parseInt(fallbackVal, 10) : null;
+    const active = document.getElementById('s-active');
+    if (active) body.is_active = active.checked;
+    return body;
+}
+
+async function saveSchedule(id) {
+    const body = collectSchedule();
+    if (!body) return;
+    const url = id ? `/admin/schedules/${id}` : '/admin/schedules/';
+    const method = id ? 'PUT' : 'POST';
+    const resp = await fetch(url, {method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+    closeModal();
+    showToast(resp.ok ? 'Saved' : 'Save failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+async function fireNow(id, label) {
+    if (!confirm(`Fire "${label}" now? This clears the queue and refunds pending pay items.`)) return;
+    const resp = await fetch(`/admin/schedules/${id}/fire`, {method: 'POST'});
+    showToast(resp.ok ? 'Fired' : 'Fire failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+async function deleteSchedule(id, label) {
+    if (!confirm(`Delete schedule "${label}"?`)) return;
+    const resp = await fetch(`/admin/schedules/${id}`, {method: 'DELETE'});
+    showToast(resp.ok ? 'Deleted' : 'Delete failed', resp.ok ? 'success' : 'error');
+    loadSchedules();
+}
+
+loadSchedules();
+
+// Keep the lock indicator and active-event banner fresh without a reload:
+// re-check every 15s while the tab is visible (the backend lifts the lock at
+// fire time and clears the active row once the event plays out).
+setInterval(() => {
+    if (document.visibilityState === 'visible') {
+        loadLockStatus();
+        loadActive();
+    }
+}, 15000);

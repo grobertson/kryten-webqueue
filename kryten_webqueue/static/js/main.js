@@ -265,3 +265,22 @@ function closeAdminQueueModal() {
     const existing = document.getElementById('admin-queue-modal');
     if (existing) existing.remove();
 }
+
+// ---------- generic admin modal ----------
+function showModal(html) {
+    closeModal();
+    const o = document.createElement('div');
+    o.className = 'modal-overlay'; o.id = 'admin-modal';
+    o.innerHTML = `<div class="modal-box">${html}</div>`;
+    o.addEventListener('click', e => { if (e.target === o) closeModal(); });
+    document.body.appendChild(o);
+}
+function closeModal() { const m = document.getElementById('admin-modal'); if (m) m.remove(); }
+
+// ---------- duration formatter ----------
+function fmtDur(sec) {
+    if (!sec && sec !== 0) return '';
+    const m = Math.floor(sec / 60);
+    const s = Math.round(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
