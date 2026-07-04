@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.29.0] — 2026-07-04
+
+### Changed
+
+- **Admin JavaScript moved to external static files.** All inline `{% block scripts %}` JavaScript has been extracted from the five admin templates into individual per-page files under `static/js/` (`admin.js`, `admin-playlists.js`, `admin-promos.js`, `admin-schedules.js`, `admin-queue-mgmt.js`). Shared utilities `showModal`/`closeModal` and `fmtDur` were promoted to `main.js` (previously only defined per-page). Duplicate `escapeHtml`/`fmtDur`/`showModal`/`closeModal` definitions are removed from per-page files. Each template now references its JS via a single `<script src="/static/js/...">` tag — no functional changes, better cacheability and maintainability.
+
+[0.29.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.29.0
+
 ## [0.28.0] — 2026-07-04
 
 ### Added
