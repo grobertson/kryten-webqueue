@@ -72,6 +72,33 @@ def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
     return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
 
 
+def _promo_hidden_media_subquery() -> tuple[str, list]:
+    """Subquery (+ params) yielding media_ids that are promos/bumpers.
+
+    "Promo/bumper" content is anything hidden from the public catalog by a promo
+    pool OR a hidden category OR a hidden tag (e.g. ``Z Channel Promos`` /
+    ``channelz``). These items never appear to regular users, so they must never
+    be recorded as recently-played. Immutable *event* playlists are intentionally
+    excluded here — they are their own class, not promos.
+    """
+    cat_ph = ",".join("?" * len(HIDDEN_CATEGORY_NAMES))
+    tag_ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
+    sql = f"""
+        SELECT spi.media_id FROM saved_playlist_items spi
+        JOIN saved_playlists sp ON sp.id = spi.playlist_id
+        WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'
+        UNION
+        SELECT cc.friendly_token FROM catalog_categories cc
+        JOIN categories cat ON cc.category_id = cat.id
+        WHERE cat.name IN ({cat_ph})
+        UNION
+        SELECT ct.friendly_token FROM catalog_tags ct
+        JOIN tags t ON ct.tag_id = t.id
+        WHERE t.name IN ({tag_ph})
+    """
+    return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
+
+
 def _recently_played_exclusion(alias: str, days: int) -> tuple[str, list]:
     """SQL fragment (+ params) hiding recently-played items from regular users.
 
@@ -363,13 +390,14 @@ class _CatalogMixin:
 
         Promo-pool clips are exempt entirely: they are already excluded from the
         public catalog and must never be treated like normal (mutable/immutable)
-        playlist items, so playing one records nothing.
+        playlist items, so playing one records nothing. The same exemption covers
+        any promo/bumper hidden by category or tag (e.g. ``Z Channel Promos`` /
+        ``channelz``), which is how most station promos are actually classified.
         """
+        sub, sub_params = _promo_hidden_media_subquery()
         promo = await self._fetch_one(
-            "SELECT 1 FROM saved_playlist_items spi "
-            "JOIN saved_playlists sp ON sp.id = spi.playlist_id "
-            "WHERE spi.media_id = ? AND spi.media_type = ? AND sp.promo_type IS NOT NULL LIMIT 1",
-            [friendly_token, media_type],
+            f"SELECT 1 WHERE ? IN ({sub})",
+            [friendly_token, *sub_params],
         )
         if promo:
             return
@@ -448,26 +476,25 @@ class _CatalogMixin:
         return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
 
     async def purge_promo_hide_state(self) -> dict:
-        """Remove any recently-played hide state recorded for promo-pool clips.
+        """Remove any recently-played hide state recorded for promos/bumpers.
 
         Promos must never be subject to recently-played hiding. New completions
         are already skipped in ``record_play_completion``; this purges rows
-        written before that exemption existed (also run once by migration v14).
+        written before that exemption existed (run once at startup). Covers promo
+        pools plus hidden-category/tag promos (the usual station-promo case).
         Returns the row counts removed.
         """
-        promo_subquery = (
-            "SELECT spi.media_id FROM saved_playlist_items spi "
-            "JOIN saved_playlists sp ON sp.id = spi.playlist_id "
-            "WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'"
-        )
+        sub, sub_params = _promo_hidden_media_subquery()
         pc = await self._fetch_one(
-            f"SELECT COUNT(*) AS c FROM play_completions WHERE media_id IN ({promo_subquery})"
+            f"SELECT COUNT(*) AS c FROM play_completions WHERE media_id IN ({sub})",
+            sub_params,
         )
         pip = await self._fetch_one(
-            f"SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id IN ({promo_subquery})"
+            f"SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id IN ({sub})",
+            sub_params,
         )
-        await self._execute(f"DELETE FROM play_completions WHERE media_id IN ({promo_subquery})")
-        await self._execute(f"DELETE FROM playlist_item_played WHERE media_id IN ({promo_subquery})")
+        await self._execute(f"DELETE FROM play_completions WHERE media_id IN ({sub})", sub_params)
+        await self._execute(f"DELETE FROM playlist_item_played WHERE media_id IN ({sub})", sub_params)
         return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
 
     async def get_recently_played_debug(self, days: int) -> dict:

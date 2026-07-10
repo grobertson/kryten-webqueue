@@ -51,6 +51,16 @@ async def lifespan(app: FastAPI):
     db = Database(config.db_path)
     await db.connect()
     await db.run_migrations()
+    # Self-heal: purge any recently-played hide state recorded for promos/bumpers
+    # (they are excluded from the public catalog and must never be hidden by the
+    # recently-played rules). Cheap and idempotent; also cleans rows written by
+    # older builds that classified promos only by pool membership.
+    purged = await db.purge_promo_hide_state()
+    if purged["completions"] or purged["playlist_pass"]:
+        logger.info(
+            "Purged promo recently-played state: %d completion(s), %d pass row(s)",
+            purged["completions"], purged["playlist_pass"],
+        )
     # Any job run still marked 'running' is an orphan from a prior crash/restart
     # (the running flag is in-memory only). Reconcile before registering jobs.
     orphaned = await db.reconcile_orphaned_job_runs()

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.3] — 2026-07-09
+
+### Fixed
+
+- **Tag/category-classified promos are now also exempt from recently-played hiding.** v0.32.2 only exempted promo-*pool* clips, but most station promos/bumpers (e.g. “CHANNEL Z …”) are classified by hidden category (`Z Channel Promos`) or tag (`channelz`, `bumpers`, …) instead, so they were still being recorded and appeared in the recently-played debug list. `record_play_completion` now skips any item hidden from the public catalog by a promo pool **or** a hidden category/tag. On startup the service self-heals by purging any such rows written by earlier builds (`purge_promo_hide_state`, now covering the tag/category case).
+
 ## [0.32.2] — 2026-07-09
 
 ### Fixed
@@ -35,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.32.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.0
 [0.32.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.1
 [0.32.2]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.2
+[0.32.3]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.3
 
 ## [0.31.0] — 2026-07-04
 

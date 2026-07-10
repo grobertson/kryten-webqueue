@@ -395,6 +395,39 @@ async def test_purge_promo_hide_state_removes_stale_rows(db):
     assert (await db.get_recently_played_debug(21))["by_completion"] == []
 
 
+async def test_hidden_tag_promo_is_exempt_from_hiding(db):
+    # Station promos/bumpers are usually classified by hidden tag/category
+    # (e.g. `channelz`), not promo-pool membership. They must still be exempt.
+    await _add_catalog(db, "bumper", "CHANNEL Z - ITS 10PM", duration_sec=15)
+    tid = await db.upsert_tag("channelz")
+    await db.set_catalog_tags("bumper", [tid])
+
+    await db.record_play_completion(friendly_token="bumper", duration_sec=15)
+    assert await db._fetch_all("SELECT media_id FROM play_completions") == []
+
+
+async def test_hidden_category_promo_is_exempt_from_hiding(db):
+    await _add_catalog(db, "bumper", "Z Promo", duration_sec=15)
+    cid = await db.upsert_category("Z Channel Promos")
+    await db.set_catalog_categories("bumper", [cid])
+
+    await db.record_play_completion(friendly_token="bumper", duration_sec=15)
+    assert await db._fetch_all("SELECT media_id FROM play_completions") == []
+
+
+async def test_purge_removes_hidden_tag_promo_rows(db):
+    # A stale row written before the tag/category exemption is cleaned by purge.
+    await _add_catalog(db, "bumper", "CHANNEL Z - ITS 10PM", duration_sec=15)
+    tid = await db.upsert_tag("channelz")
+    await db.set_catalog_tags("bumper", [tid])
+    await db._execute("INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'bumper')")
+
+    removed = await db.purge_promo_hide_state()
+    assert removed["completions"] == 1
+    assert await db._fetch_all("SELECT media_id FROM play_completions") == []
+
+
+
 
 
 
