@@ -309,3 +309,44 @@ async def test_import_full_loads_entire_list(db):
     assert result["skipped"] == 0
 
 
+# --- Admin test helpers (mark-played / clear / debug) ---------------------
+
+async def test_clear_play_state_unhides_time_window_item(db):
+    await _add_catalog(db, "movie", "Movie", duration_sec=7200)
+    await db.record_play_completion(friendly_token="movie", duration_sec=7200)
+    assert await _browse_tokens(db, recently_played_days=21) == set()
+
+    removed = await db.clear_play_state("movie")
+    assert removed == {"completions": 1, "playlist_pass": 0}
+    assert await _browse_tokens(db, recently_played_days=21) == {"movie"}
+
+
+async def test_clear_play_state_unhides_playlist_episode(db):
+    tokens = ["ep1", "ep2", "ep3"]
+    for t in tokens:
+        await _add_catalog(db, t, f"Episode {t}", duration_sec=1500)
+    await _make_mutable_playlist(db, tokens, duration_sec=1500)
+    await db.record_play_completion(friendly_token="ep1", duration_sec=1500)
+    assert "ep1" not in await _browse_tokens(db, recently_played_days=21)
+
+    removed = await db.clear_play_state("ep1")
+    assert removed["playlist_pass"] == 1
+    assert "ep1" in await _browse_tokens(db, recently_played_days=21)
+
+
+async def test_recently_played_debug_reports_both_signals(db):
+    await _add_catalog(db, "movie", "Movie", duration_sec=7200)
+    await _add_catalog(db, "ep1", "Episode 1", duration_sec=1500)
+    await _add_catalog(db, "ep2", "Episode 2", duration_sec=1500)
+    await _make_mutable_playlist(db, ["ep1", "ep2"], duration_sec=1500)
+
+    await db.record_play_completion(friendly_token="movie", duration_sec=7200)  # time window
+    await db.record_play_completion(friendly_token="ep1", duration_sec=1500)    # playlist pass
+
+    debug = await db.get_recently_played_debug(21)
+    assert debug["window_days"] == 21
+    assert {r["media_id"] for r in debug["by_completion"]} == {"movie"}
+    assert {r["media_id"] for r in debug["by_playlist_pass"]} == {"ep1"}
+
+
+

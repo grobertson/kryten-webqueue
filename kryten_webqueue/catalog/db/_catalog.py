@@ -409,6 +409,59 @@ class _CatalogMixin:
         )
         return {r["media_id"] for r in rows}
 
+    async def clear_play_state(self, friendly_token: str, *, media_type: str = "cm") -> dict:
+        """Remove all recently-played hide state for an item (admin test helper).
+
+        Deletes both time-boxed ``play_completions`` rows and any
+        ``playlist_item_played`` (mutable-playlist pass) rows for the item, so it
+        immediately reappears in the public catalog. Returns the row counts
+        removed.
+        """
+        pc = await self._fetch_one(
+            "SELECT COUNT(*) AS c FROM play_completions WHERE media_id = ? AND media_type = ?",
+            [friendly_token, media_type],
+        )
+        pip = await self._fetch_one(
+            "SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
+            [friendly_token, media_type],
+        )
+        await self._execute(
+            "DELETE FROM play_completions WHERE media_id = ? AND media_type = ?",
+            [friendly_token, media_type],
+        )
+        await self._execute(
+            "DELETE FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
+            [friendly_token, media_type],
+        )
+        return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
+
+    async def get_recently_played_debug(self, days: int) -> dict:
+        """Snapshot of what the recently-played rules currently hide (admin test).
+
+        Mirrors the two exclusion signals used by browse/search so an admin can
+        see exactly which titles a regular user would NOT see, and why.
+        """
+        by_completion = await self._fetch_all(
+            "SELECT pc.media_id, c.title, MAX(pc.completed_at) AS last_completed "
+            "FROM play_completions pc "
+            "LEFT JOIN catalog c ON c.friendly_token = pc.media_id "
+            "WHERE pc.media_type = 'cm' AND pc.completed_at >= datetime('now', ?) "
+            "GROUP BY pc.media_id ORDER BY last_completed DESC",
+            [f"-{int(days)} days"],
+        )
+        by_playlist_pass = await self._fetch_all(
+            "SELECT pip.media_id, c.title, pip.playlist_id, sp.name AS playlist_name, pip.position "
+            "FROM playlist_item_played pip "
+            "JOIN saved_playlists sp ON sp.id = pip.playlist_id "
+            "LEFT JOIN catalog c ON c.friendly_token = pip.media_id "
+            "WHERE pip.media_type = 'cm' ORDER BY sp.name, pip.position",
+        )
+        return {
+            "window_days": days,
+            "by_completion": by_completion,
+            "by_playlist_pass": by_playlist_pass,
+        }
+
     async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
         """Return a lookup of catalog metadata keyed by BOTH friendly_token and
         manifest_url, for enriching queue-shadow items that may only carry one.

@@ -43,3 +43,50 @@ async def unhide_item(request: Request, friendly_token: str, user: dict = Depend
     await db.remove_catalog_tag(friendly_token, HIDDEN_ITEM_TAG)
     remote_ok = await _mediacms_client(request).set_tag(friendly_token, HIDDEN_ITEM_TAG, present=False)
     return {"success": True, "remote_ok": remote_ok}
+
+
+# --- Recently-played test helpers (admin-only) -----------------------------
+#
+# These let an admin exercise the v0.32 "hide recently-played" rules in situ
+# without waiting for real playback: simulate a completion, clear an item's
+# hide state, or inspect exactly what a regular user would not see.
+
+@router.post("/{friendly_token}/mark-played")
+async def mark_played(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+    """Simulate a genuine play-completion for an item (testing aid).
+
+    Routes through the same ``record_play_completion`` the poll loop uses, so it
+    exercises the real rules: short (<1h) episodes of a mutable playlist mark the
+    current pass (and reset it when the last item is marked), everything else
+    gets a time-boxed completion. The item then hides from regular users exactly
+    as it would after real playback.
+    """
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    await db.record_play_completion(
+        friendly_token=friendly_token,
+        duration_sec=item.get("duration_sec"),
+    )
+    return {"success": True}
+
+
+@router.post("/{friendly_token}/clear-played")
+async def clear_played(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+    """Clear an item's recently-played hide state so it reappears immediately."""
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    removed = await db.clear_play_state(friendly_token)
+    return {"success": True, "removed": removed}
+
+
+@router.get("/recently-played/debug")
+async def recently_played_debug(request: Request, user: dict = Depends(require_admin)):
+    """List what the recently-played rules currently hide from regular users."""
+    db = request.app.state.db
+    days = request.app.state.config.catalog_recently_played_hide_days
+    return await db.get_recently_played_debug(days)
+

@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.1] — 2026-07-09
+
+### Added
+
+- **Admin controls to test recently-played hiding in situ** without waiting for real playback:
+  - `POST /admin/catalog/{token}/mark-played` — simulates a genuine completion via the same `record_play_completion` the poll loop uses, so it also exercises the mutable-playlist pass logic (marking episodes, resetting on the last item).
+  - `POST /admin/catalog/{token}/clear-played` — removes an item's completion and playlist-pass rows so it reappears for regular users immediately.
+  - `GET /admin/catalog/recently-played/debug` — read-only snapshot of exactly what regular users are not seeing and why (time-window vs mutable-playlist pass).
+  - The admin catalog browser gains **Mark played** and **Clear played** buttons per item.
+
 ## [0.32.0] — 2026-07-09
 
 ### Added
@@ -17,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Promos are unaffected — promo/immutable-playlist items are already excluded from the public catalog.
 
 [0.32.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.0
+[0.32.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.1
 
 ## [0.31.0] — 2026-07-04
 
