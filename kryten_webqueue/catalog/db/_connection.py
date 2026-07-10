@@ -258,6 +258,39 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_title_suggestions_status ON title_suggestions(status, created_at);
     """,
+    # v13: Play-completion tracking that drives hiding recently-played catalog
+    # items from regular users.
+    #
+    # play_completions records a *genuine* completion (an item that reached the
+    # now-playing slot and played past a threshold), keyed by media_id
+    # (== catalog friendly_token for 'cm'). completed_at powers the time-based
+    # hide window. Items queued-then-refunded never reach now-playing, so they
+    # never land here.
+    #
+    # playlist_item_played tracks, per mutable (TV-show) playlist, which short
+    # (<1h) episodes have played in the *current pass*. Rows are cleared for a
+    # playlist the moment its last item (MAX position) plays, releasing the whole
+    # collection at once — so appending S2/S3 never re-hides S1 piecemeal.
+    """
+    CREATE TABLE IF NOT EXISTS play_completions (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        media_type   TEXT NOT NULL,
+        media_id     TEXT NOT NULL,
+        completed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_play_completions_media ON play_completions(media_id);
+    CREATE INDEX IF NOT EXISTS idx_play_completions_at ON play_completions(completed_at);
+
+    CREATE TABLE IF NOT EXISTS playlist_item_played (
+        playlist_id INTEGER NOT NULL REFERENCES saved_playlists(id) ON DELETE CASCADE,
+        position    INTEGER NOT NULL,
+        media_type  TEXT NOT NULL,
+        media_id    TEXT NOT NULL,
+        played_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (playlist_id, position)
+    );
+    CREATE INDEX IF NOT EXISTS idx_playlist_item_played_media ON playlist_item_played(media_id);
+    """,
 ]
 
 

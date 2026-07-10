@@ -58,6 +58,19 @@ async def fire_schedule(
 
             # Load scheduled playlist items
             items = await db.get_saved_playlist_items(playlist_id)
+            # For a mutable (TV-show) playlist, skip episodes already played in the
+            # current pass so a re-fire continues where it left off instead of
+            # replaying season 1. Immutable/promo playlists never have played rows,
+            # so this is a no-op for them.
+            played = await db.get_playlist_played_media_ids(playlist_id)
+            if played:
+                before = len(items)
+                items = [it for it in items if it["media_id"] not in played]
+                if before != len(items):
+                    logger.info(
+                        f"Schedule {schedule_id}: skipped {before - len(items)} already-played "
+                        f"episode(s) from mutable playlist {playlist_id}"
+                    )
             total_duration = 0
             last_item_uid = None
             for index, item in enumerate(items):
@@ -88,6 +101,11 @@ async def fire_schedule(
             fallback_id = schedule.get("fallback_playlist_id")
             if fallback_id:
                 fallback_items = await db.get_saved_playlist_items(fallback_id)
+                # Same continuation logic as the main playlist: skip already-played
+                # episodes of the (mutable) fallback so it advances across fires.
+                fb_played = await db.get_playlist_played_media_ids(fallback_id)
+                if fb_played:
+                    fallback_items = [it for it in fallback_items if it["media_id"] not in fb_played]
                 for index, item in enumerate(fallback_items):
                     if index and add_delay_sec:
                         await asyncio.sleep(add_delay_sec)

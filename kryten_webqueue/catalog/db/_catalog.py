@@ -72,6 +72,40 @@ def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
     return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
 
 
+def _recently_played_exclusion(alias: str, days: int) -> tuple[str, list]:
+    """SQL fragment (+ params) hiding recently-played items from regular users.
+
+    Two independent signals hide an item; either one is enough:
+
+    1. **Time window** — the item has a genuine ``play_completions`` row within
+       the last ``days`` days. A completion is only recorded when an item
+       actually played past a threshold (see ``CompletionRecorder``), so an item
+       that was queued and then refunded/removed before playing never counts.
+
+    2. **Mutable-playlist pass** — the item is a short (<1h) episode of a mutable
+       (TV-show) playlist that has played in the current pass and not yet reset
+       (``playlist_item_played``). These are governed by playlist position, not
+       the day window, so a whole show collection releases together when its last
+       item plays.
+
+    The fragment is prefixed with ``AND`` so it can be appended to an existing
+    WHERE clause referencing the catalog row under ``alias``. Caller must ensure
+    ``days > 0`` before applying (a non-positive window disables both signals).
+    """
+    sql = f"""
+            AND {alias}.friendly_token NOT IN (
+                SELECT pc.media_id FROM play_completions pc
+                WHERE pc.media_type = 'cm'
+                  AND pc.completed_at >= datetime('now', ?)
+            )
+            AND {alias}.friendly_token NOT IN (
+                SELECT pip.media_id FROM playlist_item_played pip
+                WHERE pip.media_type = 'cm'
+            )
+    """
+    return sql, [f"-{int(days)} days"]
+
+
 def _facet_filter(alias: str, category: str | None, tag: str | None) -> tuple[str, list]:
     """SQL fragment (+ params) AND-filtering by a category slug and/or tag name.
 
@@ -130,7 +164,7 @@ class _CatalogMixin:
 
     # --- Catalog ---
 
-    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
+    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default", recently_played_days: int = 0) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
             FROM catalog c
@@ -145,6 +179,10 @@ class _CatalogMixin:
             excl_sql, excl_params = _hidden_exclusion("c")
             query += excl_sql
             params.extend(excl_params)
+        if recently_played_days > 0:
+            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
+            query += rp_sql
+            params.extend(rp_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -180,7 +218,7 @@ class _CatalogMixin:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
-    async def browse_count(self, *, category: str | None = None, tag: str | None = None, show_hidden: bool = False) -> int:
+    async def browse_count(self, *, category: str | None = None, tag: str | None = None, show_hidden: bool = False, recently_played_days: int = 0) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
             WHERE c.friendly_token NOT IN (
@@ -194,6 +232,10 @@ class _CatalogMixin:
             excl_sql, excl_params = _hidden_exclusion("c")
             query += excl_sql
             params.extend(excl_params)
+        if recently_played_days > 0:
+            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
+            query += rp_sql
+            params.extend(rp_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -216,7 +258,7 @@ class _CatalogMixin:
         return row["cnt"] if row else 0
 
     async def search(self, query_text: str, *, category: str | None = None, tag: str | None = None,
-                     page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default") -> list[dict]:
+                     page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default", recently_played_days: int = 0) -> list[dict]:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
@@ -234,6 +276,10 @@ class _CatalogMixin:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+        if recently_played_days > 0:
+            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
+            sql += rp_sql
+            params.extend(rp_params)
         # Category/tag facets AND with the text match (same subqueries browse()
         # uses), so a search can be narrowed by the selected facets.
         facet_sql, facet_params = _facet_filter("c", category, tag)
@@ -247,7 +293,7 @@ class _CatalogMixin:
         return await self._fetch_all(sql, params)
 
     async def search_count(self, query_text: str, *, category: str | None = None, tag: str | None = None,
-                           show_hidden: bool = False) -> int:
+                           show_hidden: bool = False, recently_played_days: int = 0) -> int:
         sql = """
             SELECT COUNT(*) as cnt
             FROM catalog_fts fts
@@ -264,6 +310,10 @@ class _CatalogMixin:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+        if recently_played_days > 0:
+            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
+            sql += rp_sql
+            params.extend(rp_params)
         facet_sql, facet_params = _facet_filter("c", category, tag)
         sql += facet_sql
         params.extend(facet_params)
@@ -284,6 +334,80 @@ class _CatalogMixin:
 
     async def get_item_admin(self, friendly_token: str) -> dict | None:
         return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
+
+    async def resolve_media(self, media_id: str) -> dict | None:
+        """Resolve a now-playing identifier to its catalog row (token + duration).
+
+        The live now-playing payload carries the manifest URL as ``id`` for 'cm'
+        items (not the friendly_token), so match on either column.
+        """
+        if not media_id:
+            return None
+        return await self._fetch_one(
+            "SELECT friendly_token, duration_sec FROM catalog "
+            "WHERE friendly_token = ? OR manifest_url = ? LIMIT 1",
+            [media_id, media_id],
+        )
+
+    async def record_play_completion(self, *, friendly_token: str, duration_sec: int | None,
+                                     media_type: str = "cm") -> None:
+        """Record a genuine play-completion, routing it to the correct hide rule.
+
+        Short (<1h) episodes that belong to a mutable (TV-show) playlist are
+        governed by playlist position instead of the day window: each such
+        completion marks the episode played for the current pass, and reaching
+        the playlist's last item (MAX position) clears the whole pass so the
+        collection releases together. Everything else (movies, standalone clips,
+        long items even inside a mutable playlist) gets a time-boxed
+        ``play_completions`` row instead.
+        """
+        rows = await self._fetch_all(
+            """
+            SELECT spi.playlist_id AS playlist_id, spi.position AS position,
+                   (SELECT MAX(position) FROM saved_playlist_items
+                     WHERE playlist_id = spi.playlist_id) AS max_pos
+            FROM saved_playlist_items spi
+            JOIN saved_playlists sp ON sp.id = spi.playlist_id
+            WHERE spi.media_id = ? AND spi.media_type = ?
+              AND sp.is_immutable = 0 AND sp.promo_type IS NULL
+            """,
+            [friendly_token, media_type],
+        )
+        governed = False
+        if duration_sec is not None and duration_sec < 3600:
+            for r in rows:
+                governed = True
+                if r["position"] == r["max_pos"]:
+                    # Last item of the pass reached — release the whole collection.
+                    await self._execute(
+                        "DELETE FROM playlist_item_played WHERE playlist_id = ?",
+                        [r["playlist_id"]],
+                    )
+                else:
+                    await self._execute(
+                        "INSERT OR REPLACE INTO playlist_item_played "
+                        "(playlist_id, position, media_type, media_id) VALUES (?, ?, ?, ?)",
+                        [r["playlist_id"], r["position"], media_type, friendly_token],
+                    )
+        if not governed:
+            await self._execute(
+                "INSERT INTO play_completions (media_type, media_id) VALUES (?, ?)",
+                [media_type, friendly_token],
+            )
+
+    async def get_playlist_played_media_ids(self, playlist_id: int) -> set[str]:
+        """media_ids already played in the current pass of a mutable playlist.
+
+        Backed by ``playlist_item_played`` (populated only for short episodes of
+        mutable playlists and cleared when the playlist's last item plays), so
+        firing can skip already-played episodes and continue the pass instead of
+        replaying from the start.
+        """
+        rows = await self._fetch_all(
+            "SELECT media_id FROM playlist_item_played WHERE playlist_id = ?",
+            [playlist_id],
+        )
+        return {r["media_id"] for r in rows}
 
     async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
         """Return a lookup of catalog metadata keyed by BOTH friendly_token and

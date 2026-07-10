@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.0] — 2026-07-09
+
+### Added
+
+- **Hide recently-played items from the public catalog.** Regular users no longer see a title in browse/search for a configurable window after it has actually finished playing. Admins (rank ≥ 3) always see every title. The window is set by `catalog_recently_played_hide_days` (default `21`; `0` disables).
+  - **Based on genuine play-completion, not queue time.** A new `CompletionRecorder` runs in the poll loop and records a completion only when the now-playing pointer advances off an item that played past ~50% of its duration (`play_completions` table). This means an item that was pay-to-queued and then **refunded/removed by an admin before it played never counts as played**, and an early admin *skip* of the currently-playing item doesn't either.
+  - **Mutable playlists (TV-show collections) are handled as a unit.** Short (< 1 hour) episodes of a mutable playlist are governed by playlist position instead of the day window: each hides as it plays, and reaching the playlist's **last item** releases the whole collection at once (`playlist_item_played` table). This lets admins append S2/S3 to a show without re-hiding S1 piecemeal or over-playing season 1. Longer items (e.g. a movie) inside a mutable playlist still follow the normal completion + day-window rule.
+  - **Firing a mutable playlist skips episodes already played in the current pass.** `fire_schedule` (scheduled or manual "fire now"), including the appended fallback playlist, now omits already-played episodes so a re-fire continues where the pass left off instead of replaying from the start. Once the last item plays the pass resets and the next fire loads the full playlist again. Immutable/promo playlists are unaffected.
+  - **Manual "import playlist to live queue" honors the same skip, with an override.** Importing a saved playlist now skips already-played episodes by default (matching automated firing); pass `?full=1` on the import endpoint to force-load the entire list regardless of pass state. Automated use (a playlist attached to a schedule as a fallback) always observes the played/non-played rules. The playlist editor exposes both as **Import to Live** (skip played) and **Load Entire List** (full) buttons.
+  - Promos are unaffected — promo/immutable-playlist items are already excluded from the public catalog.
+
+[0.32.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.0
+
 ## [0.31.0] — 2026-07-04
 
 ### Fixed

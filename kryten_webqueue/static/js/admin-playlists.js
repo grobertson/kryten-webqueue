@@ -218,13 +218,21 @@ async function saveItems() {
     showToast(resp.ok ? 'Saved' : 'Save failed', resp.ok ? 'success' : 'error');
 }
 
-async function importToLive() {
+async function importToLive(full = false) {
     if (editorId === null) return;
-    if (!confirm('Load this playlist into the live CyTube queue now?')) return;
-    const resp = await fetch(`/admin/playlists/${editorId}/import`, {method: 'POST'});
+    const prompt = full
+        ? 'Load the ENTIRE playlist into the live CyTube queue now (ignoring what has already been played this pass)?'
+        : 'Load this playlist into the live CyTube queue now?';
+    if (!confirm(prompt)) return;
+    const url = `/admin/playlists/${editorId}/import${full ? '?full=1' : ''}`;
+    const resp = await fetch(url, {method: 'POST'});
     const data = await resp.json().catch(() => ({}));
-    if (resp.ok && data.success) showToast(`Imported ${data.added} item(s)${data.errors ? `, ${data.errors} errors` : ''}`);
-    else showToast(data.error || 'Import failed', 'error');
+    if (resp.ok && data.success) {
+        const skipped = data.skipped ? `, skipped ${data.skipped} already-played` : '';
+        showToast(`Imported ${data.added} item(s)${data.errors ? `, ${data.errors} errors` : ''}${skipped}`);
+    } else {
+        showToast(data.error || 'Import failed', 'error');
+    }
 }
 
 function editMeta() {

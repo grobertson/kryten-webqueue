@@ -16,6 +16,7 @@ from .jobs import JobManager
 from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
+from .queue.completion import CompletionRecorder
 from .queue.race_poller import RacePoller
 from .queue.presence import PresenceRefundMonitor
 from .promos.director import PromoDirector
@@ -138,6 +139,11 @@ async def lifespan(app: FastAPI):
     )
     app.state.promo_director = promo_director
 
+    # Play-completion recorder (poller-driven; records genuine completions that
+    # drive hiding recently-played catalog items from regular users).
+    completion_recorder = CompletionRecorder(db=db)
+    app.state.completion_recorder = completion_recorder
+
     # State poller
     poller = StatePoller(
         api_gate=api_gate,
@@ -146,6 +152,7 @@ async def lifespan(app: FastAPI):
         db=db,
         interval=config.state_poll_interval_sec,
         promo_director=promo_director,
+        completion_recorder=completion_recorder,
     )
     await poller.start()
     app.state.poller = poller

@@ -60,6 +60,7 @@
   "catalog_sync_interval_hours": 4,
   "pre_fire_lock_minutes_default": 15,
   "state_poll_interval_sec": 3.0,
+  "catalog_recently_played_hide_days": 21,
 
   "playlist_bulk_add_delay_sec": 0.5,
   "playlist_bulk_add_max_retries": 2,

@@ -149,6 +149,13 @@ class Config(BaseModel):
     pre_fire_lock_minutes_default: int = 15
     state_poll_interval_sec: float = 3.0
 
+    # Hide recently-played items from the public catalog (browse/search) for this
+    # many days after they actually finished playing. Admins (rank >= 3) always
+    # see them. Short (<1h) episodes of a mutable playlist are instead governed by
+    # playlist position (hidden until the playlist's last item plays). Set to 0 to
+    # disable recently-played hiding entirely.
+    catalog_recently_played_hide_days: int = 21
+
     # Bulk playlist loading (manual import + scheduled fire). CyTube validates
     # each queued item server-side (fetching custom manifests); adding faster
     # than it can validate triggers a transient queueFail (surfaced by api-gate

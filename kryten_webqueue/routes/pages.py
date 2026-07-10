@@ -89,8 +89,11 @@ async def catalog_browse_page(request: Request, category: str | None = None,
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
     sort = sort if sort in _VALID_SORTS else "default"
-    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort)
-    total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden)
+    # Admins always see every title; regular users have recently-played items
+    # hidden for the configured window.
+    recently_played_days = 0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
+    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort, recently_played_days=recently_played_days)
+    total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden, recently_played_days=recently_played_days)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
@@ -125,8 +128,9 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
     sort = sort if sort in _VALID_SORTS else "default"
-    items = await db.search(q, category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort)
-    total = await db.search_count(q, category=category, tag=tag, show_hidden=show_hidden)
+    recently_played_days = 0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
+    items = await db.search(q, category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort, recently_played_days=recently_played_days)
+    total = await db.search_count(q, category=category, tag=tag, show_hidden=show_hidden, recently_played_days=recently_played_days)
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
