@@ -349,4 +349,52 @@ async def test_recently_played_debug_reports_both_signals(db):
     assert {r["media_id"] for r in debug["by_playlist_pass"]} == {"ep1"}
 
 
+async def test_promo_clips_are_exempt_from_hiding(db):
+    # A clip in a promo pool (promo_type set) must never be recorded as played
+    # nor appear in the recently-played debug list.
+    await _add_catalog(db, "promo1", "Bumper", duration_sec=30)
+    pid = await db.create_saved_playlist(
+        name="Bumpers", description=None, is_immutable=False,
+        created_by="admin", promo_type="general",
+    )
+    await db.replace_playlist_items(pid, [
+        {"media_type": "cm", "media_id": "promo1", "title": "Bumper", "duration_sec": 30},
+    ])
+
+    await db.record_play_completion(friendly_token="promo1", duration_sec=30)
+
+    rows = await db._fetch_all("SELECT media_id FROM play_completions")
+    assert rows == []
+    pip = await db._fetch_all("SELECT media_id FROM playlist_item_played")
+    assert pip == []
+    debug = await db.get_recently_played_debug(21)
+    assert debug["by_completion"] == []
+    assert debug["by_playlist_pass"] == []
+
+
+async def test_purge_promo_hide_state_removes_stale_rows(db):
+    # Rows recorded before the promo exemption (e.g. in production) are cleaned up
+    # at the data layer by purge_promo_hide_state (also run by migration v14).
+    await _add_catalog(db, "promo1", "Bumper", duration_sec=30)
+    pid = await db.create_saved_playlist(
+        name="Bumpers", description=None, is_immutable=False,
+        created_by="admin", promo_type="general",
+    )
+    await db.replace_playlist_items(pid, [
+        {"media_type": "cm", "media_id": "promo1", "title": "Bumper", "duration_sec": 30},
+    ])
+    # Simulate a stale row written before the exemption existed.
+    await db._execute("INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'promo1')")
+    # Before the purge it shows in the (unfiltered) debug view.
+    assert {r["media_id"] for r in (await db.get_recently_played_debug(21))["by_completion"]} == {"promo1"}
+
+    removed = await db.purge_promo_hide_state()
+    assert removed["completions"] == 1
+
+    assert await db._fetch_all("SELECT media_id FROM play_completions") == []
+    assert (await db.get_recently_played_debug(21))["by_completion"] == []
+
+
+
+
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.32.2] — 2026-07-09
+
+### Fixed
+
+- **Promo clips are exempt from recently-played hiding.** Playing a promo-pool clip no longer records any hide state — promos are already excluded from the public catalog and must not be treated like normal mutable/immutable playlist items. `record_play_completion` now skips promo-pool members entirely. A one-time migration (v14) purges any promo hide state recorded before this fix; the same cleanup is also available on-demand via `purge_promo_hide_state()`.
+
 ## [0.32.1] — 2026-07-09
 
 ### Added
@@ -28,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.32.0]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.0
 [0.32.1]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.1
+[0.32.2]: https://github.com/grobertson/kryten-webqueue/releases/tag/v0.32.2
 
 ## [0.31.0] — 2026-07-04
 

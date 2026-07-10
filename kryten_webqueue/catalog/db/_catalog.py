@@ -360,7 +360,19 @@ class _CatalogMixin:
         collection releases together. Everything else (movies, standalone clips,
         long items even inside a mutable playlist) gets a time-boxed
         ``play_completions`` row instead.
+
+        Promo-pool clips are exempt entirely: they are already excluded from the
+        public catalog and must never be treated like normal (mutable/immutable)
+        playlist items, so playing one records nothing.
         """
+        promo = await self._fetch_one(
+            "SELECT 1 FROM saved_playlist_items spi "
+            "JOIN saved_playlists sp ON sp.id = spi.playlist_id "
+            "WHERE spi.media_id = ? AND spi.media_type = ? AND sp.promo_type IS NOT NULL LIMIT 1",
+            [friendly_token, media_type],
+        )
+        if promo:
+            return
         rows = await self._fetch_all(
             """
             SELECT spi.playlist_id AS playlist_id, spi.position AS position,
@@ -433,6 +445,29 @@ class _CatalogMixin:
             "DELETE FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
             [friendly_token, media_type],
         )
+        return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
+
+    async def purge_promo_hide_state(self) -> dict:
+        """Remove any recently-played hide state recorded for promo-pool clips.
+
+        Promos must never be subject to recently-played hiding. New completions
+        are already skipped in ``record_play_completion``; this purges rows
+        written before that exemption existed (also run once by migration v14).
+        Returns the row counts removed.
+        """
+        promo_subquery = (
+            "SELECT spi.media_id FROM saved_playlist_items spi "
+            "JOIN saved_playlists sp ON sp.id = spi.playlist_id "
+            "WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'"
+        )
+        pc = await self._fetch_one(
+            f"SELECT COUNT(*) AS c FROM play_completions WHERE media_id IN ({promo_subquery})"
+        )
+        pip = await self._fetch_one(
+            f"SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id IN ({promo_subquery})"
+        )
+        await self._execute(f"DELETE FROM play_completions WHERE media_id IN ({promo_subquery})")
+        await self._execute(f"DELETE FROM playlist_item_played WHERE media_id IN ({promo_subquery})")
         return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
 
     async def get_recently_played_debug(self, days: int) -> dict:

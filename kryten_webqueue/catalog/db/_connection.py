@@ -291,6 +291,24 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_playlist_item_played_media ON playlist_item_played(media_id);
     """,
+    # v14: One-time cleanup of recently-played hide state wrongly recorded for
+    # promo-pool clips. Promos are excluded from the public catalog and must
+    # never be treated like normal playlist items, so any hide state recorded for
+    # a promo clip (before the exemption in record_play_completion) is purged.
+    """
+    DELETE FROM play_completions
+    WHERE media_id IN (
+        SELECT spi.media_id FROM saved_playlist_items spi
+        JOIN saved_playlists sp ON sp.id = spi.playlist_id
+        WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'
+    );
+    DELETE FROM playlist_item_played
+    WHERE media_id IN (
+        SELECT spi.media_id FROM saved_playlist_items spi
+        JOIN saved_playlists sp ON sp.id = spi.playlist_id
+        WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'
+    );
+    """,
 ]
 
 
