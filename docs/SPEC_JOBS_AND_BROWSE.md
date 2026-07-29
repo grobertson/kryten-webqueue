@@ -146,14 +146,14 @@ Reimplements `fetchurls.py`: read the Channel Z Excel workbook from SharePoint, 
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `section` | enum | `all` | `all` \| `friday` \| `saturday-night` \| `saturday-morning`. |
+| `section` | enum | `all` | `all` \| `friday` \| `saturday-night` \| `saturday-morning` \| `sunday-morning` \| `sunday-daytime`. |
 | `dry_run` | bool | `false` | Resolve/preview only; no downloads, no writeback, no import. |
 | `writeback` | bool | `true` | Write resolved URLs back to column F. |
 | `validate` | bool | `true` | HEAD-check existing dropsugar.co URLs. |
 
 **Import resulting playlists (new):**
-- The tool produces `playlists/{sheet}-friday.txt`, `{sheet}-saturday-night.txt`, `{sheet}-saturday-morning.txt`, and `{sheet}-failures.txt`.
-- After a successful (non-dry-run) run, **import each non-failures file as a saved playlist** named exactly like the file stem: `{sheet}-friday`, `{sheet}-saturday-night`, `{sheet}-saturday-morning`. Reuse `import_playlist_text()` to resolve lines, then `create_saved_playlist(name=stem, created_by=triggered_by)` + `replace_playlist_items()`.
+- The tool produces `playlists/{sheet}-friday.txt`, `{sheet}-saturday-night.txt`, `{sheet}-saturday-morning.txt`, `{sheet}-sunday-morning.txt`, `{sheet}-sunday-daytime.txt`, and `{sheet}-failures.txt`.
+- After a successful (non-dry-run) run, **import each non-failures file as a saved playlist** named exactly like the file stem: `{sheet}-friday`, `{sheet}-saturday-night`, `{sheet}-saturday-morning`, `{sheet}-sunday-morning`, `{sheet}-sunday-daytime`. Reuse `import_playlist_text()` to resolve lines, then `create_saved_playlist(name=stem, created_by=triggered_by)` + `replace_playlist_items()`.
 - If a playlist of that name already exists, **replace its items** (idempotent re-runs) rather than creating a duplicate. (Match by exact name + `created_by`.)
 - The `{sheet}-failures` file is **not** imported; surface its count in the run detail.
 

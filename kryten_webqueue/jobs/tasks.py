@@ -167,7 +167,8 @@ async def fetchurls_job(params: dict, ctx):
 
     Sections map to the fixed playlists by their human label:
       friday → "Friday Night", saturday-morning → "Saturday Morning",
-      saturday-night → "Saturday Night".
+      saturday-night → "Saturday Night", sunday-morning → "Sunday Morning",
+      sunday-daytime → "Sunday Daytime".
     """
     result = await _run_vendored(
         "kryten_webqueue.integrations.cmsutils.fetchurls", params, ctx,
@@ -261,7 +262,8 @@ FETCH_SCHEMA = [
 
 FETCHURLS_SCHEMA = [
     {"name": "section", "type": "enum", "default": "all",
-     "options": ["all", "friday", "saturday-night", "saturday-morning"], "label": "Section"},
+     "options": ["all", "friday", "saturday-night", "saturday-morning",
+                 "sunday-morning", "sunday-daytime"], "label": "Section"},
     {"name": "dry_run", "type": "bool", "default": False, "label": "Dry run (resolve only)"},
     {"name": "validate", "type": "bool", "default": True, "label": "Validate existing URLs"},
     {"name": "writeback", "type": "bool", "default": True, "label": "Write resolved URLs back to SharePoint (col F)"},

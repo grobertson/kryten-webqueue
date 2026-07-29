@@ -10,12 +10,14 @@
 fetchurls.py - Import off-site media and build dropsugar.co playlist files.
 
 Reads source URLs from an Excel sheet on SharePoint (or a local file / plain
-text file), grouped into three playlist sections by the section headers found
+text file), grouped into playlist sections by the section headers found
 in column A:
 
     Friday Schedule           → playlists/{sheet}-friday.txt
     Saturday Schedule         → playlists/{sheet}-saturday-night.txt
     Saturday Morning Cartoons → playlists/{sheet}-saturday-morning.txt
+    Sunday Morning            → playlists/{sheet}-sunday-morning.txt
+    Sunday Afternoon          → playlists/{sheet}-sunday-daytime.txt
 
 For each source URL:
   • dropsugar.co  — validated with a HEAD request, kept as-is
@@ -81,6 +83,8 @@ Output
   playlists/{sheet}-friday.txt
   playlists/{sheet}-saturday-night.txt
   playlists/{sheet}-saturday-morning.txt
+  playlists/{sheet}-sunday-morning.txt
+  playlists/{sheet}-sunday-daytime.txt
   playlists/{sheet}-failures.txt          (if any URLs could not be resolved)
 """
 
@@ -129,11 +133,15 @@ GRAPH_SCOPES = ["https://graph.microsoft.com/Files.ReadWrite.All"]
 COL_SECTION = 1   # Column A — section headers
 COL_URL     = 5   # Column E — source URLs
 
-# Section-name substrings → output playlist slug
+# Section-name substrings → output playlist slug.
+# Order matters: more specific keys must precede broader ones (see
+# _classify_section, which returns the first substring match).
 SECTION_MAP = {
     "friday":   "friday",
     "saturday morning": "saturday-morning",
     "saturday": "saturday-night",   # must come AFTER "saturday morning"
+    "sunday morning":   "sunday-morning",
+    "sunday afternoon": "sunday-daytime",
 }
 
 DROPSUGAR_HOST = "dropsugar.co"
@@ -458,6 +466,8 @@ def parse_excel_sections(
         "friday":           [(row, url, col_f), ...],
         "saturday-night":   [(row, url, col_f), ...],
         "saturday-morning": [(row, url, col_f), ...],
+        "sunday-morning":   [(row, url, col_f), ...],
+        "sunday-daytime":   [(row, url, col_f), ...],
     }
     """
     _check_openpyxl()
@@ -475,6 +485,8 @@ def parse_excel_sections(
         "friday":           [],
         "saturday-night":   [],
         "saturday-morning": [],
+        "sunday-morning":   [],
+        "sunday-daytime":   [],
     }
     current_section: Optional[str] = None
 
@@ -996,12 +1008,16 @@ SECTION_SLUGS = {
     "friday":           "friday",
     "saturday-night":   "saturday-night",
     "saturday-morning": "saturday-morning",
+    "sunday-morning":   "sunday-morning",
+    "sunday-daytime":   "sunday-daytime",
 }
 
 SECTION_LABELS = {
     "friday":           "Friday Night",
     "saturday-night":   "Saturday Night",
     "saturday-morning": "Saturday Morning",
+    "sunday-morning":   "Sunday Morning",
+    "sunday-daytime":   "Sunday Daytime",
 }
 
 

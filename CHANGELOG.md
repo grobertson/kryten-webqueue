@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.0] — 2026-07-29
+
+### Added
+
+- **Sunday schedule in the "Fetch URLs (weekend workbook)" job.** `fetchurls` now resolves two additional column-A sections from the weekend workbook: `SUNDAY MORNING` → the **"Sunday Morning"** saved playlist (slug `sunday-morning`), and `SUNDAY AFTERNOON` → the **"Sunday Daytime"** saved playlist (slug `sunday-daytime`). The two new sections join the existing Friday/Saturday sections and are resolved and imported the same way (dropsugar.co validated via HEAD; YouTube/Tubi auto-downloaded and posted to the CMS). The job's `section` parameter gains `sunday-morning` and `sunday-daytime` options (`all` still runs every section). Sunday lives in the existing `M.D-M.D` weekend sheet as extra rows — the worksheet naming scheme is unchanged (first sheet with Sunday rows is `8.7-8.8`).
+
 ## [0.32.3] — 2026-07-09
 
 ### Fixed
