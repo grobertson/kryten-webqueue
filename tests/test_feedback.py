@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from kryten_webqueue.catalog.db import Database
 from kryten_webqueue.catalog.images import CoverArtResolver
-from kryten_webqueue.auth.rate_limit import RateLimiter
+from kryten_webqueue.auth.rate_limit import QuotaLimiter, RateLimiter
 from kryten_webqueue.routes.feedback import (
     FeedbackSubmit,
     SuggestResolve,
@@ -63,11 +63,16 @@ async def _add_catalog(db, token, title):
 
 def _request(**state):
     """Minimal stand-in for a FastAPI Request exposing app.state.<attr>."""
+    state.setdefault("feedback_quota_limiter", _lenient_quota())
     return SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(**state)))
 
 
 def _lenient_limiter():
     return RateLimiter(max_requests=100, window_seconds=300)
+
+
+def _lenient_quota():
+    return QuotaLimiter([("day", 1000, 86_400), ("week", 1000, 604_800)])
 
 
 class _FakeCover:
@@ -317,6 +322,55 @@ async def test_submit_feedback_rate_limited(db):
     assert ei.value.status_code == 429
 
 
+async def test_submit_feedback_daily_quota(db):
+    # 2 feedback submissions per day; the 3rd is rejected with a 429.
+    req = _request(
+        db=db,
+        feedback_rate_limiter=_lenient_limiter(),
+        feedback_quota_limiter=QuotaLimiter([("day", 2, 86_400), ("week", 6, 604_800)]),
+    )
+    await submit_feedback(FeedbackSubmit(body="one"), req, user=USER)
+    await submit_feedback(FeedbackSubmit(body="two"), req, user=USER)
+    with pytest.raises(HTTPException) as ei:
+        await submit_feedback(FeedbackSubmit(body="three"), req, user=USER)
+    assert ei.value.status_code == 429
+    assert "today" in ei.value.detail
+    assert await db.count_feedback() == 2
+
+
+async def test_submit_feedback_weekly_quota(db):
+    # 6 per week even when the daily cap is not the binding constraint.
+    req = _request(
+        db=db,
+        feedback_rate_limiter=_lenient_limiter(),
+        # High daily cap so only the weekly tier (6) can bind.
+        feedback_quota_limiter=QuotaLimiter(
+            [("day", 100, 86_400), ("week", 6, 604_800)]
+        ),
+    )
+    for i in range(6):
+        await submit_feedback(FeedbackSubmit(body=f"item {i}"), req, user=USER)
+    with pytest.raises(HTTPException) as ei:
+        await submit_feedback(FeedbackSubmit(body="seventh"), req, user=USER)
+    assert ei.value.status_code == 429
+    assert "week" in ei.value.detail
+    assert await db.count_feedback() == 6
+
+
+async def test_submit_feedback_quota_is_per_user(db):
+    # Each user gets an independent quota (namespaced keys).
+    req = _request(
+        db=db,
+        feedback_rate_limiter=_lenient_limiter(),
+        feedback_quota_limiter=QuotaLimiter([("day", 2, 86_400), ("week", 6, 604_800)]),
+    )
+    await submit_feedback(FeedbackSubmit(body="a"), req, user={"username": "Alice"})
+    await submit_feedback(FeedbackSubmit(body="b"), req, user={"username": "Alice"})
+    # Bob is unaffected by Alice reaching her cap.
+    res = await submit_feedback(FeedbackSubmit(body="c"), req, user={"username": "Bob"})
+    assert res["success"] is True
+
+
 # ── User routes: suggestions ────────────────────────────────────────────────
 
 
@@ -428,6 +482,24 @@ async def test_submit_suggestion_sanitizes_bad_source(db):
     row = (await db.list_title_suggestions())[0]
     assert row["resolved_source"] is None
     assert row["resolution"] == "resolved"
+
+
+async def test_submit_suggestion_daily_quota(db):
+    # Suggestions share the same 2/day, 6/week cap (independent of feedback).
+    req = _request(
+        db=db,
+        feedback_rate_limiter=_lenient_limiter(),
+        feedback_quota_limiter=QuotaLimiter([("day", 2, 86_400), ("week", 6, 604_800)]),
+    )
+    await submit_suggestion(SuggestSubmit(query="one", unresolved=True), req, user=USER)
+    await submit_suggestion(SuggestSubmit(query="two", unresolved=True), req, user=USER)
+    with pytest.raises(HTTPException) as ei:
+        await submit_suggestion(
+            SuggestSubmit(query="three", unresolved=True), req, user=USER
+        )
+    assert ei.value.status_code == 429
+    assert "today" in ei.value.detail
+    assert await db.count_title_suggestions() == 2
 
 
 # ── Admin routes ────────────────────────────────────────────────────────────

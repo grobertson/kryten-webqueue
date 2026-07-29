@@ -54,6 +54,26 @@ def _rate_limit(request: Request, key: str, message: str) -> None:
         raise HTTPException(status_code=429, detail=message)
 
 
+def _submission_quota(request: Request, key: str, noun: str) -> None:
+    """Enforce the hard per-user daily/weekly submission quota (2/day, 6/week).
+
+    Raises 429 with a tier-appropriate message when the day or week cap for
+    ``key`` is reached. A permitted submission is recorded against both tiers.
+    """
+    limiter = request.app.state.feedback_quota_limiter
+    exceeded = limiter.check(key)
+    if exceeded == "day":
+        raise HTTPException(
+            status_code=429,
+            detail=f"You've reached today's limit of 2 {noun}. Please try again tomorrow.",
+        )
+    if exceeded == "week":
+        raise HTTPException(
+            status_code=429,
+            detail=f"You've reached this week's limit of 6 {noun}. Please try again next week.",
+        )
+
+
 @router.post("/feedback/submit")
 async def submit_feedback(
     payload: FeedbackSubmit, request: Request, user: dict = Depends(get_current_user)
@@ -74,6 +94,7 @@ async def submit_feedback(
         f"feedback:{user['username']}",
         "You're sending feedback very quickly. Please wait a moment and try again.",
     )
+    _submission_quota(request, f"feedback:{user['username']}", "feedback submissions")
     db = request.app.state.db
     await db.add_feedback(username=user["username"], body=body)
     return {
@@ -144,6 +165,7 @@ async def submit_suggestion(
         f"suggest:{user['username']}",
         "You're sending suggestions very quickly. Please wait a moment and try again.",
     )
+    _submission_quota(request, f"suggest:{user['username']}", "suggestions")
     db = request.app.state.db
     username = user["username"]
     choice = payload.choice

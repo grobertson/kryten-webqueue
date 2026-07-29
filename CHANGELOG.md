@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.2] — 2026-07-29
+
+### Added
+
+- **Per-user submission quota on feedback and title suggestions.** Each user may now submit at most **2 per day and 6 per week** for feedback *and* (independently) for suggestions. Exceeding either tier returns `429` with a message pointing at the day/week limit. Implemented as a new `QuotaLimiter` (multi-tier sliding window) wired into the two submit endpoints, in addition to the existing short-burst throttle. Search/resolve requests are unaffected.
+
 ## [0.33.1] — 2026-07-29
 
 ### Changed

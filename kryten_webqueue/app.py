@@ -22,7 +22,7 @@ from .queue.presence import PresenceRefundMonitor
 from .promos.director import PromoDirector
 from .ws.manager import WebSocketManager
 from .playlists.scheduler import PlaylistScheduler
-from .auth.rate_limit import RateLimiter
+from .auth.rate_limit import QuotaLimiter, RateLimiter
 
 from .routes.auth import router as auth_router
 from .routes.catalog import router as catalog_router
@@ -196,6 +196,11 @@ async def lifespan(app: FastAPI):
     # feedback/suggestion endpoints (per-user, namespaced keys).
     app.state.rate_limiter = RateLimiter()
     app.state.feedback_rate_limiter = RateLimiter(max_requests=12, window_seconds=300)
+    # Hard per-user submission quota for feedback and suggestions: 2/day, 6/week
+    # (namespaced keys, checked in addition to the short-burst limiter above).
+    app.state.feedback_quota_limiter = QuotaLimiter(
+        [("day", 2, 86_400), ("week", 6, 604_800)]
+    )
 
     # Playlist scheduler
     scheduler = PlaylistScheduler(
