@@ -51,7 +51,12 @@ async def fire_schedule(
             # Refund all pay items currently in queue
             pay_items = await db.get_pay_items()
             for item in pay_items:
-                await refund_item(api_gate=api_gate, db=db, uid=item["uid"], reason="schedule_displaced")
+                await refund_item(
+                    api_gate=api_gate,
+                    db=db,
+                    uid=item["uid"],
+                    reason="schedule_displaced",
+                )
 
             # Clear the CyTube playlist
             await api_gate.playlist_clear()
@@ -87,11 +92,16 @@ async def fire_schedule(
                         max_retries=add_max_retries,
                         retry_delay_sec=add_delay_sec or 0.5,
                     )
-                    if isinstance(add_result, dict) and add_result.get("uid") is not None:
+                    if (
+                        isinstance(add_result, dict)
+                        and add_result.get("uid") is not None
+                    ):
                         last_item_uid = add_result["uid"]
                     total_duration += item.get("duration_sec", 0) or 0
                 except Exception as e:
-                    logger.warning(f"Schedule fire: failed to add {item['media_id']}: {e}")
+                    logger.warning(
+                        f"Schedule fire: failed to add {item['media_id']}: {e}"
+                    )
 
             # Append the optional fallback (mutable) playlist AFTER the event items so
             # the live queue isn't left empty once the event is exhausted. The
@@ -105,7 +115,9 @@ async def fire_schedule(
                 # episodes of the (mutable) fallback so it advances across fires.
                 fb_played = await db.get_playlist_played_media_ids(fallback_id)
                 if fb_played:
-                    fallback_items = [it for it in fallback_items if it["media_id"] not in fb_played]
+                    fallback_items = [
+                        it for it in fallback_items if it["media_id"] not in fb_played
+                    ]
                 for index, item in enumerate(fallback_items):
                     if index and add_delay_sec:
                         await asyncio.sleep(add_delay_sec)
@@ -119,7 +131,9 @@ async def fire_schedule(
                             retry_delay_sec=add_delay_sec or 0.5,
                         )
                     except Exception as e:
-                        logger.warning(f"Schedule fire: failed to add fallback {item['media_id']}: {e}")
+                        logger.warning(
+                            f"Schedule fire: failed to add fallback {item['media_id']}: {e}"
+                        )
                 if fallback_items:
                     logger.info(
                         f"Schedule {schedule_id}: appended {len(fallback_items)} fallback item(s) "
@@ -142,13 +156,17 @@ async def fire_schedule(
             await db.mark_schedule_fired(schedule_id, now.isoformat())
 
         # Notify WS clients
-        await ws_manager.broadcast({
-            "type": "schedule_fired",
-            "data": {
-                "schedule_id": schedule_id,
-                "playlist_name": playlist["name"],
-                "is_immutable": playlist.get("is_immutable", False),
-            },
-        })
+        await ws_manager.broadcast(
+            {
+                "type": "schedule_fired",
+                "data": {
+                    "schedule_id": schedule_id,
+                    "playlist_name": playlist["name"],
+                    "is_immutable": playlist.get("is_immutable", False),
+                },
+            }
+        )
 
-        logger.info(f"Schedule {schedule_id} fired: playlist '{playlist['name']}' ({len(items)} items)")
+        logger.info(
+            f"Schedule {schedule_id} fired: playlist '{playlist['name']}' ({len(items)} items)"
+        )

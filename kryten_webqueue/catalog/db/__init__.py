@@ -1,5 +1,10 @@
 from ._connection import _DBBase
-from ._catalog import _CatalogMixin, HIDDEN_ITEM_TAG, HIDDEN_CATEGORY_NAMES, HIDDEN_TAG_NAMES
+from ._catalog import (
+    _CatalogMixin,
+    HIDDEN_ITEM_TAG,
+    HIDDEN_CATEGORY_NAMES,
+    HIDDEN_TAG_NAMES,
+)
 from ._playlists import _PlaylistsMixin
 from ._queue import _QueueMixin
 from ._feedback import _FeedbackMixin

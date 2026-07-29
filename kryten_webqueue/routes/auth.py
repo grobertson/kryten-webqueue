@@ -57,7 +57,9 @@ async def verify_otp(request: Request, response: Response):
 
     # Issue JWT session cookie
     config = request.app.state.config
-    token = create_session_token(username, rank, config.secret_key, config.session_ttl_hours)
+    token = create_session_token(
+        username, rank, config.secret_key, config.session_ttl_hours
+    )
 
     response.set_cookie(
         key="session",

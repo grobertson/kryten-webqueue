@@ -55,11 +55,19 @@ async def remove_lead_in_for(*, api_gate, shadow, uid: int) -> int:
             try:
                 await api_gate.playlist_delete(promo_uid)
             except Exception:
-                logger.warning("Failed to delete lead-in promo uid=%s from CyTube", promo_uid, exc_info=True)
+                logger.warning(
+                    "Failed to delete lead-in promo uid=%s from CyTube",
+                    promo_uid,
+                    exc_info=True,
+                )
             try:
                 await shadow.remove(promo_uid)
             except Exception:
-                logger.warning("Failed to remove lead-in promo uid=%s from shadow", promo_uid, exc_info=True)
+                logger.warning(
+                    "Failed to remove lead-in promo uid=%s from shadow",
+                    promo_uid,
+                    exc_info=True,
+                )
             removed += 1
     return removed
 
@@ -67,8 +75,16 @@ async def remove_lead_in_for(*, api_gate, shadow, uid: int) -> int:
 class PromoDirector:
     """Inserts promos just-in-time as the poller observes playback advancing."""
 
-    def __init__(self, *, api_gate, db, shadow, config,
-                 add_delay_sec: float = 0.5, add_max_retries: int = 2):
+    def __init__(
+        self,
+        *,
+        api_gate,
+        db,
+        shadow,
+        config,
+        add_delay_sec: float = 0.5,
+        add_max_retries: int = 2,
+    ):
         self._api_gate = api_gate
         self._db = db
         self._shadow = shadow
@@ -81,8 +97,8 @@ class PromoDirector:
         self._last_np_is_promo: bool = False
         self._content_since_last_general: int = 0
         self._last_general_at: datetime | None = None
-        self._last_clip_token: dict[str, str] = {}   # promo_type -> last clip media_id
-        self._seq_index: dict[str, int] = {}          # promo_type -> next sequential index
+        self._last_clip_token: dict[str, str] = {}  # promo_type -> last clip media_id
+        self._seq_index: dict[str, int] = {}  # promo_type -> next sequential index
 
         # Suppression guard. Held (re-entrantly) by bulk live-queue loaders
         # (schedule fire, playlist import) so promos are never inserted *into* a
@@ -107,7 +123,10 @@ class PromoDirector:
         weights, and per-type ordering.
         """
         self._config = config
-        logger.info("PromoDirector config updated (enabled=%s)", getattr(config, "enabled", None))
+        logger.info(
+            "PromoDirector config updated (enabled=%s)",
+            getattr(config, "enabled", None),
+        )
 
     @property
     def is_suppressed(self) -> bool:
@@ -212,7 +231,10 @@ class PromoDirector:
             it = items[(t - k) % n]
             if not it.get("is_promo"):
                 return False
-            if it.get("lead_in_for_uid") is None and it.get("promo_type") in GENERAL_PROMO_TYPES:
+            if (
+                it.get("lead_in_for_uid") is None
+                and it.get("promo_type") in GENERAL_PROMO_TYPES
+            ):
                 return True
         return False
 
@@ -230,7 +252,8 @@ class PromoDirector:
         if self._content_since_last_general >= g.every_n_items:
             logger.debug(
                 "General promo due: content_since_last=%d >= every_n_items=%d",
-                self._content_since_last_general, g.every_n_items,
+                self._content_since_last_general,
+                g.every_n_items,
             )
             return True
         if self._last_general_at is not None:
@@ -238,7 +261,8 @@ class PromoDirector:
             if elapsed_min >= g.every_m_minutes:
                 logger.debug(
                     "General promo due: elapsed=%.1fmin >= every_m_minutes=%.1f",
-                    elapsed_min, g.every_m_minutes,
+                    elapsed_min,
+                    g.every_m_minutes,
                 )
                 return True
         return False
@@ -267,7 +291,10 @@ class PromoDirector:
         chosen = self._rng.choices(candidates, weights=weights, k=1)[0]
         logger.debug(
             "Promo general-type pick: chosen=%s candidates=%s weights=%s skipped=%s",
-            chosen, candidates, weights, skipped,
+            chosen,
+            candidates,
+            weights,
+            skipped,
         )
         return chosen
 
@@ -283,8 +310,13 @@ class PromoDirector:
             logger.debug(
                 "Promo clip select [%s] order=sequential pool_size=%d raw_index=%d "
                 "-> idx=%d media_id=%s title=%r next_index=%d",
-                promo_type, pool_size, raw_index, idx,
-                clip.get("media_id"), clip.get("title"), idx + 1,
+                promo_type,
+                pool_size,
+                raw_index,
+                idx,
+                clip.get("media_id"),
+                clip.get("title"),
+                idx + 1,
             )
         else:
             clip = self._rng.choice(pool)
@@ -302,14 +334,19 @@ class PromoDirector:
             logger.debug(
                 "Promo clip select [%s] order=random pool_size=%d no_repeat=%s "
                 "avoided_repeat=%s -> media_id=%s title=%r",
-                promo_type, pool_size, self._config.general.no_repeat,
-                repeated, clip.get("media_id"), clip.get("title"),
+                promo_type,
+                pool_size,
+                self._config.general.no_repeat,
+                repeated,
+                clip.get("media_id"),
+                clip.get("title"),
             )
         if pool_size == 1:
             logger.warning(
                 "Promo pool for %r has a single clip; it will repeat every time "
                 "(media_id=%s). Add more clips to vary this promo type.",
-                promo_type, clip.get("media_id"),
+                promo_type,
+                clip.get("media_id"),
             )
         self._last_clip_token[promo_type] = clip.get("media_id")
         return clip
@@ -321,8 +358,15 @@ class PromoDirector:
         idx = self._index_of(after_uid, items)
         return (idx + 1) if idx is not None else len(items)
 
-    async def _insert_promo(self, promo_type: str, *, after_uid, target_uid, lead_in: bool,
-                            pool: list[dict] | None = None) -> int | None:
+    async def _insert_promo(
+        self,
+        promo_type: str,
+        *,
+        after_uid,
+        target_uid,
+        lead_in: bool,
+        pool: list[dict] | None = None,
+    ) -> int | None:
         tc = self._config.types.get(promo_type)
         if not tc or not tc.enabled:
             return None
@@ -347,7 +391,9 @@ class PromoDirector:
         if not add_result or not add_result.get("success"):
             logger.warning(
                 "Promo add rejected (%s media_id=%s): result=%r",
-                promo_type, clip.get("media_id"), add_result,
+                promo_type,
+                clip.get("media_id"),
+                add_result,
             )
             return None
         uid = add_result.get("uid")
@@ -361,7 +407,9 @@ class PromoDirector:
                 "Promo add for %s (media_id=%s) returned success but NO uid; "
                 "cannot track in shadow (result=%r). Skipping shadow insert to "
                 "avoid an untracked, repeatable insertion.",
-                promo_type, clip.get("media_id"), add_result,
+                promo_type,
+                clip.get("media_id"),
+                add_result,
             )
             return None
 
@@ -370,7 +418,9 @@ class PromoDirector:
                 await self._api_gate.playlist_move(uid, after_uid)
                 logger.debug("Promo move ok: uid=%s after_uid=%s", uid, after_uid)
             except Exception:
-                logger.warning("Promo move failed (uid=%s after=%s)", uid, after_uid, exc_info=True)
+                logger.warning(
+                    "Promo move failed (uid=%s after=%s)", uid, after_uid, exc_info=True
+                )
 
         item = {
             "uid": uid,
@@ -391,7 +441,9 @@ class PromoDirector:
         await self._shadow.insert_at(item, pos)
         logger.info(
             "Inserted %s promo uid=%s (%s) %s",
-            promo_type, uid, clip.get("title"),
+            promo_type,
+            uid,
+            clip.get("title"),
             f"before content uid={target_uid}" if lead_in else "(general)",
         )
         return uid
@@ -429,7 +481,8 @@ class PromoDirector:
             return None
         logger.info(
             "Viewer's-Choice lead-in (pay path) for paid uid=%s after_uid=%s",
-            content_uid, pred,
+            content_uid,
+            pred,
         )
         return await self._insert_promo(
             "viewers_choice", after_uid=pred, target_uid=content_uid, lead_in=True
@@ -472,7 +525,10 @@ class PromoDirector:
                 self._content_since_last_general += 1
             logger.debug(
                 "Now-playing advanced: %s -> %s (is_promo=%s) content_since_last_general=%d",
-                self._last_np_uid, np_uid, np_is_promo, self._content_since_last_general,
+                self._last_np_uid,
+                np_uid,
+                np_is_promo,
+                self._content_since_last_general,
             )
             self._last_np_uid = np_uid
             self._last_np_is_promo = np_is_promo
@@ -509,8 +565,11 @@ class PromoDirector:
         if leadin_type and not self._has_lead_in(target_uid, items):
             logger.info(
                 "Promo lead-in due: type=%s target_uid=%s (is_pay=%s dur=%.0fs) after_uid=%s",
-                leadin_type, target_uid, target.get("is_pay"),
-                _duration_seconds(target), direct_pred,
+                leadin_type,
+                target_uid,
+                target.get("is_pay"),
+                _duration_seconds(target),
+                direct_pred,
             )
             await self._insert_promo(
                 leadin_type, after_uid=direct_pred, target_uid=target_uid, lead_in=True
@@ -518,7 +577,8 @@ class PromoDirector:
         elif leadin_type:
             logger.debug(
                 "Promo lead-in already present for target_uid=%s (type=%s)",
-                target_uid, leadin_type,
+                target_uid,
+                leadin_type,
             )
 
         # General cadence promo.
@@ -529,13 +589,20 @@ class PromoDirector:
             if chosen:
                 pool = await self._db.get_promo_pool_items(chosen)
                 inserted = await self._insert_promo(
-                    chosen, after_uid=content_pred, target_uid=None, lead_in=False, pool=pool
+                    chosen,
+                    after_uid=content_pred,
+                    target_uid=None,
+                    lead_in=False,
+                    pool=pool,
                 )
                 if inserted is not None:
                     logger.info(
                         "Promo general inserted: type=%s uid=%s before content_uid=%s "
                         "(reset cadence counter from %d)",
-                        chosen, inserted, target_uid, self._content_since_last_general,
+                        chosen,
+                        inserted,
+                        target_uid,
+                        self._content_since_last_general,
                     )
                     self._content_since_last_general = 0
                     self._last_general_at = now

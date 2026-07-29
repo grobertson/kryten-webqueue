@@ -26,18 +26,22 @@ async def db(tmp_path):
 
 # --- pure: season/episode parsing ---
 
-@pytest.mark.parametrize("title,expected", [
-    ("Show Name S01E02 - The Title", (1, 2)),
-    ("Show Name s1e2", (1, 2)),
-    ("Show Name S01 E02", (1, 2)),
-    ("Show Name S01.E02", (1, 2)),
-    ("Show Name 1x02", (1, 2)),
-    ("Show Name 01x003", (1, 3)),
-    ("Show Name Season 2 Episode 11", (2, 11)),
-    ("A Plain Movie (2020)", None),
-    ("", None),
-    (None, None),
-])
+
+@pytest.mark.parametrize(
+    "title,expected",
+    [
+        ("Show Name S01E02 - The Title", (1, 2)),
+        ("Show Name s1e2", (1, 2)),
+        ("Show Name S01 E02", (1, 2)),
+        ("Show Name S01.E02", (1, 2)),
+        ("Show Name 1x02", (1, 2)),
+        ("Show Name 01x003", (1, 3)),
+        ("Show Name Season 2 Episode 11", (2, 11)),
+        ("A Plain Movie (2020)", None),
+        ("", None),
+        (None, None),
+    ],
+)
 def test_parse_season_episode(title, expected):
     parsed = parse_season_episode(title)
     if expected is None:
@@ -48,6 +52,7 @@ def test_parse_season_episode(title, expected):
 
 
 # --- pure: ordering ---
+
 
 def test_order_groups_series_by_season_episode():
     items = [
@@ -94,18 +99,25 @@ def test_order_separates_distinct_series():
 
 # --- db: bulk append with de-dupe ---
 
+
 async def _make_playlist(db):
     return await db.create_saved_playlist(
-        name="Results", description=None, is_immutable=False, created_by="admin",
+        name="Results",
+        description=None,
+        is_immutable=False,
+        created_by="admin",
     )
 
 
 async def test_append_playlist_items_appends_in_order(db):
     pid = await _make_playlist(db)
-    added = await db.append_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "a", "title": "A", "duration_sec": 60},
-        {"media_type": "cm", "media_id": "b", "title": "B", "duration_sec": 60},
-    ])
+    added = await db.append_playlist_items(
+        pid,
+        [
+            {"media_type": "cm", "media_id": "a", "title": "A", "duration_sec": 60},
+            {"media_type": "cm", "media_id": "b", "title": "B", "duration_sec": 60},
+        ],
+    )
     assert added == 2
     items = await db.get_saved_playlist_items(pid)
     assert [i["media_id"] for i in items] == ["a", "b"]
@@ -114,16 +126,22 @@ async def test_append_playlist_items_appends_in_order(db):
 
 async def test_append_playlist_items_skips_existing(db):
     pid = await _make_playlist(db)
-    await db.append_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "a", "title": "A"},
-        {"media_type": "cm", "media_id": "b", "title": "B"},
-    ])
+    await db.append_playlist_items(
+        pid,
+        [
+            {"media_type": "cm", "media_id": "a", "title": "A"},
+            {"media_type": "cm", "media_id": "b", "title": "B"},
+        ],
+    )
     # Second pass: only "c" is new; "a"/"b" already present.
-    added = await db.append_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "a", "title": "A"},
-        {"media_type": "cm", "media_id": "c", "title": "C"},
-        {"media_type": "cm", "media_id": "b", "title": "B"},
-    ])
+    added = await db.append_playlist_items(
+        pid,
+        [
+            {"media_type": "cm", "media_id": "a", "title": "A"},
+            {"media_type": "cm", "media_id": "c", "title": "C"},
+            {"media_type": "cm", "media_id": "b", "title": "B"},
+        ],
+    )
     assert added == 1
     items = await db.get_saved_playlist_items(pid)
     assert [i["media_id"] for i in items] == ["a", "b", "c"]
@@ -132,10 +150,13 @@ async def test_append_playlist_items_skips_existing(db):
 
 async def test_append_playlist_items_dedupes_within_batch(db):
     pid = await _make_playlist(db)
-    added = await db.append_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "x", "title": "X"},
-        {"media_type": "cm", "media_id": "x", "title": "X dup"},
-    ])
+    added = await db.append_playlist_items(
+        pid,
+        [
+            {"media_type": "cm", "media_id": "x", "title": "X"},
+            {"media_type": "cm", "media_id": "x", "title": "X dup"},
+        ],
+    )
     assert added == 1
     items = await db.get_saved_playlist_items(pid)
     assert [i["media_id"] for i in items] == ["x"]

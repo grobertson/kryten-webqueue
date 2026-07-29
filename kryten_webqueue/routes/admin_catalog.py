@@ -13,7 +13,9 @@ def _mediacms_client(request: Request) -> MediaCMSClient:
 
 
 @router.post("/{friendly_token}/hide")
-async def hide_item(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+async def hide_item(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
     """Tag an item ``kryten-hidden`` in MediaCMS and hide it locally (B6).
 
     The local catalog is updated immediately so the admin sees the item
@@ -28,12 +30,16 @@ async def hide_item(request: Request, friendly_token: str, user: dict = Depends(
     # Local mirror first so the UI hides immediately regardless of the remote
     # write outcome (which can be retried/confirmed by sync).
     await db.add_catalog_tag(friendly_token, HIDDEN_ITEM_TAG)
-    remote_ok = await _mediacms_client(request).set_tag(friendly_token, HIDDEN_ITEM_TAG, present=True)
+    remote_ok = await _mediacms_client(request).set_tag(
+        friendly_token, HIDDEN_ITEM_TAG, present=True
+    )
     return {"success": True, "remote_ok": remote_ok}
 
 
 @router.post("/{friendly_token}/unhide")
-async def unhide_item(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+async def unhide_item(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
     """Remove the ``kryten-hidden`` tag in MediaCMS and locally (B6)."""
     db = request.app.state.db
     item = await db.get_item_admin(friendly_token)
@@ -41,7 +47,9 @@ async def unhide_item(request: Request, friendly_token: str, user: dict = Depend
         raise HTTPException(404, "Catalog item not found")
 
     await db.remove_catalog_tag(friendly_token, HIDDEN_ITEM_TAG)
-    remote_ok = await _mediacms_client(request).set_tag(friendly_token, HIDDEN_ITEM_TAG, present=False)
+    remote_ok = await _mediacms_client(request).set_tag(
+        friendly_token, HIDDEN_ITEM_TAG, present=False
+    )
     return {"success": True, "remote_ok": remote_ok}
 
 
@@ -51,8 +59,11 @@ async def unhide_item(request: Request, friendly_token: str, user: dict = Depend
 # without waiting for real playback: simulate a completion, clear an item's
 # hide state, or inspect exactly what a regular user would not see.
 
+
 @router.post("/{friendly_token}/mark-played")
-async def mark_played(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+async def mark_played(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
     """Simulate a genuine play-completion for an item (testing aid).
 
     Routes through the same ``record_play_completion`` the poll loop uses, so it
@@ -73,7 +84,9 @@ async def mark_played(request: Request, friendly_token: str, user: dict = Depend
 
 
 @router.post("/{friendly_token}/clear-played")
-async def clear_played(request: Request, friendly_token: str, user: dict = Depends(require_admin)):
+async def clear_played(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
     """Clear an item's recently-played hide state so it reappears immediately."""
     db = request.app.state.db
     item = await db.get_item_admin(friendly_token)
@@ -89,4 +102,3 @@ async def recently_played_debug(request: Request, user: dict = Depends(require_a
     db = request.app.state.db
     days = request.app.state.config.catalog_recently_played_hide_days
     return await db.get_recently_played_debug(days)
-

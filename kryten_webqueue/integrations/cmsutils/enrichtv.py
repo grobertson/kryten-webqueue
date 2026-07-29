@@ -57,8 +57,8 @@ import requests
 API_BASE = "https://www.dropsugar.co/api/v1"
 DEFAULT_TIMEOUT = 30
 REQUEST_DELAY = 0.25
-MIN_DURATION = 600       # 10 minutes in seconds
-MAX_DURATION = 3599      # just under 60 minutes
+MIN_DURATION = 600  # 10 minutes in seconds
+MAX_DURATION = 3599  # just under 60 minutes
 MIN_SCORE_THRESHOLD = 50
 TMDB_BASE = "https://api.themoviedb.org/3"
 OMDB_BASE = "http://www.omdbapi.com/"
@@ -120,19 +120,22 @@ def score_description(description: str) -> dict:
 #  Data classes
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class TVParsedTitle:
     """Result of parsing a TV episode filename."""
+
     show_name: str
     season: int | None = None
     episode: int | None = None
     episode_title: str | None = None
-    show_year: str | None = None      # year in show name for disambiguation
+    show_year: str | None = None  # year in show name for disambiguation
 
 
 @dataclass
 class ShowInfo:
     """Cached info about a TV show (from TMDb + OMDb)."""
+
     tmdb_id: int
     name: str
     first_air_date: str = ""
@@ -144,15 +147,16 @@ class ShowInfo:
     num_seasons: int = 0
     num_episodes: int = 0
     imdb_id: str = ""
-    content_rating: str = ""     # from OMDb (TV-MA, TV-14, etc.)
-    omdb_rating: str = ""        # show-level IMDb rating from OMDb
-    year_range: str = ""         # e.g. "1989–1996"
+    content_rating: str = ""  # from OMDb (TV-MA, TV-14, etc.)
+    omdb_rating: str = ""  # show-level IMDb rating from OMDb
+    year_range: str = ""  # e.g. "1989–1996"
     cast: list[str] = field(default_factory=list)  # series regular actors
 
 
 @dataclass
 class EpisodeMetadata:
     """Merged episode metadata from TMDb + OMDb."""
+
     found: bool = False
     show_name: str = ""
     episode_title: str = ""
@@ -166,19 +170,22 @@ class EpisodeMetadata:
     writer: list[str] = field(default_factory=list)
     tmdb_rating: str = ""
     imdb_rating: str = ""
-    imdb_id: str = ""            # episode-level IMDb ID
+    imdb_id: str = ""  # episode-level IMDb ID
 
 
 @dataclass
 class TVCandidate:
     """A CMS item identified as needing TV enrichment."""
+
     friendly_token: str
     raw_title: str
     description: str
     duration: int
     score: int
     parsed: TVParsedTitle | None
-    cms_user: str = ""   # original uploader — captured before any PUT so we can restore it
+    cms_user: str = (
+        ""  # original uploader — captured before any PUT so we can restore it
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -219,7 +226,8 @@ _SEASON_TEXT_RE = re.compile(r"Season\s*(?P<s>\d{1,2})", re.IGNORECASE)
 
 # "Episode N", "Ep N", "Episode #07" — case-insensitive
 _EPISODE_TEXT_RE = re.compile(
-    r"(?:Episode|Ep\.?)\s*#?\s*(?P<e>\d{1,3})", re.IGNORECASE,
+    r"(?:Episode|Ep\.?)\s*#?\s*(?P<e>\d{1,3})",
+    re.IGNORECASE,
 )
 
 # Bare "E14" (uppercase only) — used as fallback when Season text present
@@ -253,7 +261,7 @@ def _extract_show_year(show_part: str) -> tuple[str, str | None]:
     m = _YEAR_PAREN_RE.search(show)
     if m:
         year = m.group(1)
-        show = (show[:m.start()] + show[m.end():]).strip()
+        show = (show[: m.start()] + show[m.end() :]).strip()
         return show, year
     # Try trailing bare year
     m = _SHOW_YEAR_TAIL_RE.search(show)
@@ -261,7 +269,7 @@ def _extract_show_year(show_part: str) -> tuple[str, str | None]:
         candidate = int(m.group(1))
         if 1920 <= candidate <= 2030:
             year = m.group(1)
-            show = show[:m.start()].strip()
+            show = show[: m.start()].strip()
             return show, year
     return show, None
 
@@ -298,8 +306,8 @@ def _clean_show_name(show_part: str) -> str:
     name = show_part.strip()
     # Truncate at tilde (show~episode separator in YouTube rips)
     # e.g. "Mr Belvedere ~ Gorgeous George - Season 1 Episode 4"
-    if '~' in name:
-        name = name.split('~', 1)[0].strip()
+    if "~" in name:
+        name = name.split("~", 1)[0].strip()
     # Strip parenthetical alt-names that aren't years: (MXC), (UK), etc.
     name = re.sub(r"\s*\([^)]*[a-zA-Z][^)]*\)", "", name)
     # Expand standalone "w" → "with" (lowercase only)
@@ -362,8 +370,8 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
     # ── SxxExx pattern ─────────────────────────────────────────────────────
     m = _SXEX_RE.search(title)
     if m:
-        show_part = title[:m.start()]
-        ep_part = title[m.end():]
+        show_part = title[: m.start()]
+        ep_part = title[m.end() :]
         season = int(m.group("s"))
         episode = int(m.group("e"))
 
@@ -374,8 +382,8 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
         sm_in_show = _SEASON_TEXT_RE.search(show_part)
         if sm_in_show:
             # Treat everything between "Season" and SxxExx as episode title
-            extra_ep = show_part[sm_in_show.end():].strip()
-            show_part = show_part[:sm_in_show.start()]
+            extra_ep = show_part[sm_in_show.end() :].strip()
+            show_part = show_part[: sm_in_show.start()]
             # Strip leading "E13" / "Ep 3" that is part of the episode marker
             extra_ep = re.sub(r"^[Ee](?:p\.?\s*)?\d{1,3}\s*", "", extra_ep).strip()
             # Prepend any extra text to ep_part
@@ -395,8 +403,8 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
     # ── NxNN pattern ───────────────────────────────────────────────────────
     m = _NXNN_RE.search(title)
     if m:
-        show_part = title[:m.start()]
-        ep_part = title[m.end():]
+        show_part = title[: m.start()]
+        ep_part = title[m.end() :]
         season = int(m.group("s"))
         episode = int(m.group("e"))
 
@@ -432,11 +440,11 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
     #      "Parker Lewis Can't Lose 225 Diner 75"  → S02E25
     m = _THREE_DIGIT_RE.search(title)
     if m:
-        before = title[:m.start()]
+        before = title[: m.start()]
         # Only match if there's actual show text before the number
         if before.strip() and re.search(r"[a-zA-Z]", before):
             show_part = before
-            ep_part = title[m.end():]
+            ep_part = title[m.end() :]
             season = int(m.group("s"))
             episode = int(m.group("e"))
 
@@ -444,8 +452,7 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
             show_name, show_year = _extract_show_year(show_clean)
             ep_title = _clean_episode_title(ep_part) or None
 
-            return TVParsedTitle(show_name, season, episode,
-                                ep_title, show_year)
+            return TVParsedTitle(show_name, season, episode, ep_title, show_year)
 
     # ── Bare episode marker without season → default season 1 ─────────────
     # e.g. "Nightmares and Dreamscapes ep1 Battlegrounds" → S01E01
@@ -454,10 +461,10 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
     if not em_only:
         em_only = _BARE_E_RE.search(title)
     if em_only:
-        before = title[:em_only.start()]
+        before = title[: em_only.start()]
         if before.strip() and re.search(r"[a-zA-Z]", before):
             show_part = before
-            ep_part = title[em_only.end():]
+            ep_part = title[em_only.end() :]
             season = 1
             episode = int(em_only.group("e"))
 
@@ -465,8 +472,7 @@ def parse_tv_title(raw_title: str) -> TVParsedTitle | None:
             show_name, show_year = _extract_show_year(show_clean)
             ep_title = _clean_episode_title(ep_part) or None
 
-            return TVParsedTitle(show_name, season, episode,
-                                ep_title, show_year)
+            return TVParsedTitle(show_name, season, episode, ep_title, show_year)
 
     # ── Could not parse ────────────────────────────────────────────────────
     return None
@@ -480,9 +486,20 @@ _STRIP_ARTICLES_RE = re.compile(r"\b(?:the|a|an)\b", re.I)
 _NON_ALNUM_RE = re.compile(r"[^a-z0-9 ]")
 
 _NUMBER_WORDS = {
-    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
-    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
-    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "thirteen": "13",
 }
 
 
@@ -515,7 +532,9 @@ def _titles_similar(query: str, result_title: str) -> bool:
 
 
 def _pick_best_show_result(
-    results: list[dict], query: str, year: str | None,
+    results: list[dict],
+    query: str,
+    year: str | None,
 ) -> dict | None:
     """Return the first TMDb TV result whose name passes the similarity check.
 
@@ -540,6 +559,7 @@ def _pick_best_show_result(
 # ══════════════════════════════════════════════════════════════════════════════
 #  API helpers
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _api_call_with_backoff(
     session: requests.Session,
@@ -567,8 +587,10 @@ def _api_call_with_backoff(
             wait = backoff
 
         wait = min(wait, 60)
-        print(f"         ** 429 rate-limited — waiting {wait:.0f}s "
-              f"(attempt {attempt + 1}/{max_retries}) **")
+        print(
+            f"         ** 429 rate-limited — waiting {wait:.0f}s "
+            f"(attempt {attempt + 1}/{max_retries}) **"
+        )
         time.sleep(wait)
         backoff *= 2
 
@@ -591,6 +613,7 @@ def _tmdb_auth(tmdb_token: str) -> tuple[dict, dict]:
 #  CMS catalog fetcher
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def fetch_all_media(session: requests.Session, api_base: str) -> list[dict]:
     """Paginate through /manage_media to get every media item."""
     all_items: list[dict] = []
@@ -603,8 +626,7 @@ def fetch_all_media(session: requests.Session, api_base: str) -> list[dict]:
     )
 
     if resp.status_code == 403:
-        print("  (falling back to /media — may be capped at ~1000)",
-              file=sys.stderr)
+        print("  (falling back to /media — may be capped at ~1000)", file=sys.stderr)
         return _fetch_media_fallback(session, api_base)
 
     resp.raise_for_status()
@@ -625,15 +647,15 @@ def fetch_all_media(session: requests.Session, api_base: str) -> list[dict]:
         data = resp.json()
         all_items.extend(data.get("results", []))
         pct = min(100, int(len(all_items) / total * 100)) if total else 0
-        print(f"\r    Fetched {len(all_items)}/{total} ({pct}%)",
-              end="", flush=True)
+        print(f"\r    Fetched {len(all_items)}/{total} ({pct}%)", end="", flush=True)
 
     print(f"\r    Fetched {len(all_items)}/{total} (100%)    ")
     return all_items
 
 
 def _fetch_media_fallback(
-    session: requests.Session, api_base: str,
+    session: requests.Session,
+    api_base: str,
 ) -> list[dict]:
     all_items: list[dict] = []
     page = 1
@@ -693,6 +715,7 @@ def _restore_owner(
 #  TMDb TV provider
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _search_tmdb_show(
     show_name: str,
     show_year: str | None,
@@ -712,8 +735,12 @@ def _search_tmdb_show(
 
     try:
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/search/tv",
-            delay=delay, headers=headers, params=params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/search/tv",
+            delay=delay,
+            headers=headers,
+            params=params,
             timeout=DEFAULT_TIMEOUT,
         )
     except Exception:
@@ -729,8 +756,12 @@ def _search_tmdb_show(
         params.pop("first_air_date_year", None)
         try:
             r = _api_call_with_backoff(
-                session, "GET", f"{TMDB_BASE}/search/tv",
-                delay=delay, headers=headers, params=params,
+                session,
+                "GET",
+                f"{TMDB_BASE}/search/tv",
+                delay=delay,
+                headers=headers,
+                params=params,
                 timeout=DEFAULT_TIMEOUT,
             )
             if r.status_code == 200:
@@ -743,7 +774,7 @@ def _search_tmdb_show(
 
     best = _pick_best_show_result(results, show_name, show_year)
     if best is None:
-        return None, results     # results exist but none similar enough
+        return None, results  # results exist but none similar enough
 
     return _fetch_show_details(best["id"], tmdb_token, session, delay), results
 
@@ -762,8 +793,12 @@ def _fetch_show_details(
     try:
         time.sleep(delay)
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/tv/{show_id}",
-            delay=delay, headers=headers, params=auth_params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/tv/{show_id}",
+            delay=delay,
+            headers=headers,
+            params=auth_params,
             timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
@@ -784,8 +819,12 @@ def _fetch_show_details(
     try:
         time.sleep(delay)
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/tv/{show_id}/external_ids",
-            delay=delay, headers=headers, params=auth_params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/tv/{show_id}/external_ids",
+            delay=delay,
+            headers=headers,
+            params=auth_params,
             timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
@@ -797,8 +836,12 @@ def _fetch_show_details(
     try:
         time.sleep(delay)
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/tv/{show_id}/aggregate_credits",
-            delay=delay, headers=headers, params=auth_params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/tv/{show_id}/aggregate_credits",
+            delay=delay,
+            headers=headers,
+            params=auth_params,
             timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
@@ -846,9 +889,12 @@ def _fetch_tmdb_episode(
         try:
             time.sleep(delay)
             r = _api_call_with_backoff(
-                session, "GET",
+                session,
+                "GET",
                 f"{TMDB_BASE}/tv/{show_id}/season/{try_season}/episode/{episode}",
-                delay=delay, headers=headers, params=auth_params,
+                delay=delay,
+                headers=headers,
+                params=auth_params,
                 timeout=DEFAULT_TIMEOUT,
             )
         except Exception:
@@ -880,8 +926,9 @@ def _fetch_tmdb_episode(
     # Crew
     crew = ep.get("crew", [])
     meta.director = [c["name"] for c in crew if c.get("job") == "Director"]
-    meta.writer = [c["name"] for c in crew
-                   if c.get("job") in ("Writer", "Teleplay", "Story")][:5]
+    meta.writer = [
+        c["name"] for c in crew if c.get("job") in ("Writer", "Teleplay", "Story")
+    ][:5]
 
     # Guest stars
     guests = ep.get("guest_stars", [])
@@ -893,6 +940,7 @@ def _fetch_tmdb_episode(
 # ══════════════════════════════════════════════════════════════════════════════
 #  OMDb TV provider
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _fetch_omdb_show(
     show_imdb_id: str,
@@ -909,8 +957,12 @@ def _fetch_omdb_show(
 
     try:
         r = _api_call_with_backoff(
-            session, "GET", OMDB_BASE,
-            delay=delay, params=params, timeout=DEFAULT_TIMEOUT,
+            session,
+            "GET",
+            OMDB_BASE,
+            delay=delay,
+            params=params,
+            timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
             data = r.json()
@@ -948,19 +1000,27 @@ def _fetch_omdb_episode(
     """Fetch a specific episode from OMDb. Returns raw dict or {}."""
     if show_imdb_id:
         params: dict = {
-            "apikey": omdb_key, "i": show_imdb_id,
-            "Season": season, "Episode": episode,
+            "apikey": omdb_key,
+            "i": show_imdb_id,
+            "Season": season,
+            "Episode": episode,
         }
     else:
         params = {
-            "apikey": omdb_key, "t": show_name,
-            "Season": season, "Episode": episode,
+            "apikey": omdb_key,
+            "t": show_name,
+            "Season": season,
+            "Episode": episode,
         }
 
     try:
         r = _api_call_with_backoff(
-            session, "GET", OMDB_BASE,
-            delay=delay, params=params, timeout=DEFAULT_TIMEOUT,
+            session,
+            "GET",
+            OMDB_BASE,
+            delay=delay,
+            params=params,
+            timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
             data = r.json()
@@ -974,6 +1034,7 @@ def _fetch_omdb_episode(
 # ══════════════════════════════════════════════════════════════════════════════
 #  Description formatter
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _format_year_range(show: ShowInfo) -> str:
     """Build year range string like '1989–1996' or '2014–'."""
@@ -1020,13 +1081,10 @@ def format_tv_description(
     lines.append("")
 
     # ── Episode header ─────────────────────────────────────────────────────
-    ep_title = (ep_meta.episode_title
-                or omdb_ep.get("Title", "")
-                or "")
+    ep_title = ep_meta.episode_title or omdb_ep.get("Title", "") or ""
     if ep_title and ep_title != "N/A":
         lines.append(
-            f'Season {ep_meta.season}, Episode {ep_meta.episode}: '
-            f'"{ep_title}"'
+            f"Season {ep_meta.season}, Episode {ep_meta.episode}: " f'"{ep_title}"'
         )
     else:
         lines.append(f"Season {ep_meta.season}, Episode {ep_meta.episode}")
@@ -1126,6 +1184,7 @@ def format_tv_description(
 #  Show cache
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def _cache_key(name: str) -> str:
     """Normalise a show name for cache lookup.
 
@@ -1173,13 +1232,21 @@ def _lookup_show(
 
     if tmdb_token:
         info, search_results = _search_tmdb_show(
-            search_name, show_year, tmdb_token, session, delay,
+            search_name,
+            show_year,
+            tmdb_token,
+            session,
+            delay,
         )
 
     # Enrich with OMDb show-level data
     if info and omdb_key:
         omdb_show = _fetch_omdb_show(
-            info.imdb_id, info.name, omdb_key, session, delay,
+            info.imdb_id,
+            info.name,
+            omdb_key,
+            session,
+            delay,
         )
         if omdb_show:
             _enrich_show_from_omdb(info, omdb_show)
@@ -1195,6 +1262,7 @@ def _lookup_show(
 # ══════════════════════════════════════════════════════════════════════════════
 #  Candidate finder
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def find_tv_candidates(
     all_media: list[dict],
@@ -1219,15 +1287,17 @@ def find_tv_candidates(
 
         parsed = parse_tv_title(raw_title)
 
-        candidates.append(TVCandidate(
-            friendly_token=item.get("friendly_token", ""),
-            raw_title=raw_title,
-            description=desc,
-            duration=dur,
-            score=quality["score"],
-            parsed=parsed,
-            cms_user=item.get("user", ""),
-        ))
+        candidates.append(
+            TVCandidate(
+                friendly_token=item.get("friendly_token", ""),
+                raw_title=raw_title,
+                description=desc,
+                duration=dur,
+                score=quality["score"],
+                parsed=parsed,
+                cms_user=item.get("user", ""),
+            )
+        )
 
     # Sort by show name then season/episode for efficient caching
     def sort_key(c: TVCandidate) -> tuple:
@@ -1247,6 +1317,7 @@ def find_tv_candidates(
 # ══════════════════════════════════════════════════════════════════════════════
 #  Report
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def run_report(candidates: list[TVCandidate]) -> None:
     """Print a table of TV candidates with scores and parsed info."""
@@ -1271,8 +1342,7 @@ def run_report(candidates: list[TVCandidate]) -> None:
 
     col_t = 55
     col_s = 30
-    print(f"  {'SCORE':>5}  {'DUR':>5}  {'TITLE':<{col_t}}  "
-          f"{'SHOW':<{col_s}}  S/E")
+    print(f"  {'SCORE':>5}  {'DUR':>5}  {'TITLE':<{col_t}}  " f"{'SHOW':<{col_s}}  S/E")
     print(f"  {'─'*5}  {'─'*5}  {'─'*col_t}  {'─'*col_s}  {'─'*10}")
 
     limit = min(len(candidates), 150)
@@ -1281,14 +1351,18 @@ def run_report(candidates: list[TVCandidate]) -> None:
         t_disp = c.raw_title[:col_t]
         if c.parsed:
             s_disp = c.parsed.show_name[:col_s]
-            se = (f"S{c.parsed.season:02d}E{c.parsed.episode:02d}"
-                  if c.parsed.season is not None and c.parsed.episode is not None
-                  else "?")
+            se = (
+                f"S{c.parsed.season:02d}E{c.parsed.episode:02d}"
+                if c.parsed.season is not None and c.parsed.episode is not None
+                else "?"
+            )
         else:
             s_disp = "(unparsed)"
             se = "--"
-        print(f"  {c.score:5d}  {dur_m:4d}m  {t_disp:<{col_t}}  "
-              f"{s_disp:<{col_s}}  {se}")
+        print(
+            f"  {c.score:5d}  {dur_m:4d}m  {t_disp:<{col_t}}  "
+            f"{s_disp:<{col_s}}  {se}"
+        )
 
     if len(candidates) > limit:
         print(f"  ... and {len(candidates) - limit} more.")
@@ -1297,6 +1371,7 @@ def run_report(candidates: list[TVCandidate]) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 #  Interactive helpers
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _interactive_pick_show(results: list[dict]) -> dict | None:
     """Show numbered TMDb TV results for the user to pick from."""
@@ -1337,7 +1412,7 @@ def _interactive_show_miss(
     Returns ShowInfo if found, None if skipped, or the string ``'quit'``
     to disable interactive prompting.
     """
-    print(f'{prefix} ???   {title_disp}')
+    print(f"{prefix} ???   {title_disp}")
     print(f'         Show "{show_name}" not found.')
     print("         Type corrected show name, Enter to skip, 'q' to stop:")
     while True:
@@ -1357,8 +1432,11 @@ def _interactive_show_miss(
         headers, auth_params = _tmdb_auth(tmdb_token)
         try:
             r = _api_call_with_backoff(
-                session, "GET", f"{TMDB_BASE}/search/tv",
-                delay=delay, headers=headers,
+                session,
+                "GET",
+                f"{TMDB_BASE}/search/tv",
+                delay=delay,
+                headers=headers,
                 params={"query": hint, **auth_params},
                 timeout=DEFAULT_TIMEOUT,
             )
@@ -1371,8 +1449,10 @@ def _interactive_show_miss(
 
         results = r.json().get("results", [])
         if not results:
-            print(f'         No results for "{hint}" — try again '
-                  "or press Enter to skip.")
+            print(
+                f'         No results for "{hint}" — try again '
+                "or press Enter to skip."
+            )
             continue
 
         picked = _interactive_pick_show(results)
@@ -1382,11 +1462,18 @@ def _interactive_show_miss(
 
         # Fetch full show details
         info = _fetch_show_details(
-            picked["id"], tmdb_token, session, delay,
+            picked["id"],
+            tmdb_token,
+            session,
+            delay,
         )
         if info and omdb_key:
             omdb_show = _fetch_omdb_show(
-                info.imdb_id, info.name, omdb_key, session, delay,
+                info.imdb_id,
+                info.name,
+                omdb_key,
+                session,
+                delay,
             )
             if omdb_show:
                 _enrich_show_from_omdb(info, omdb_show)
@@ -1403,6 +1490,7 @@ def _interactive_show_miss(
 # ══════════════════════════════════════════════════════════════════════════════
 #  Enrichment loop
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def _fmt_elapsed(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
@@ -1460,9 +1548,13 @@ def run_enrichment(
 
             # ── Show lookup (cached) ───────────────────────────────────────
             show_info, search_results = _lookup_show(
-                p.show_name, p.show_year,
-                tmdb_token, omdb_key,
-                lookup_session, delay, show_cache,
+                p.show_name,
+                p.show_year,
+                tmdb_token,
+                omdb_key,
+                lookup_session,
+                delay,
+                show_cache,
             )
 
             # Track API calls (rough: search=1, details=1, external_ids=1,
@@ -1476,18 +1568,25 @@ def run_enrichment(
                 # rejected them, let user pick
                 if interactive and search_results:
                     print(f"{prefix} ???   {title_disp}")
-                    print(f'         Show "{p.show_name}" — no good match. '
-                          "Pick from results:")
+                    print(
+                        f'         Show "{p.show_name}" — no good match. '
+                        "Pick from results:"
+                    )
                     picked = _interactive_pick_show(search_results)
                     if picked is not None:
                         show_info = _fetch_show_details(
-                            picked["id"], tmdb_token or "",
-                            lookup_session, delay,
+                            picked["id"],
+                            tmdb_token or "",
+                            lookup_session,
+                            delay,
                         )
                         if show_info and omdb_key:
                             omdb_show = _fetch_omdb_show(
-                                show_info.imdb_id, show_info.name,
-                                omdb_key, lookup_session, delay,
+                                show_info.imdb_id,
+                                show_info.name,
+                                omdb_key,
+                                lookup_session,
+                                delay,
                             )
                             if omdb_show:
                                 _enrich_show_from_omdb(show_info, omdb_show)
@@ -1500,9 +1599,15 @@ def run_enrichment(
                 # Interactive: no search results at all → prompt for name
                 if show_info is None and interactive:
                     result = _interactive_show_miss(
-                        prefix, title_disp, p.show_name, p.show_year,
-                        tmdb_token, omdb_key,
-                        lookup_session, delay, show_cache,
+                        prefix,
+                        title_disp,
+                        p.show_name,
+                        p.show_year,
+                        tmdb_token,
+                        omdb_key,
+                        lookup_session,
+                        delay,
+                        show_cache,
                     )
                     if result == "quit":
                         interactive = False
@@ -1511,23 +1616,32 @@ def run_enrichment(
                         show_cache[key] = show_info
 
                 if show_info is None:
-                    print(f'{prefix} MISS  {title_disp}  '
-                          f'<- show "{p.show_name}" not found')
+                    print(
+                        f"{prefix} MISS  {title_disp}  "
+                        f'<- show "{p.show_name}" not found'
+                    )
                     skipped += 1
-                    skipped_items.append((c.raw_title, f'show "{p.show_name}" not found'))
+                    skipped_items.append(
+                        (c.raw_title, f'show "{p.show_name}" not found')
+                    )
                     continue
 
             # ── Episode lookup ─────────────────────────────────────────────
             ep_meta = EpisodeMetadata(
-                season=p.season, episode=p.episode,
+                season=p.season,
+                episode=p.episode,
                 show_name=show_info.name,
             )
             omdb_ep: dict = {}
 
             if tmdb_token and show_info.tmdb_id:
                 ep_meta = _fetch_tmdb_episode(
-                    show_info.tmdb_id, p.season, p.episode,
-                    tmdb_token, lookup_session, delay,
+                    show_info.tmdb_id,
+                    p.season,
+                    p.episode,
+                    tmdb_token,
+                    lookup_session,
+                    delay,
                 )
                 ep_meta.season = p.season
                 ep_meta.episode = p.episode
@@ -1536,9 +1650,13 @@ def run_enrichment(
 
             if omdb_key:
                 omdb_ep = _fetch_omdb_episode(
-                    show_info.imdb_id, show_info.name,
-                    p.season, p.episode,
-                    omdb_key, lookup_session, delay,
+                    show_info.imdb_id,
+                    show_info.name,
+                    p.season,
+                    p.episode,
+                    omdb_key,
+                    lookup_session,
+                    delay,
                 )
                 api_calls += 1
 
@@ -1546,35 +1664,44 @@ def run_enrichment(
 
             # Check if we got anything useful
             has_synopsis = bool(
-                ep_meta.synopsis
-                or (omdb_ep.get("Plot") and omdb_ep["Plot"] != "N/A")
+                ep_meta.synopsis or (omdb_ep.get("Plot") and omdb_ep["Plot"] != "N/A")
             )
             has_any_data = has_synopsis or ep_meta.found or omdb_ep
 
             if not has_any_data:
-                print(f"{prefix} MISS  {title_disp}  "
-                      f"<- S{p.season:02d}E{p.episode:02d} not found")
+                print(
+                    f"{prefix} MISS  {title_disp}  "
+                    f"<- S{p.season:02d}E{p.episode:02d} not found"
+                )
                 skipped += 1
-                skipped_items.append((c.raw_title, f'episode S{p.season:02d}E{p.episode:02d} not found'))
+                skipped_items.append(
+                    (c.raw_title, f"episode S{p.season:02d}E{p.episode:02d} not found")
+                )
                 continue
 
             # ── Format description ─────────────────────────────────────────
             desc = format_tv_description(
-                show_info, ep_meta, omdb_ep, c.description,
+                show_info,
+                ep_meta,
+                omdb_ep,
+                c.description,
             )
 
             # ── Canonical title ────────────────────────────────────────────
-            ep_title = (ep_meta.episode_title
-                        or omdb_ep.get("Title", "")
-                        or p.episode_title
-                        or "")
+            ep_title = (
+                ep_meta.episode_title
+                or omdb_ep.get("Title", "")
+                or p.episode_title
+                or ""
+            )
             if ep_title and ep_title != "N/A":
-                canonical = (f"{show_info.name} - "
-                             f"S{p.season:02d}E{p.episode:02d} - "
-                             f"{ep_title}")
+                canonical = (
+                    f"{show_info.name} - "
+                    f"S{p.season:02d}E{p.episode:02d} - "
+                    f"{ep_title}"
+                )
             else:
-                canonical = (f"{show_info.name} - "
-                             f"S{p.season:02d}E{p.episode:02d}")
+                canonical = f"{show_info.name} - " f"S{p.season:02d}E{p.episode:02d}"
 
             # CMS has a 100-char title limit; truncate gracefully
             if len(canonical) > 100:
@@ -1598,12 +1725,15 @@ def run_enrichment(
             if commit:
                 try:
                     payload: dict = {
-                        "description": desc, "title": canonical,
+                        "description": desc,
+                        "title": canonical,
                     }
                     r = _api_call_with_backoff(
-                        cms_session, "PUT",
+                        cms_session,
+                        "PUT",
                         f"{api_base}/media/{c.friendly_token}",
-                        delay=delay, data=payload,
+                        delay=delay,
+                        data=payload,
                         timeout=DEFAULT_TIMEOUT,
                     )
                     if r.status_code in (200, 201):
@@ -1613,8 +1743,11 @@ def run_enrichment(
                         # the original uploader immediately after each commit.
                         if c.cms_user:
                             _restore_owner(
-                                cms_session, api_base,
-                                c.friendly_token, c.cms_user, delay,
+                                cms_session,
+                                api_base,
+                                c.friendly_token,
+                                c.cms_user,
+                                delay,
                             )
                     else:
                         detail = ""
@@ -1632,15 +1765,20 @@ def run_enrichment(
 
     except KeyboardInterrupt:
         elapsed = time.time() - t0
-        print(f"\n\n  *** Interrupted after {_fmt_elapsed(elapsed)} "
-              f"({api_calls} API calls) ***")
-        print(f"  Processed so far: enriched={enriched}  "
-              f"skipped={skipped}  failed={failed}")
+        print(
+            f"\n\n  *** Interrupted after {_fmt_elapsed(elapsed)} "
+            f"({api_calls} API calls) ***"
+        )
+        print(
+            f"  Processed so far: enriched={enriched}  "
+            f"skipped={skipped}  failed={failed}"
+        )
         return enriched, skipped, failed
 
     elapsed = time.time() - t0
-    print(f"\n  *** Completed in {_fmt_elapsed(elapsed)} "
-          f"({api_calls} API calls) ***")
+    print(
+        f"\n  *** Completed in {_fmt_elapsed(elapsed)} " f"({api_calls} API calls) ***"
+    )
 
     if skipped_items:
         # Group by reason
@@ -1663,6 +1801,7 @@ def run_enrichment(
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Enrich TV episode metadata in MediaCMS.",
@@ -1675,32 +1814,62 @@ examples:
   %(prog)s --token CMS --tmdb-key KEY --omdb-key KEY --commit
 """,
     )
-    p.add_argument("--token", required=True,
-                   help="MediaCMS API token.")
-    p.add_argument("--tmdb-key", default=None,
-                   help="TMDb API key or read-access token (Bearer).")
-    p.add_argument("--omdb-key", default=None,
-                   help="OMDb API key.")
-    p.add_argument("--report", action="store_true",
-                   help="Scan & score only — don't look up metadata.")
-    p.add_argument("--commit", action="store_true",
-                   help="Push enriched data to CMS (default: dry-run).")
-    p.add_argument("--interactive", "-i", action="store_true",
-                   help="Prompt for corrections on missed shows.")
-    p.add_argument("--limit", type=int, default=None,
-                   help="Process at most N candidates.")
-    p.add_argument("--min-score", type=int, default=MIN_SCORE_THRESHOLD,
-                   help="Only enrich items scoring below N (default 50).")
-    p.add_argument("--min-duration", type=int, default=MIN_DURATION,
-                   help="Min duration in seconds (default 600 = 10 min).")
-    p.add_argument("--max-duration", type=int, default=MAX_DURATION,
-                   help="Max duration in seconds (default 3599 = ~59 min).")
-    p.add_argument("--days", type=int, default=None, metavar="N",
-                   help="Only consider items uploaded in the last N days.")
-    p.add_argument("--delay", type=float, default=REQUEST_DELAY,
-                   help="Delay between API calls (default 0.25s).")
-    p.add_argument("--api-url", default=API_BASE,
-                   help="MediaCMS API base URL.")
+    p.add_argument("--token", required=True, help="MediaCMS API token.")
+    p.add_argument(
+        "--tmdb-key", default=None, help="TMDb API key or read-access token (Bearer)."
+    )
+    p.add_argument("--omdb-key", default=None, help="OMDb API key.")
+    p.add_argument(
+        "--report",
+        action="store_true",
+        help="Scan & score only — don't look up metadata.",
+    )
+    p.add_argument(
+        "--commit",
+        action="store_true",
+        help="Push enriched data to CMS (default: dry-run).",
+    )
+    p.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Prompt for corrections on missed shows.",
+    )
+    p.add_argument(
+        "--limit", type=int, default=None, help="Process at most N candidates."
+    )
+    p.add_argument(
+        "--min-score",
+        type=int,
+        default=MIN_SCORE_THRESHOLD,
+        help="Only enrich items scoring below N (default 50).",
+    )
+    p.add_argument(
+        "--min-duration",
+        type=int,
+        default=MIN_DURATION,
+        help="Min duration in seconds (default 600 = 10 min).",
+    )
+    p.add_argument(
+        "--max-duration",
+        type=int,
+        default=MAX_DURATION,
+        help="Max duration in seconds (default 3599 = ~59 min).",
+    )
+    p.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Only consider items uploaded in the last N days.",
+    )
+    p.add_argument(
+        "--delay",
+        type=float,
+        default=REQUEST_DELAY,
+        help="Delay between API calls (default 0.25s).",
+    )
+    p.add_argument("--api-url", default=API_BASE, help="MediaCMS API base URL.")
     return p
 
 
@@ -1718,9 +1887,11 @@ def main(argv: list[str] | None = None) -> int:
     api_base = args.api_url.rstrip("/")
 
     if not args.report and not args.tmdb_key and not args.omdb_key:
-        print("Error: at least one of --tmdb-key or --omdb-key is required "
-              "for enrichment (use --report for scan-only).",
-              file=sys.stderr)
+        print(
+            "Error: at least one of --tmdb-key or --omdb-key is required "
+            "for enrichment (use --report for scan-only).",
+            file=sys.stderr,
+        )
         return 1
 
     mode = "REPORT" if args.report else ("COMMIT" if args.commit else "DRY-RUN")
@@ -1731,8 +1902,10 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n{'='*60}")
     print(f"  enrichtv  --  Mode: {mode}")
-    print(f"  TV episodes: {min_m}–{max_m} min  |  "
-          f"Score threshold: < {args.min_score}")
+    print(
+        f"  TV episodes: {min_m}–{max_m} min  |  "
+        f"Score threshold: < {args.min_score}"
+    )
     if args.days:
         print(f"  Window: last {args.days} day(s)")
     if args.limit:
@@ -1761,18 +1934,24 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── Filter by upload date ─────────────────────────────────────────────
     if args.days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=args.days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(days=args.days)
+        ).strftime("%Y-%m-%d")
         before = len(all_media)
-        all_media = [i for i in all_media
-                     if (i.get("add_date") or "")[:10] >= cutoff]
-        print(f"  Filtered to {len(all_media)}/{before} item(s) "
-              f"uploaded in the last {args.days} day(s).")
+        all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
+        print(
+            f"  Filtered to {len(all_media)}/{before} item(s) "
+            f"uploaded in the last {args.days} day(s)."
+        )
 
     # ── Find candidates ────────────────────────────────────────────────────
     print("\n  Scanning for TV enrichment candidates ...")
     candidates = find_tv_candidates(
-        all_media, args.min_duration, args.max_duration, args.min_score,
+        all_media,
+        args.min_duration,
+        args.max_duration,
+        args.min_score,
     )
 
     if not candidates:
@@ -1802,14 +1981,14 @@ def main(argv: list[str] | None = None) -> int:
     # ── Summary ────────────────────────────────────────────────────────────
     action = "Enriched" if args.commit else "Would enrich"
     print(f"\n{'='*60}")
-    print(f"  {action}: {enriched}  |  Skipped: {skipped}  |  "
-          f"Failed: {failed}")
+    print(f"  {action}: {enriched}  |  Skipped: {skipped}  |  " f"Failed: {failed}")
     print(f"{'='*60}\n")
 
     return 0
 
 
 # ── Headless entry point for the webqueue job runner ───────────────────────────
+
 
 def run(params: dict, *, config, progress=None) -> dict:
     """Run TV-episode enrichment headlessly (no argparse/interactive).
@@ -1844,18 +2023,28 @@ def run(params: dict, *, config, progress=None) -> dict:
     all_media = fetch_all_media(cms_session, api_base)
 
     if days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        ).strftime("%Y-%m-%d")
         all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
 
     candidates = find_tv_candidates(
-        all_media, min_duration, max_duration, min_score,
+        all_media,
+        min_duration,
+        max_duration,
+        min_score,
     )
     _emit({"phase": "scanned", "scanned": len(all_media), "matched": len(candidates)})
 
     if not candidates:
-        return {"scanned": len(all_media), "matched": 0, "committed": 0,
-                "skipped": 0, "failed": 0, "dry_run": dry_run}
+        return {
+            "scanned": len(all_media),
+            "matched": 0,
+            "committed": 0,
+            "skipped": 0,
+            "failed": 0,
+            "dry_run": dry_run,
+        }
 
     enriched, skipped, failed = run_enrichment(
         candidates=candidates,

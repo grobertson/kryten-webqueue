@@ -21,15 +21,17 @@ async def db(tmp_path):
 
 
 async def _add_catalog(db, token, title):
-    await db.insert_catalog({
-        "friendly_token": token,
-        "title": title,
-        "description": "",
-        "duration_sec": 600,
-        "manifest_url": f"{MEDIACMS}/api/v1/media/cytube/{token}.json?format=json",
-        "thumbnail_url": "",
-        "synced_at": "2026-01-01T00:00:00+00:00",
-    })
+    await db.insert_catalog(
+        {
+            "friendly_token": token,
+            "title": title,
+            "description": "",
+            "duration_sec": 600,
+            "manifest_url": f"{MEDIACMS}/api/v1/media/cytube/{token}.json?format=json",
+            "thumbnail_url": "",
+            "synced_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
 
 
 async def test_search_ands_with_category_and_tag(db):
@@ -47,16 +49,22 @@ async def test_search_ands_with_category_and_tag(db):
     await db.set_catalog_tags("tok_action", [epic_tag])
 
     # Resolve the Action slug (upsert derives it).
-    action_slug = next(c["slug"] for c in await db.get_categories() if c["name"] == "Action")
+    action_slug = next(
+        c["slug"] for c in await db.get_categories() if c["name"] == "Action"
+    )
 
     # Plain query: all three match.
     assert {r["friendly_token"] for r in await db.search("Dragon")} == {
-        "tok_action", "tok_comedy", "tok_plain",
+        "tok_action",
+        "tok_comedy",
+        "tok_plain",
     }
     assert await db.search_count("Dragon") == 3
 
     # Query + category: only the Action item.
-    cat_results = {r["friendly_token"] for r in await db.search("Dragon", category=action_slug)}
+    cat_results = {
+        r["friendly_token"] for r in await db.search("Dragon", category=action_slug)
+    }
     assert cat_results == {"tok_action"}
     assert await db.search_count("Dragon", category=action_slug) == 1
 
@@ -74,7 +82,9 @@ async def test_search_facet_with_no_text_match_is_empty(db):
     await _add_catalog(db, "tok1", "Comedy Night")
     comedy_id = await db.upsert_category("Comedy")
     await db.set_catalog_categories("tok1", [comedy_id])
-    comedy_slug = next(c["slug"] for c in await db.get_categories() if c["name"] == "Comedy")
+    comedy_slug = next(
+        c["slug"] for c in await db.get_categories() if c["name"] == "Comedy"
+    )
 
     # The category matches the item, but the query does not -> no results.
     assert await db.search("Horror", category=comedy_slug) == []

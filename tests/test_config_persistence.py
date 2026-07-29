@@ -13,11 +13,16 @@ from kryten_webqueue.config import Config
 
 
 def _write_minimal_config(path):
-    path.write_text(json.dumps({
-        "secret_key": "x" * 16,
-        "api_gate_token": "tok",
-        "mediacms_token": "tok",
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "secret_key": "x" * 16,
+                "api_gate_token": "tok",
+                "mediacms_token": "tok",
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_save_round_trips_promo_edits(tmp_path):

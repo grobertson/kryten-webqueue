@@ -14,7 +14,11 @@ def _describe_httpx_error(exc: Exception, url: str) -> str:
         return f"Connection to {host} timed out — check host/port and firewall"
     if isinstance(exc, httpx.ConnectError):
         cause = str(exc.__cause__ or exc).lower()
-        if "name or service not known" in cause or "nodename nor servname" in cause or "getaddrinfo" in cause:
+        if (
+            "name or service not known" in cause
+            or "nodename nor servname" in cause
+            or "getaddrinfo" in cause
+        ):
             return f"DNS lookup failed for {host} — check mediacms_url in config"
         if "connection refused" in cause:
             return f"Connection refused by {host} — service may be down"
@@ -62,7 +66,9 @@ class CatalogSync:
             while next_url:
                 page += 1
                 try:
-                    resp = await self._client.get(next_url, params=params if page == 1 else None)
+                    resp = await self._client.get(
+                        next_url, params=params if page == 1 else None
+                    )
                 except httpx.TransportError as exc:
                     logger.error(_describe_httpx_error(exc, next_url))
                     stats["errors"] += 1
@@ -87,12 +93,16 @@ class CatalogSync:
                     try:
                         await self._process_item(media, stats)
                     except Exception as e:
-                        logger.warning(f"Error processing {media.get('friendly_token')}: {e}")
+                        logger.warning(
+                            f"Error processing {media.get('friendly_token')}: {e}"
+                        )
                         stats["errors"] += 1
 
                 # Follow the next URL from the response — don't construct it ourselves
                 next_url = data.get("next") if isinstance(data, dict) else None
-                logger.debug(f"Catalog sync page {page}: seen={stats['seen']} next={next_url!r}")
+                logger.debug(
+                    f"Catalog sync page {page}: seen={stats['seen']} next={next_url!r}"
+                )
 
             await self._db.finish_sync_log(log_id, stats, "completed")
             logger.info(f"Catalog sync complete: {stats} ({page} pages)")
@@ -176,7 +186,7 @@ class CatalogSync:
             if isinstance(c, dict) and c.get("title")
         ]
         tag_names = []
-        for t in (data.get("tags_info") or []):
+        for t in data.get("tags_info") or []:
             name = t.get("title") if isinstance(t, dict) else t
             if name:
                 tag_names.append(name)

@@ -37,8 +37,13 @@ async def _wait_terminal(db: Database, name: str, *, timeout: float = 2.0) -> di
 
 SCHEMA = [
     {"name": "url", "type": "string", "required": True, "label": "URL"},
-    {"name": "quality", "type": "enum", "default": "medium",
-     "options": ["best", "good", "medium"], "label": "Quality"},
+    {
+        "name": "quality",
+        "type": "enum",
+        "default": "medium",
+        "options": ["best", "good", "medium"],
+        "label": "Quality",
+    },
     {"name": "max_videos", "type": "int", "default": 50, "label": "Max"},
     {"name": "dry_run", "type": "bool", "default": False, "label": "Dry run"},
 ]
@@ -46,9 +51,17 @@ SCHEMA = [
 
 # --- validate_params ---
 
+
 def test_validate_applies_defaults_and_coerces():
-    out = validate_params(SCHEMA, {"url": "http://x", "max_videos": "10", "dry_run": "true"})
-    assert out == {"url": "http://x", "quality": "medium", "max_videos": 10, "dry_run": True}
+    out = validate_params(
+        SCHEMA, {"url": "http://x", "max_videos": "10", "dry_run": "true"}
+    )
+    assert out == {
+        "url": "http://x",
+        "quality": "medium",
+        "max_videos": 10,
+        "dry_run": True,
+    }
 
 
 def test_validate_required_missing_raises():
@@ -72,6 +85,7 @@ def test_validate_no_schema_returns_empty():
 
 # --- JobManager parameterized run ---
 
+
 async def test_parameterized_job_receives_params_and_persists(db):
     seen = {}
 
@@ -89,7 +103,10 @@ async def test_parameterized_job_receives_params_and_persists(db):
     run = await _wait_terminal(db, "fetch")
     assert run["status"] == "completed"
     assert json.loads(run["params"]) == {
-        "url": "http://x", "quality": "medium", "max_videos": 50, "dry_run": False,
+        "url": "http://x",
+        "quality": "medium",
+        "max_videos": 50,
+        "dry_run": False,
     }
     assert json.loads(run["detail"]) == {"ok": True, "count": 50}
     assert seen["url"] == "http://x"

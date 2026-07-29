@@ -339,7 +339,9 @@ class _DBBase:
         for version, sql in enumerate(MIGRATIONS[1:], start=1):
             if version > current_version:
                 await self._executescript(sql)
-                await self._execute("INSERT INTO _migrations (version) VALUES (?)", [version])
+                await self._execute(
+                    "INSERT INTO _migrations (version) VALUES (?)", [version]
+                )
 
     # --- Low-level helpers ---
 

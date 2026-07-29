@@ -116,26 +116,30 @@ async def test_owner_offline_cancels_paid_keeps_free():
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws)
 
-    assert await mon.check_once() == 0           # first sighting: starts grace
-    assert await mon.check_once() == 1           # grace elapsed: acts
+    assert await mon.check_once() == 0  # first sighting: starts grace
+    assert await mon.check_once() == 1  # grace elapsed: acts
 
     assert api.refunds == [("alice", "r11", "owner_left")]
-    assert 11 in shadow.removed                  # paid item removed
-    assert 12 not in shadow.removed              # free item untouched
+    assert 11 in shadow.removed  # paid item removed
+    assert 12 not in shadow.removed  # free item untouched
     assert db.refunded == ["r11"]
     assert ws.messages and ws.messages[-1]["type"] == "queue_state"
 
 
 async def test_afk_cancel_pms_owner_when_notify_enabled():
     # AFK owners are still connected and CAN be PM'd.
-    shadow = _FakeShadow([_paid(11, "alice", title="Cool Video")], now_playing={"uid": 10})
-    api = _FakeApiGate({"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10})
+    shadow = _FakeShadow(
+        [_paid(11, "alice", title="Cool Video")], now_playing={"uid": 10}
+    )
+    api = _FakeApiGate(
+        {"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10}
+    )
     db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws, notify_user=True, on_afk=True)
 
-    await mon.check_once()                        # first sighting: starts grace
-    await mon.check_once()                        # grace elapsed: acts
+    await mon.check_once()  # first sighting: starts grace
+    await mon.check_once()  # grace elapsed: acts
 
     assert len(api.pms) == 1
     user, msg = api.pms[0]
@@ -161,7 +165,9 @@ async def test_left_channel_cancel_does_not_pm():
 
 async def test_cancel_silent_when_notify_disabled():
     shadow = _FakeShadow([_paid(11, "alice")], now_playing={"uid": 10})
-    api = _FakeApiGate({"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10})
+    api = _FakeApiGate(
+        {"alice": {"online": True, "meta": {"afk": True}}}, np={"uid": 10}
+    )
     db = _FakeDb({11: {"request_id": "r11", "username": "alice"}})
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws, notify_user=False, on_afk=True)
@@ -177,7 +183,7 @@ async def test_cancel_silent_when_notify_disabled():
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws, on_afk=True, grace_seconds=60.0)
 
-    await mon.check_once()                        # registers AFK
+    await mon.check_once()  # registers AFK
     assert "bob" in mon._missing_since
 
     api._users["bob"] = {"online": True, "meta": {"afk": False}}  # returned
@@ -211,27 +217,31 @@ async def test_get_user_error_is_inconclusive():
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws)
 
-    assert await mon.check_once() == 0            # lookup raised: no tracking
+    assert await mon.check_once() == 0  # lookup raised: no tracking
     assert "dave" not in mon._missing_since
 
-    api._users["dave"] = {"online": False}        # now a real signal
-    await mon.check_once()                         # registers
-    assert await mon.check_once() == 1             # acts
+    api._users["dave"] = {"online": False}  # now a real signal
+    await mon.check_once()  # registers
+    assert await mon.check_once() == 1  # acts
     assert api.refunds == [("dave", "r11", "owner_left")]
 
 
 async def test_two_items_one_owner_both_cancelled():
-    shadow = _FakeShadow([_paid(11, "erin"), _paid(12, "erin")], now_playing={"uid": 10})
+    shadow = _FakeShadow(
+        [_paid(11, "erin"), _paid(12, "erin")], now_playing={"uid": 10}
+    )
     api = _FakeApiGate({"erin": {"online": False}}, np={"uid": 10})
-    db = _FakeDb({
-        11: {"request_id": "r11", "username": "erin"},
-        12: {"request_id": "r12", "username": "erin"},
-    })
+    db = _FakeDb(
+        {
+            11: {"request_id": "r11", "username": "erin"},
+            12: {"request_id": "r12", "username": "erin"},
+        }
+    )
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws)
 
-    await mon.check_once()                          # register
-    assert await mon.check_once() == 2             # both cancelled in one window
+    await mon.check_once()  # register
+    assert await mon.check_once() == 2  # both cancelled in one window
 
     assert set(shadow.removed) == {11, 12}
     assert ("erin", "r11", "owner_left") in api.refunds
@@ -275,10 +285,10 @@ async def test_owner_recovers_after_partial_grace_then_leaves_again():
     ws = _FakeWs()
     mon = _monitor(api, shadow, db, ws, grace_seconds=60.0)
 
-    await mon.check_once()                          # gone: grace starts
+    await mon.check_once()  # gone: grace starts
     assert "hank" in mon._missing_since
 
-    api._users["hank"] = {"online": True}           # returns: grace cleared
+    api._users["hank"] = {"online": True}  # returns: grace cleared
     await mon.check_once()
     assert "hank" not in mon._missing_since
     assert shadow.removed == []

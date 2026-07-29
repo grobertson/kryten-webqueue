@@ -95,8 +95,12 @@ def _economy_error(exc: Exception) -> str:
 
 
 @router.get("/transactions")
-async def get_transactions(request: Request, limit: int = 20, offset: int = 0,
-                           user: dict = Depends(get_current_user)):
+async def get_transactions(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    user: dict = Depends(get_current_user),
+):
     """Get user's transaction history."""
     api_gate = request.app.state.api_gate
     return await api_gate.get_transactions(user["username"], limit=limit, offset=offset)

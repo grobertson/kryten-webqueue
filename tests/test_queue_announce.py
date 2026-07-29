@@ -34,23 +34,26 @@ class _FakeShadow:
         return self._items
 
 
-@pytest.mark.parametrize("n,word", [
-    (2, "second"),
-    (3, "third"),
-    (4, "fourth"),
-    (5, "fifth"),
-    (8, "eighth"),
-    (9, "ninth"),
-    (11, "eleventh"),
-    (12, "twelfth"),
-    (20, "twentieth"),
-    (21, "twenty-first"),
-    (42, "forty-second"),
-    (53, "fifty-third"),
-    (100, "one hundredth"),
-    (107, "one hundred seventh"),
-    (123, "one hundred twenty-third"),
-])
+@pytest.mark.parametrize(
+    "n,word",
+    [
+        (2, "second"),
+        (3, "third"),
+        (4, "fourth"),
+        (5, "fifth"),
+        (8, "eighth"),
+        (9, "ninth"),
+        (11, "eleventh"),
+        (12, "twelfth"),
+        (20, "twentieth"),
+        (21, "twenty-first"),
+        (42, "forty-second"),
+        (53, "fifty-third"),
+        (100, "one hundredth"),
+        (107, "one hundred seventh"),
+        (123, "one hundred twenty-third"),
+    ],
+)
 def test_ordinal_words(n, word):
     assert _ordinal_words(n) == word
 
@@ -63,7 +66,9 @@ async def test_paid_announcement_next():
     # now-playing uid=10 at index 0; the new item uid=11 is immediately next.
     api = _FakeApiGate(np_uid=10)
     shadow = _FakeShadow(_items(10, 11))
-    await _announce_paid_queued(api, shadow, uid=11, title="Airplane (1980)", username="Hollis")
+    await _announce_paid_queued(
+        api, shadow, uid=11, title="Airplane (1980)", username="Hollis"
+    )
     assert api.sent == [
         "Airplane (1980) added to the queue with Zcoin by Hollis and is now next."
     ]
@@ -73,7 +78,9 @@ async def test_paid_announcement_third():
     # now-playing uid=10 at index 0; new item is two slots away -> "third".
     api = _FakeApiGate(np_uid=10)
     shadow = _FakeShadow(_items(10, 99, 11))
-    await _announce_paid_queued(api, shadow, uid=11, title="Airplane (1980)", username="Hollis")
+    await _announce_paid_queued(
+        api, shadow, uid=11, title="Airplane (1980)", username="Hollis"
+    )
     assert api.sent == [
         "Airplane (1980) added to the queue with Zcoin by Hollis and is now third."
     ]
@@ -100,6 +107,7 @@ async def test_admin_queue_not_announced(monkeypatch):
     # Source check: the admin path has no announce call (the helper is only wired
     # to the paid paths). This guards against a regression re-adding it.
     import inspect
+
     src = inspect.getsource(ordering.insert_admin_queue)
     assert "_announce_paid_queued" not in src
     assert "_announce_queued" not in src

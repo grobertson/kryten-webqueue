@@ -3,7 +3,9 @@ from datetime import datetime, timedelta, UTC
 from fastapi import Request, HTTPException
 
 
-def create_session_token(username: str, rank: int, secret_key: str, ttl_hours: int = 24) -> str:
+def create_session_token(
+    username: str, rank: int, secret_key: str, ttl_hours: int = 24
+) -> str:
     payload = {
         "sub": username,
         "rank": rank,

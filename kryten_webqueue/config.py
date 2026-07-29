@@ -41,10 +41,10 @@ class PresenceRefundConfig(BaseModel):
 
     enabled: bool = True
     on_leave: bool = True
-    on_afk: bool = True               # needs Kryten-Robot >= 1.10.0 deployed
-    grace_seconds: float = 60.0       # wait before acting; re-check after grace
+    on_afk: bool = True  # needs Kryten-Robot >= 1.10.0 deployed
+    grace_seconds: float = 60.0  # wait before acting; re-check after grace
     check_interval_seconds: float = 15.0  # how often to evaluate owners
-    notify_user: bool = True          # PM the AFK owner on cancel/refund
+    notify_user: bool = True  # PM the AFK owner on cancel/refund
 
 
 class PromoTypeConfig(BaseModel):
@@ -57,16 +57,16 @@ class PromoTypeConfig(BaseModel):
     """
 
     enabled: bool = True
-    order: str = "random"   # "random" | "sequential"
+    order: str = "random"  # "random" | "sequential"
     weight: int = 1
 
 
 class GeneralPromoConfig(BaseModel):
     """Cadence for the general (between-content) promos."""
 
-    every_n_items: int = 4       # insert a general promo every N content items
+    every_n_items: int = 4  # insert a general promo every N content items
     every_m_minutes: float = 20.0  # ...or roughly every M minutes, whichever first
-    no_repeat: bool = True       # don't play the same clip twice in a row
+    no_repeat: bool = True  # don't play the same clip twice in a row
 
 
 class PromoConfig(BaseModel):
@@ -128,7 +128,7 @@ class Config(BaseModel):
     omdb_api_key: str = ""
 
     # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
-    fetch_cookies_path: str = ""          # optional yt-dlp cookies for gated sources
+    fetch_cookies_path: str = ""  # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()
 
     # Presence-based cancel/refund of pending paid items
@@ -160,8 +160,8 @@ class Config(BaseModel):
     # each queued item server-side (fetching custom manifests); adding faster
     # than it can validate triggers a transient queueFail (surfaced by api-gate
     # as HTTP 422). Throttle consecutive adds and retry the transient 422.
-    playlist_bulk_add_delay_sec: float = 0.5   # pause between consecutive adds
-    playlist_bulk_add_max_retries: int = 2     # retries on transient 422
+    playlist_bulk_add_delay_sec: float = 0.5  # pause between consecutive adds
+    playlist_bulk_add_max_retries: int = 2  # retries on transient 422
 
     # Monitoring
     prometheus_port: int = 28292

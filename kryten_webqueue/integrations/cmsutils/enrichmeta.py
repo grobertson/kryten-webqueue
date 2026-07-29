@@ -56,9 +56,9 @@ import requests
 
 API_BASE = "https://www.dropsugar.co/api/v1"
 DEFAULT_TIMEOUT = 30
-REQUEST_DELAY = 0.25          # polite delay between API calls
-MIN_DURATION = 3600           # 1 hour in seconds
-MIN_SCORE_THRESHOLD = 50      # items scoring below this need enrichment
+REQUEST_DELAY = 0.25  # polite delay between API calls
+MIN_DURATION = 3600  # 1 hour in seconds
+MIN_SCORE_THRESHOLD = 50  # items scoring below this need enrichment
 TMDB_BASE = "https://api.themoviedb.org/3"
 OMDB_BASE = "http://www.omdbapi.com/"
 
@@ -143,8 +143,9 @@ def is_tubi_metadata(description: str) -> bool:
     if _TUBI_URL_RE.search(description):
         return True
     # Secondary signal: the distinctive Tubi importer structure
-    if (_TUBI_ORIG_DESC_RE.search(description)
-            and _TUBI_VIDEO_INFO_RE.search(description)):
+    if _TUBI_ORIG_DESC_RE.search(description) and _TUBI_VIDEO_INFO_RE.search(
+        description
+    ):
         return True
     return False
 
@@ -159,25 +160,30 @@ def _extract_tubi_year(description: str) -> str | None:
 #  Hosted-version detection
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class HostedInfo:
-    show_name: str          # e.g. "MonsterVision with Joe Bob Briggs"
-    movie_title: str        # extracted movie name
+    show_name: str  # e.g. "MonsterVision with Joe Bob Briggs"
+    movie_title: str  # extracted movie name
     movie_year: str | None  # extracted year or None
 
 
 # Patterns ordered longest-first to avoid partial matches
 _HOSTED_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"Joe\s*Bob'?s?\s+Drive[\s-]*In\s+Theater", re.I),
-     "Joe Bob's Drive-In Theater"),
-    (re.compile(r"JBBTLDI|Joe\s*Bob\s+TLDI", re.I),
-     "The Last Drive-In with Joe Bob Briggs"),
-    (re.compile(r"(?:The\s+)?Last\s+Drive[\s\-]*In", re.I),
-     "The Last Drive-In with Joe Bob Briggs"),
-    (re.compile(r"Monster\s*Vision", re.I),
-     "MonsterVision with Joe Bob Briggs"),
-    (re.compile(r"Svengoolie", re.I),
-     "Svengoolie"),
+    (
+        re.compile(r"Joe\s*Bob'?s?\s+Drive[\s-]*In\s+Theater", re.I),
+        "Joe Bob's Drive-In Theater",
+    ),
+    (
+        re.compile(r"JBBTLDI|Joe\s*Bob\s+TLDI", re.I),
+        "The Last Drive-In with Joe Bob Briggs",
+    ),
+    (
+        re.compile(r"(?:The\s+)?Last\s+Drive[\s\-]*In", re.I),
+        "The Last Drive-In with Joe Bob Briggs",
+    ),
+    (re.compile(r"Monster\s*Vision", re.I), "MonsterVision with Joe Bob Briggs"),
+    (re.compile(r"Svengoolie", re.I), "Svengoolie"),
 ]
 
 # Rifftrax is handled separately from _HOSTED_PATTERNS because its
@@ -192,12 +198,13 @@ _YEAR_BARE_RE = re.compile(r"\b((?:19|20)\d{2})\b")
 
 # Scene / quality tags that appear in hosted-version filenames
 _SCENE_RE_HOSTED = re.compile(
-    r"\[?(?:720p|480p|1080p|who(?:do)?dude\w*|CG|Hybrid)\]?", re.I,
+    r"\[?(?:720p|480p|1080p|who(?:do)?dude\w*|CG|Hybrid)\]?",
+    re.I,
 )
 
 # Date patterns: MM-DD-YY, MM-DD-YYYY, or YYYY-MM-DD (ISO)
 _DATE_RE = re.compile(
-    r"(?:(?:19|20)\d{2}-\d{1,2}-\d{1,2})"   # YYYY-MM-DD (ISO)
+    r"(?:(?:19|20)\d{2}-\d{1,2}-\d{1,2})"  # YYYY-MM-DD (ISO)
     r"|"
     r"(?:\d{1,2}-\d{1,2}-(?:19|20)?\d{2})"  # MM-DD-YY or MM-DD-YYYY
 )
@@ -210,17 +217,18 @@ _EPISODE_CODE_RE = re.compile(r"[SW]\d+[eE]\d+", re.I)
 #         Ep 3, Ep.3, Ep03, "S01 E02" (space-separated)
 _TV_EPISODE_RE = re.compile(
     r"(?:"
-    r"[Ss]\d{1,2}\s*[Ee]\d{1,2}"           # S01E02, S1 E2
-    r"|\b\d{1,2}[Xx]\d{2,3}\b"              # 1x03, 01x03
-    r"|\b[Ss]eason\s*\d+"                    # Season 1, Season 02
-    r"|\b[Ee]pisode\s*\d+"                   # Episode 3, Episode 03
-    r"|\b[Ee][Pp]\.?\s*\d+"                  # Ep 3, Ep.3, Ep03
+    r"[Ss]\d{1,2}\s*[Ee]\d{1,2}"  # S01E02, S1 E2
+    r"|\b\d{1,2}[Xx]\d{2,3}\b"  # 1x03, 01x03
+    r"|\b[Ss]eason\s*\d+"  # Season 1, Season 02
+    r"|\b[Ee]pisode\s*\d+"  # Episode 3, Episode 03
+    r"|\b[Ee][Pp]\.?\s*\d+"  # Ep 3, Ep.3, Ep03
     r")"
 )
 
 # Show-year in parens at start of remaining text: "(2020) S2-Wk 2 Film 2-"
 _SHOW_YEAR_PREFIX_RE = re.compile(
-    r"^\s*\(\d{4}\)\s*S\d+-Wk\s*\d+\s*Film\s*\d+\s*[-–—]?\s*", re.I,
+    r"^\s*\(\d{4}\)\s*S\d+-Wk\s*\d+\s*Film\s*\d+\s*[-–—]?\s*",
+    re.I,
 )
 
 # "Week N - Movie N -" or "S2-Wk 2 Film 1 -"
@@ -247,7 +255,7 @@ def detect_hosted(raw_title: str) -> HostedInfo | None:
         if m:
             host_show = show_name
             # Remove host show from title
-            title = title[:m.start()] + title[m.end():]
+            title = title[: m.start()] + title[m.end() :]
             break
 
     if host_show is None:
@@ -288,12 +296,12 @@ def detect_hosted(raw_title: str) -> HostedInfo | None:
     m = _YEAR_PAREN_RE.search(title)
     if m:
         year = m.group(1)
-        title = title[:m.start()] + title[m.end():]
+        title = title[: m.start()] + title[m.end() :]
     else:
         m = _YEAR_BRACKET_RE.search(title)
         if m:
             year = m.group(1)
-            title = title[:m.start()] + title[m.end():]
+            title = title[: m.start()] + title[m.end() :]
         else:
             # Bare year — only grab it if it looks like a year, not a movie number
             m = _YEAR_BARE_RE.search(title)
@@ -301,14 +309,14 @@ def detect_hosted(raw_title: str) -> HostedInfo | None:
                 candidate = int(m.group(1))
                 if 1920 <= candidate <= 2030:
                     year = m.group(1)
-                    title = title[:m.start()] + title[m.end():]
+                    title = title[: m.start()] + title[m.end() :]
 
     # Clean up empty brackets/parens, separators, trailing junk
     title = re.sub(r"\[\s*\]", "", title)
     title = re.sub(r"\(\s*\)", "", title)
     title = re.sub(r"^[\s\-–—:,]+", "", title)
     title = re.sub(r"[\s\-–—:,]+$", "", title)
-    title = re.sub(r"\s*-\s*\d+$", "", title)   # trailing "-1" from filenames
+    title = re.sub(r"\s*-\s*\d+$", "", title)  # trailing "-1" from filenames
     title = re.sub(r"\s+", " ", title).strip()
 
     return HostedInfo(show_name=host_show, movie_title=title, movie_year=year)
@@ -387,13 +395,13 @@ def parse_standard_title(raw_title: str) -> tuple[str, str | None]:
     m = _STD_YEAR_RE.search(title)
     if m:
         year = m.group(1)
-        title = title[:m.start()]
+        title = title[: m.start()]
     else:
         # Try [YYYY], ]YYYY], {YYYY}, [ 1996], etc.
         m = _YEAR_BRACKET_RE.search(title)
         if m:
             year = m.group(1)
-            title = title[:m.start()]
+            title = title[: m.start()]
         else:
             # Bare year — only if it looks like a plausible movie year
             m = _YEAR_BARE_RE.search(title)
@@ -401,7 +409,7 @@ def parse_standard_title(raw_title: str) -> tuple[str, str | None]:
                 candidate = int(m.group(1))
                 if 1920 <= candidate <= 2030:
                     year = m.group(1)
-                    title = title[:m.start()]
+                    title = title[: m.start()]
 
     # ── strip scene / quality tags ──────────────────────────────────────
     title = _SCENE_TAGS_RE.sub("", title)
@@ -424,9 +432,11 @@ def parse_standard_title(raw_title: str) -> tuple[str, str | None]:
 #  Metadata providers
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class MovieMetadata:
     """Merged metadata from all providers."""
+
     title: str = ""
     year: str | None = None
     synopsis: str = ""
@@ -465,9 +475,20 @@ _NON_ALNUM_RE = re.compile(r"[^a-z0-9 ]")
 
 # Map number words to digits for comparison
 _NUMBER_WORDS = {
-    "zero": "0", "one": "1", "two": "2", "three": "3", "four": "4",
-    "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9",
-    "ten": "10", "eleven": "11", "twelve": "12", "thirteen": "13",
+    "zero": "0",
+    "one": "1",
+    "two": "2",
+    "three": "3",
+    "four": "4",
+    "five": "5",
+    "six": "6",
+    "seven": "7",
+    "eight": "8",
+    "nine": "9",
+    "ten": "10",
+    "eleven": "11",
+    "twelve": "12",
+    "thirteen": "13",
 }
 
 
@@ -509,7 +530,9 @@ def _titles_similar(query: str, result_title: str) -> bool:
 
 
 def _pick_best_tmdb_result(
-    results: list[dict], query: str, year: str | None,
+    results: list[dict],
+    query: str,
+    year: str | None,
 ) -> dict | None:
     """Return the first TMDb result whose title passes the similarity check.
 
@@ -565,9 +588,13 @@ def _parse_tmdb_search(
         if year:
             try:
                 r = _api_call_with_backoff(
-                    session, "GET", f"{TMDB_BASE}/search/movie",
-                    delay=delay, headers=headers,
-                    params={"query": title, **auth_params}, timeout=DEFAULT_TIMEOUT,
+                    session,
+                    "GET",
+                    f"{TMDB_BASE}/search/movie",
+                    delay=delay,
+                    headers=headers,
+                    params={"query": title, **auth_params},
+                    timeout=DEFAULT_TIMEOUT,
                 )
                 if r.status_code == 200:
                     results = r.json().get("results", [])
@@ -578,7 +605,7 @@ def _parse_tmdb_search(
 
     movie = _pick_best_tmdb_result(results, title, year)
     if movie is None:
-        return meta          # no result passed the similarity check
+        return meta  # no result passed the similarity check
 
     movie_id = movie["id"]
     meta.title = movie.get("title", "")
@@ -591,8 +618,12 @@ def _parse_tmdb_search(
     try:
         time.sleep(delay)
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/movie/{movie_id}",
-            delay=delay, headers=headers, params=auth_params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/movie/{movie_id}",
+            delay=delay,
+            headers=headers,
+            params=auth_params,
             timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
@@ -611,8 +642,12 @@ def _parse_tmdb_search(
     try:
         time.sleep(delay)
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/movie/{movie_id}/credits",
-            delay=delay, headers=headers, params=auth_params,
+            session,
+            "GET",
+            f"{TMDB_BASE}/movie/{movie_id}/credits",
+            delay=delay,
+            headers=headers,
+            params=auth_params,
             timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
@@ -621,19 +656,28 @@ def _parse_tmdb_search(
             crew = credits_data.get("crew", [])
             meta.director = [c["name"] for c in crew if c.get("job") == "Director"]
             meta.producer = [c["name"] for c in crew if c.get("job") == "Producer"][:5]
-            meta.writer = [c["name"] for c in crew
-                           if c.get("job") in ("Writer", "Screenplay", "Story")][:5]
-            meta.cinematographer = [c["name"] for c in crew
-                                    if c.get("job") == "Director of Photography"][:3]
-            meta.composer = [c["name"] for c in crew
-                             if c.get("job") == "Original Music Composer"][:3]
+            meta.writer = [
+                c["name"]
+                for c in crew
+                if c.get("job") in ("Writer", "Screenplay", "Story")
+            ][:5]
+            meta.cinematographer = [
+                c["name"] for c in crew if c.get("job") == "Director of Photography"
+            ][:3]
+            meta.composer = [
+                c["name"] for c in crew if c.get("job") == "Original Music Composer"
+            ][:3]
             meta.editor = [c["name"] for c in crew if c.get("job") == "Editor"][:3]
-            sfx_jobs = {"Special Effects", "Visual Effects Supervisor",
-                         "Special Effects Supervisor", "Visual Effects Producer",
-                         "Creature Design", "Practical Effects"}
+            sfx_jobs = {
+                "Special Effects",
+                "Visual Effects Supervisor",
+                "Special Effects Supervisor",
+                "Visual Effects Producer",
+                "Creature Design",
+                "Practical Effects",
+            }
             meta.special_effects = [
-                f"{c['name']} ({c['job']})"
-                for c in crew if c.get("job") in sfx_jobs
+                f"{c['name']} ({c['job']})" for c in crew if c.get("job") in sfx_jobs
             ][:5]
     except Exception:
         pass
@@ -655,8 +699,13 @@ def lookup_tmdb(
         params["year"] = int(year)
     try:
         r = _api_call_with_backoff(
-            session, "GET", f"{TMDB_BASE}/search/movie",
-            delay=delay, headers=headers, params=params, timeout=DEFAULT_TIMEOUT,
+            session,
+            "GET",
+            f"{TMDB_BASE}/search/movie",
+            delay=delay,
+            headers=headers,
+            params=params,
+            timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
             return _parse_tmdb_search(r.json(), title, year, tmdb_token, session, delay)
@@ -666,6 +715,7 @@ def lookup_tmdb(
 
 
 # ── OMDb provider ─────────────────────────────────────────────────────────────
+
 
 def _parse_omdb_response(
     data: dict,
@@ -687,7 +737,9 @@ def _parse_omdb_response(
             try:
                 time.sleep(delay)
                 r = _api_call_with_backoff(
-                    session, "GET", OMDB_BASE,
+                    session,
+                    "GET",
+                    OMDB_BASE,
                     delay=delay,
                     params={"apikey": omdb_key, "t": title, "type": "movie"},
                     timeout=DEFAULT_TIMEOUT,
@@ -703,7 +755,7 @@ def _parse_omdb_response(
 
     meta.title = data.get("Title", "")
     if not _titles_similar(title, meta.title):
-        return MovieMetadata()   # OMDb returned something unrelated
+        return MovieMetadata()  # OMDb returned something unrelated
 
     meta.year = data.get("Year", "")
     meta.synopsis = data.get("Plot", "")
@@ -748,8 +800,12 @@ def lookup_omdb(
         params["y"] = year
     try:
         r = _api_call_with_backoff(
-            session, "GET", OMDB_BASE,
-            delay=delay, params=params, timeout=DEFAULT_TIMEOUT,
+            session,
+            "GET",
+            OMDB_BASE,
+            delay=delay,
+            params=params,
+            timeout=DEFAULT_TIMEOUT,
         )
         if r.status_code == 200:
             return _parse_omdb_response(r.json(), title, year, omdb_key, session, delay)
@@ -759,6 +815,7 @@ def lookup_omdb(
 
 
 # ── Merge providers ───────────────────────────────────────────────────────────
+
 
 def merge_metadata(tmdb: MovieMetadata, omdb: MovieMetadata) -> MovieMetadata:
     """Merge TMDb (deep credits) with OMDb (ratings) into one result."""
@@ -805,6 +862,7 @@ def merge_metadata(tmdb: MovieMetadata, omdb: MovieMetadata) -> MovieMetadata:
 # ══════════════════════════════════════════════════════════════════════════════
 #  Description formatter
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def format_description(
     meta: MovieMetadata,
@@ -874,9 +932,16 @@ def format_description(
         lines.append("")
 
     # ── Cast & Crew ────────────────────────────────────────────────────────
-    has_crew = (meta.director or meta.cast or meta.producer or meta.writer
-                or meta.cinematographer or meta.composer or meta.editor
-                or meta.special_effects)
+    has_crew = (
+        meta.director
+        or meta.cast
+        or meta.producer
+        or meta.writer
+        or meta.cinematographer
+        or meta.composer
+        or meta.editor
+        or meta.special_effects
+    )
     if has_crew:
         lines.append("Cast & Crew:")
 
@@ -919,6 +984,7 @@ def format_description(
 #  CMS API helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def fetch_all_media(session: requests.Session, api_base: str) -> list[dict]:
     """Paginate through /manage_media to get every media item."""
     all_items: list[dict] = []
@@ -931,8 +997,7 @@ def fetch_all_media(session: requests.Session, api_base: str) -> list[dict]:
     )
 
     if resp.status_code == 403:
-        print("  (falling back to /media — may be capped at ~1000)",
-              file=sys.stderr)
+        print("  (falling back to /media — may be capped at ~1000)", file=sys.stderr)
         return _fetch_media_fallback(session, api_base)
 
     resp.raise_for_status()
@@ -1037,6 +1102,7 @@ def _restore_owner(
 #  Data model
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 @dataclass
 class Candidate:
     friendly_token: str
@@ -1045,17 +1111,20 @@ class Candidate:
     duration: int
     score: int
     hosted: HostedInfo | None
-    lookup_title: str         # clean title for API lookup
-    lookup_year: str | None   # year for API lookup
+    lookup_title: str  # clean title for API lookup
+    lookup_year: str | None  # year for API lookup
     genre_hints: list[str] = field(default_factory=list)  # from YouTube titles
-    is_youtube: bool = False   # parsed from "Title | Full Movie | Genres"
-    cms_user: str = ""         # original uploader — captured before any PUT so we can restore it
-    is_tubi: bool = False       # True when --tubi-upgrade targets this item
+    is_youtube: bool = False  # parsed from "Title | Full Movie | Genres"
+    cms_user: str = (
+        ""  # original uploader — captured before any PUT so we can restore it
+    )
+    is_tubi: bool = False  # True when --tubi-upgrade targets this item
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 #  Main pipeline
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def find_candidates(
     all_media: list[dict],
@@ -1116,7 +1185,7 @@ def find_candidates(
             yt = parse_youtube_title(raw_title)
             if yt:
                 lookup_title, genre_hints = yt
-                lookup_year = None          # YouTube titles never have years
+                lookup_year = None  # YouTube titles never have years
                 is_youtube = True
             else:
                 lookup_title, lookup_year = parse_standard_title(raw_title)
@@ -1128,20 +1197,22 @@ def find_candidates(
             if tubi_year:
                 lookup_year = tubi_year
 
-        candidates.append(Candidate(
-            friendly_token=item.get("friendly_token", ""),
-            raw_title=raw_title,
-            description=desc,
-            duration=dur,
-            score=quality["score"],
-            hosted=hosted,
-            lookup_title=lookup_title,
-            lookup_year=lookup_year,
-            genre_hints=genre_hints,
-            is_youtube=is_youtube,
-            cms_user=item.get("user", ""),
-            is_tubi=item_is_tubi,
-        ))
+        candidates.append(
+            Candidate(
+                friendly_token=item.get("friendly_token", ""),
+                raw_title=raw_title,
+                description=desc,
+                duration=dur,
+                score=quality["score"],
+                hosted=hosted,
+                lookup_title=lookup_title,
+                lookup_year=lookup_year,
+                genre_hints=genre_hints,
+                is_youtube=is_youtube,
+                cms_user=item.get("user", ""),
+                is_tubi=item_is_tubi,
+            )
+        )
 
     # Sort by score ascending (worst first)
     candidates.sort(key=lambda c: (c.score, c.raw_title))
@@ -1169,7 +1240,7 @@ def run_report(candidates: list[Candidate]) -> None:
     print(f"  {'SCORE':>5}  {'DUR':>5}  {'TITLE':<{col_t}}  {'LOOKUP':<{col_l}}  HOST")
     print(f"  {'─'*5}  {'─'*5}  {'─'*col_t}  {'─'*col_l}  {'─'*20}")
 
-    for c in candidates[:100]:   # cap report at 100 rows
+    for c in candidates[:100]:  # cap report at 100 rows
         dur_m = c.duration // 60
         title_disp = c.raw_title[:col_t]
         lookup_disp = c.lookup_title[:col_l]
@@ -1177,7 +1248,9 @@ def run_report(candidates: list[Candidate]) -> None:
         if c.is_tubi:
             host_disp = (host_disp + " Tubi↑").strip()
         yr = f" ({c.lookup_year})" if c.lookup_year else ""
-        print(f"  {c.score:>5}  {dur_m:>4}m  {title_disp:<{col_t}}  {lookup_disp}{yr:<{col_l}}  {host_disp}")
+        print(
+            f"  {c.score:>5}  {dur_m:>4}m  {title_disp:<{col_t}}  {lookup_disp}{yr:<{col_l}}  {host_disp}"
+        )
 
     if len(candidates) > 100:
         print(f"\n  ... and {len(candidates) - 100} more.")
@@ -1213,8 +1286,10 @@ def _api_call_with_backoff(
             wait = backoff
 
         wait = min(wait, 60)  # cap at 1 minute
-        print(f"         ** 429 rate-limited — waiting {wait:.0f}s "
-              f"(attempt {attempt + 1}/{max_retries}) **")
+        print(
+            f"         ** 429 rate-limited — waiting {wait:.0f}s "
+            f"(attempt {attempt + 1}/{max_retries}) **"
+        )
         time.sleep(wait)
         backoff *= 2  # exponential
 
@@ -1264,8 +1339,13 @@ def _interactive_pick(
 
 
 def _interactive_miss(
-    prefix: str, title_disp: str, query: str, year: str | None,
-    tmdb_token: str | None, lookup_session: requests.Session, delay: float,
+    prefix: str,
+    title_disp: str,
+    query: str,
+    year: str | None,
+    tmdb_token: str | None,
+    lookup_session: requests.Session,
+    delay: float,
 ) -> MovieMetadata | None:
     """Prompt the user for a corrected search query on a MISS.
 
@@ -1273,10 +1353,13 @@ def _interactive_miss(
     None if they choose to skip.  Returns the sentinel string ``'quit'``
     when the user wants to stop interactive prompting.
     """
-    print(f"{prefix} MISS  {title_disp}  "
-          f'<- no results for "{query}" ({year or "?"})')
-    print("         Type a corrected title to retry, Enter to skip, "
-          "or 'q' to stop prompting:")
+    print(
+        f"{prefix} MISS  {title_disp}  " f'<- no results for "{query}" ({year or "?"})'
+    )
+    print(
+        "         Type a corrected title to retry, Enter to skip, "
+        "or 'q' to stop prompting:"
+    )
     while True:
         try:
             hint = input("         >> ").strip()
@@ -1295,9 +1378,13 @@ def _interactive_miss(
         headers, auth_params = _tmdb_auth(tmdb_token)
         try:
             r = _api_call_with_backoff(
-                lookup_session, "GET", f"{TMDB_BASE}/search/movie",
-                delay=delay, headers=headers,
-                params={"query": hint, **auth_params}, timeout=DEFAULT_TIMEOUT,
+                lookup_session,
+                "GET",
+                f"{TMDB_BASE}/search/movie",
+                delay=delay,
+                headers=headers,
+                params={"query": hint, **auth_params},
+                timeout=DEFAULT_TIMEOUT,
             )
         except Exception:
             print("         (search failed — network error)")
@@ -1307,7 +1394,9 @@ def _interactive_miss(
             continue
         results = r.json().get("results", [])
         if not results:
-            print(f'         No results for "{hint}" — try again or press Enter to skip.')
+            print(
+                f'         No results for "{hint}" — try again or press Enter to skip.'
+            )
             continue
 
         picked = _interactive_pick(results)
@@ -1327,8 +1416,12 @@ def _interactive_miss(
         try:
             time.sleep(delay)
             r2 = _api_call_with_backoff(
-                lookup_session, "GET", f"{TMDB_BASE}/movie/{movie_id}",
-                delay=delay, headers=headers, params=auth_params,
+                lookup_session,
+                "GET",
+                f"{TMDB_BASE}/movie/{movie_id}",
+                delay=delay,
+                headers=headers,
+                params=auth_params,
                 timeout=DEFAULT_TIMEOUT,
             )
             if r2.status_code == 200:
@@ -1345,8 +1438,12 @@ def _interactive_miss(
         try:
             time.sleep(delay)
             r3 = _api_call_with_backoff(
-                lookup_session, "GET", f"{TMDB_BASE}/movie/{movie_id}/credits",
-                delay=delay, headers=headers, params=auth_params,
+                lookup_session,
+                "GET",
+                f"{TMDB_BASE}/movie/{movie_id}/credits",
+                delay=delay,
+                headers=headers,
+                params=auth_params,
                 timeout=DEFAULT_TIMEOUT,
             )
             if r3.status_code == 200:
@@ -1354,13 +1451,20 @@ def _interactive_miss(
                 meta.cast = [c["name"] for c in credits_data.get("cast", [])[:10]]
                 crew = credits_data.get("crew", [])
                 meta.director = [c["name"] for c in crew if c.get("job") == "Director"]
-                meta.producer = [c["name"] for c in crew if c.get("job") == "Producer"][:5]
-                meta.writer = [c["name"] for c in crew
-                               if c.get("job") in ("Writer", "Screenplay", "Story")][:5]
-                meta.cinematographer = [c["name"] for c in crew
-                                        if c.get("job") == "Director of Photography"][:3]
-                meta.composer = [c["name"] for c in crew
-                                 if c.get("job") == "Original Music Composer"][:3]
+                meta.producer = [c["name"] for c in crew if c.get("job") == "Producer"][
+                    :5
+                ]
+                meta.writer = [
+                    c["name"]
+                    for c in crew
+                    if c.get("job") in ("Writer", "Screenplay", "Story")
+                ][:5]
+                meta.cinematographer = [
+                    c["name"] for c in crew if c.get("job") == "Director of Photography"
+                ][:3]
+                meta.composer = [
+                    c["name"] for c in crew if c.get("job") == "Original Music Composer"
+                ][:3]
                 meta.editor = [c["name"] for c in crew if c.get("job") == "Editor"][:3]
         except Exception:
             pass
@@ -1415,20 +1519,28 @@ def run_enrichment(
                 _hdrs, _aprms = _tmdb_auth(tmdb_token)
                 try:
                     r = _api_call_with_backoff(
-                        lookup_session, "GET",
+                        lookup_session,
+                        "GET",
                         f"{TMDB_BASE}/search/movie",
                         delay=delay,
                         headers=_hdrs,
-                        params={"query": c.lookup_title, **_aprms,
-                                **(({"year": int(c.lookup_year)} if c.lookup_year else {}))},
+                        params={
+                            "query": c.lookup_title,
+                            **_aprms,
+                            **(({"year": int(c.lookup_year)} if c.lookup_year else {})),
+                        },
                         timeout=DEFAULT_TIMEOUT,
                     )
                     api_calls += 1
                     if r.status_code == 200:
                         tmdb_search_results = r.json().get("results", [])
                         tmdb_meta = _parse_tmdb_search(
-                            r.json(), c.lookup_title, c.lookup_year,
-                            tmdb_token, lookup_session, delay,
+                            r.json(),
+                            c.lookup_title,
+                            c.lookup_year,
+                            tmdb_token,
+                            lookup_session,
+                            delay,
                         )
                 except Exception:
                     pass
@@ -1436,16 +1548,22 @@ def run_enrichment(
                 # Interactive: if results existed but similarity rejected
                 # them all, let the user pick from the list.
                 if interactive and not tmdb_meta.found and tmdb_search_results:
-                    print(f"{prefix} ???   {title_disp}  "
-                          f'<- no good match for "{c.lookup_title}" '
-                          f'({c.lookup_year or "?"})')
+                    print(
+                        f"{prefix} ???   {title_disp}  "
+                        f'<- no good match for "{c.lookup_title}" '
+                        f'({c.lookup_year or "?"})'
+                    )
                     picked = _interactive_pick(
                         tmdb_search_results,
                     )
                     if picked is not None:
                         tmdb_meta = _parse_tmdb_search(
-                            {"results": [picked]}, picked.get("title", ""),
-                            None, tmdb_token, lookup_session, delay,
+                            {"results": [picked]},
+                            picked.get("title", ""),
+                            None,
+                            tmdb_token,
+                            lookup_session,
+                            delay,
                         )
 
                 time.sleep(delay)
@@ -1462,15 +1580,23 @@ def run_enrichment(
                         if c.lookup_year:
                             params["y"] = c.lookup_year
                     r = _api_call_with_backoff(
-                        lookup_session, "GET", OMDB_BASE,
-                        delay=delay, params=params, timeout=DEFAULT_TIMEOUT,
+                        lookup_session,
+                        "GET",
+                        OMDB_BASE,
+                        delay=delay,
+                        params=params,
+                        timeout=DEFAULT_TIMEOUT,
                     )
                     api_calls += 1
                     if r.status_code == 200:
                         omdb_title_for_check = tmdb_meta.title or c.lookup_title
                         omdb_meta = _parse_omdb_response(
-                            r.json(), omdb_title_for_check, c.lookup_year,
-                            omdb_key, lookup_session, delay,
+                            r.json(),
+                            omdb_title_for_check,
+                            c.lookup_year,
+                            omdb_key,
+                            lookup_session,
+                            delay,
                         )
                 except Exception:
                     pass
@@ -1485,13 +1611,20 @@ def run_enrichment(
             if not meta.found:
                 if interactive:
                     result = _interactive_miss(
-                        prefix, title_disp, c.lookup_title, c.lookup_year,
-                        tmdb_token, lookup_session, delay,
+                        prefix,
+                        title_disp,
+                        c.lookup_title,
+                        c.lookup_year,
+                        tmdb_token,
+                        lookup_session,
+                        delay,
                     )
                     if result == "quit":
                         interactive = False  # stop prompting, keep running
-                        print(f"{prefix} MISS  {title_disp}  "
-                              f'<- no results for "{c.lookup_title}" ({c.lookup_year or "?"})')
+                        print(
+                            f"{prefix} MISS  {title_disp}  "
+                            f'<- no results for "{c.lookup_title}" ({c.lookup_year or "?"})'
+                        )
                         skipped += 1
                         continue
                     if result is not None and result.found:
@@ -1500,15 +1633,21 @@ def run_enrichment(
                         if omdb_key and tmdb_meta.imdb_id:
                             try:
                                 r = _api_call_with_backoff(
-                                    lookup_session, "GET", OMDB_BASE,
+                                    lookup_session,
+                                    "GET",
+                                    OMDB_BASE,
                                     delay=delay,
                                     params={"apikey": omdb_key, "i": tmdb_meta.imdb_id},
                                     timeout=DEFAULT_TIMEOUT,
                                 )
                                 if r.status_code == 200:
                                     omdb_meta = _parse_omdb_response(
-                                        r.json(), tmdb_meta.title, tmdb_meta.year,
-                                        omdb_key, lookup_session, delay,
+                                        r.json(),
+                                        tmdb_meta.title,
+                                        tmdb_meta.year,
+                                        omdb_key,
+                                        lookup_session,
+                                        delay,
                                     )
                             except Exception:
                                 pass
@@ -1520,18 +1659,24 @@ def run_enrichment(
                         skipped += 1
                         continue
                 else:
-                    print(f"{prefix} MISS  {title_disp}  "
-                          f'<- no results for "{c.lookup_title}" ({c.lookup_year or "?"})')
+                    print(
+                        f"{prefix} MISS  {title_disp}  "
+                        f'<- no results for "{c.lookup_title}" ({c.lookup_year or "?"})'
+                    )
                     skipped += 1
                     continue
 
             # ── Format ─────────────────────────────────────────────────────
-            new_desc = format_description(meta, hosted=c.hosted, existing_desc=c.description)
+            new_desc = format_description(
+                meta, hosted=c.hosted, existing_desc=c.description
+            )
             new_score = score_description(new_desc)
 
             if new_score["score"] <= c.score:
-                print(f"{prefix} SKIP  {title_disp}  "
-                      f"(new score {new_score['score']} <= existing {c.score})")
+                print(
+                    f"{prefix} SKIP  {title_disp}  "
+                    f"(new score {new_score['score']} <= existing {c.score})"
+                )
                 skipped += 1
                 continue
 
@@ -1569,19 +1714,26 @@ def run_enrichment(
 
             found_title = meta.title or c.lookup_title
             print(f"{prefix} MATCH {title_disp}")
-            print(f"         -> {found_title} ({meta.year or '?'}){host_tag}{ratings_tag}")
+            print(
+                f"         -> {found_title} ({meta.year or '?'}){host_tag}{ratings_tag}"
+            )
             if new_cms_title:
                 print(f"         -> rename: {c.raw_title} -> {new_cms_title}")
-            print(f"         -> score {c.score} -> {new_score['score']}  "
-                  f"({new_score['description_length']} chars, "
-                  f"{len(new_score['sections_present'])} sections)  "
-                  f"ETA: {eta}")
+            print(
+                f"         -> score {c.score} -> {new_score['score']}  "
+                f"({new_score['description_length']} chars, "
+                f"{len(new_score['sections_present'])} sections)  "
+                f"ETA: {eta}"
+            )
 
             if commit:
                 try:
                     ok = update_media(
-                        cms_session, api_base, c.friendly_token,
-                        new_desc, title=new_cms_title,
+                        cms_session,
+                        api_base,
+                        c.friendly_token,
+                        new_desc,
+                        title=new_cms_title,
                     )
                 except Exception:
                     ok = False
@@ -1593,8 +1745,11 @@ def run_enrichment(
                     # original uploader immediately after each commit.
                     if c.cms_user:
                         _restore_owner(
-                            cms_session, api_base,
-                            c.friendly_token, c.cms_user, delay,
+                            cms_session,
+                            api_base,
+                            c.friendly_token,
+                            c.cms_user,
+                            delay,
                         )
                 else:
                     failed += 1
@@ -1605,10 +1760,14 @@ def run_enrichment(
 
     except KeyboardInterrupt:
         elapsed = time.monotonic() - start_time
-        print(f"\n\n  *** Interrupted after {_format_eta(elapsed)} "
-              f"({api_calls} API calls) ***")
-        print(f"  Processed so far: enriched={enriched}  "
-              f"skipped={skipped}  failed={failed}")
+        print(
+            f"\n\n  *** Interrupted after {_format_eta(elapsed)} "
+            f"({api_calls} API calls) ***"
+        )
+        print(
+            f"  Processed so far: enriched={enriched}  "
+            f"skipped={skipped}  failed={failed}"
+        )
         if commit and enriched > 0:
             print(f"  ({enriched} items were already committed before interrupt)")
         print()
@@ -1619,6 +1778,7 @@ def run_enrichment(
 # ══════════════════════════════════════════════════════════════════════════════
 #  CLI
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -1639,26 +1799,62 @@ examples:
     p.add_argument("--token", required=True, help="MediaCMS API token.")
     p.add_argument("--tmdb-key", default=None, help="TMDb read-access token (Bearer).")
     p.add_argument("--omdb-key", default=None, help="OMDb API key.")
-    p.add_argument("--report", action="store_true",
-                   help="Scan and score only - no lookups, no changes.")
-    p.add_argument("--commit", action="store_true",
-                   help="Push enriched descriptions to the CMS.")
-    p.add_argument("--interactive", "-i", action="store_true",
-                   help="Prompt on misses and ambiguous matches.")
-    p.add_argument("--limit", type=int, default=None, metavar="N",
-                   help="Only process the first N candidates.")
-    p.add_argument("--tubi-upgrade", action="store_true",
-                   help="Re-enrich items with Tubi-sourced metadata regardless of score.")
-    p.add_argument("--min-score", type=int, default=MIN_SCORE_THRESHOLD,
-                   help=f"Enrich items scoring below this (default: {MIN_SCORE_THRESHOLD}).")
-    p.add_argument("--min-duration", type=int, default=MIN_DURATION,
-                   help=f"Minimum duration in seconds (default: {MIN_DURATION}).")
-    p.add_argument("--days", type=int, default=None, metavar="N",
-                   help="Only consider items uploaded in the last N days.")
-    p.add_argument("--delay", type=float, default=REQUEST_DELAY,
-                   help=f"Seconds between API calls (default: {REQUEST_DELAY}).")
-    p.add_argument("--api-url", default=API_BASE,
-                   help=f"Override the API base URL (default: {API_BASE}).")
+    p.add_argument(
+        "--report",
+        action="store_true",
+        help="Scan and score only - no lookups, no changes.",
+    )
+    p.add_argument(
+        "--commit", action="store_true", help="Push enriched descriptions to the CMS."
+    )
+    p.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Prompt on misses and ambiguous matches.",
+    )
+    p.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Only process the first N candidates.",
+    )
+    p.add_argument(
+        "--tubi-upgrade",
+        action="store_true",
+        help="Re-enrich items with Tubi-sourced metadata regardless of score.",
+    )
+    p.add_argument(
+        "--min-score",
+        type=int,
+        default=MIN_SCORE_THRESHOLD,
+        help=f"Enrich items scoring below this (default: {MIN_SCORE_THRESHOLD}).",
+    )
+    p.add_argument(
+        "--min-duration",
+        type=int,
+        default=MIN_DURATION,
+        help=f"Minimum duration in seconds (default: {MIN_DURATION}).",
+    )
+    p.add_argument(
+        "--days",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Only consider items uploaded in the last N days.",
+    )
+    p.add_argument(
+        "--delay",
+        type=float,
+        default=REQUEST_DELAY,
+        help=f"Seconds between API calls (default: {REQUEST_DELAY}).",
+    )
+    p.add_argument(
+        "--api-url",
+        default=API_BASE,
+        help=f"Override the API base URL (default: {API_BASE}).",
+    )
     return p
 
 
@@ -1666,6 +1862,7 @@ def main(argv: list[str] | None = None) -> int:
     # Windows console UTF-8 fix
     if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
         import io
+
         sys.stdout = io.TextIOWrapper(
             sys.stdout.buffer, encoding="utf-8", errors="replace"
         )
@@ -1679,8 +1876,11 @@ def main(argv: list[str] | None = None) -> int:
     api_base = args.api_url.rstrip("/")
 
     if not args.report and not args.tmdb_key and not args.omdb_key:
-        print("Error: at least one of --tmdb-key or --omdb-key is required "
-              "for enrichment (use --report for scan-only).", file=sys.stderr)
+        print(
+            "Error: at least one of --tmdb-key or --omdb-key is required "
+            "for enrichment (use --report for scan-only).",
+            file=sys.stderr,
+        )
         return 1
 
     mode = "REPORT" if args.report else ("COMMIT" if args.commit else "DRY-RUN")
@@ -1692,7 +1892,9 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n{'='*60}")
     print(f"  enrichmeta  --  Mode: {mode}")
-    print(f"  Movies: duration >= {dur_mins} min  |  Score threshold: < {args.min_score}")
+    print(
+        f"  Movies: duration >= {dur_mins} min  |  Score threshold: < {args.min_score}"
+    )
     if args.tubi_upgrade:
         print(f"  Tubi upgrade: ON (re-enrich Tubi-sourced items regardless of score)")
     if args.days:
@@ -1719,18 +1921,23 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── Filter by upload date ─────────────────────────────────────────────
     if args.days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=args.days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(days=args.days)
+        ).strftime("%Y-%m-%d")
         before = len(all_media)
-        all_media = [i for i in all_media
-                     if (i.get("add_date") or "")[:10] >= cutoff]
-        print(f"  Filtered to {len(all_media)}/{before} item(s) "
-              f"uploaded in the last {args.days} day(s).")
+        all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
+        print(
+            f"  Filtered to {len(all_media)}/{before} item(s) "
+            f"uploaded in the last {args.days} day(s)."
+        )
 
     # ── Find candidates ────────────────────────────────────────────────────
     print("\n  Scanning for enrichment candidates ...")
     candidates = find_candidates(
-        all_media, args.min_duration, args.min_score,
+        all_media,
+        args.min_duration,
+        args.min_score,
         tubi_upgrade=args.tubi_upgrade,
     )
 
@@ -1771,6 +1978,7 @@ def main(argv: list[str] | None = None) -> int:
 
 # ── Headless entry point for the webqueue job runner ───────────────────────────
 
+
 def run(params: dict, *, config, progress=None) -> dict:
     """Run movie-metadata enrichment headlessly (no argparse/interactive).
 
@@ -1791,7 +1999,9 @@ def run(params: dict, *, config, progress=None) -> dict:
     tmdb_key = getattr(config, "tmdb_api_key", "") or ""
     omdb_key = getattr(config, "omdb_api_key", "") or ""
     if not tmdb_key and not omdb_key:
-        raise RuntimeError("enrichmeta requires a TMDb or OMDb API key (none configured)")
+        raise RuntimeError(
+            "enrichmeta requires a TMDb or OMDb API key (none configured)"
+        )
 
     def _emit(detail):
         if progress:
@@ -1804,18 +2014,28 @@ def run(params: dict, *, config, progress=None) -> dict:
     all_media = fetch_all_media(cms_session, api_base)
 
     if days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        ).strftime("%Y-%m-%d")
         all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
 
     candidates = find_candidates(
-        all_media, min_duration, min_score, tubi_upgrade=tubi_upgrade,
+        all_media,
+        min_duration,
+        min_score,
+        tubi_upgrade=tubi_upgrade,
     )
     _emit({"phase": "scanned", "scanned": len(all_media), "matched": len(candidates)})
 
     if not candidates:
-        return {"scanned": len(all_media), "matched": 0, "committed": 0,
-                "skipped": 0, "failed": 0, "dry_run": dry_run}
+        return {
+            "scanned": len(all_media),
+            "matched": 0,
+            "committed": 0,
+            "skipped": 0,
+            "failed": 0,
+            "dry_run": dry_run,
+        }
 
     enriched, skipped, failed = run_enrichment(
         candidates=candidates,

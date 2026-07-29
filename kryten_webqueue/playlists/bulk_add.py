@@ -47,6 +47,9 @@ async def add_item_throttled(
             backoff = retry_delay_sec * attempt
             logger.info(
                 "CyTube rejected %s (422 queueFail); retry %d/%d after %.1fs",
-                media_id, attempt, max_retries, backoff,
+                media_id,
+                attempt,
+                max_retries,
+                backoff,
             )
             await asyncio.sleep(backoff)

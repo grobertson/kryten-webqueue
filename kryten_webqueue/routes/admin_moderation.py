@@ -17,6 +17,7 @@ router = APIRouter(prefix="/admin/moderation", tags=["admin"])
 
 # ── request bodies ─────────────────────────────────────────────────────────────
 
+
 class AddEntryRequest(BaseModel):
     username: str
     action: Literal["ban", "smute", "mute"]
@@ -32,6 +33,7 @@ class AddPatternRequest(BaseModel):
 
 # ── helpers ────────────────────────────────────────────────────────────────────
 
+
 def _api(request: Request):
     return request.app.state.api_gate
 
@@ -41,6 +43,7 @@ def _channel(request: Request) -> str:
 
 
 # ── service status ─────────────────────────────────────────────────────────────
+
 
 @router.get("/status")
 async def mod_status(request: Request, user: dict = Depends(require_admin)):
@@ -65,6 +68,7 @@ async def mod_status(request: Request, user: dict = Depends(require_admin)):
 
 # ── moderation entries ─────────────────────────────────────────────────────────
 
+
 @router.get("/entries")
 async def list_entries(
     request: Request,
@@ -72,7 +76,9 @@ async def list_entries(
     user: dict = Depends(require_admin),
 ):
     """List moderation entries for the configured channel."""
-    return await _api(request).mod_list_entries(_channel(request), action_filter=action_filter)
+    return await _api(request).mod_list_entries(
+        _channel(request), action_filter=action_filter
+    )
 
 
 @router.post("/entries", status_code=201)
@@ -102,6 +108,7 @@ async def remove_entry(
 
 
 # ── patterns ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/patterns")
 async def list_patterns(request: Request, user: dict = Depends(require_admin)):
@@ -137,6 +144,7 @@ async def remove_pattern(
 
 
 # ── recent users ───────────────────────────────────────────────────────────────
+
 
 @router.get("/recent")
 async def recent_users(

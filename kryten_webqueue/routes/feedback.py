@@ -61,14 +61,17 @@ async def submit_feedback(
     """Record a free-text feedback submission and thank the user."""
     body = (payload.body or "").strip()
     if not body:
-        raise HTTPException(status_code=400, detail="Please enter some feedback before submitting.")
+        raise HTTPException(
+            status_code=400, detail="Please enter some feedback before submitting."
+        )
     if len(body) > FEEDBACK_MAX_LEN:
         raise HTTPException(
             status_code=400,
             detail=f"Feedback is too long (max {FEEDBACK_MAX_LEN} characters).",
         )
     _rate_limit(
-        request, f"feedback:{user['username']}",
+        request,
+        f"feedback:{user['username']}",
         "You're sending feedback very quickly. Please wait a moment and try again.",
     )
     db = request.app.state.db
@@ -93,14 +96,17 @@ async def resolve_suggestion(
     """
     query = (payload.query or "").strip()
     if not query:
-        raise HTTPException(status_code=400, detail="Enter a movie or show title to search.")
+        raise HTTPException(
+            status_code=400, detail="Enter a movie or show title to search."
+        )
     if len(query) > SUGGEST_QUERY_MAX_LEN:
         raise HTTPException(
             status_code=400,
             detail=f"Title is too long (max {SUGGEST_QUERY_MAX_LEN} characters).",
         )
     _rate_limit(
-        request, f"suggest-resolve:{user['username']}",
+        request,
+        f"suggest-resolve:{user['username']}",
         "Too many searches in a short time. Please wait a moment and try again.",
     )
     cover_art = request.app.state.cover_art
@@ -134,7 +140,8 @@ async def submit_suggestion(
             detail=f"Title is too long (max {SUGGEST_QUERY_MAX_LEN} characters).",
         )
     _rate_limit(
-        request, f"suggest:{user['username']}",
+        request,
+        f"suggest:{user['username']}",
         "You're sending suggestions very quickly. Please wait a moment and try again.",
     )
     db = request.app.state.db
@@ -143,7 +150,9 @@ async def submit_suggestion(
 
     # Unresolved path: no match chosen (or explicitly flagged). Still recorded.
     if payload.unresolved or not choice or not (choice.title or "").strip():
-        await db.add_title_suggestion(username=username, query=query, resolution="unresolved")
+        await db.add_title_suggestion(
+            username=username, query=query, resolution="unresolved"
+        )
         return {
             "success": True,
             "resolution": "unresolved",
@@ -167,9 +176,15 @@ async def submit_suggestion(
     match = await db.find_catalog_by_title(title)
     if match:
         await db.add_title_suggestion(
-            username=username, query=query, resolved_title=title, resolved_year=year,
-            resolved_source=source, resolved_id=resolved_id, poster_url=poster,
-            resolution="already_have", catalog_token=match["friendly_token"],
+            username=username,
+            query=query,
+            resolved_title=title,
+            resolved_year=year,
+            resolved_source=source,
+            resolved_id=resolved_id,
+            poster_url=poster,
+            resolution="already_have",
+            catalog_token=match["friendly_token"],
         )
         return {
             "success": True,
@@ -183,8 +198,13 @@ async def submit_suggestion(
         }
 
     await db.add_title_suggestion(
-        username=username, query=query, resolved_title=title, resolved_year=year,
-        resolved_source=source, resolved_id=resolved_id, poster_url=poster,
+        username=username,
+        query=query,
+        resolved_title=title,
+        resolved_year=year,
+        resolved_source=source,
+        resolved_id=resolved_id,
+        poster_url=poster,
         resolution="resolved",
     )
     return {

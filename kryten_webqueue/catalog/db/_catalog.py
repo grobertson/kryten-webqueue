@@ -133,7 +133,9 @@ def _recently_played_exclusion(alias: str, days: int) -> tuple[str, list]:
     return sql, [f"-{int(days)} days"]
 
 
-def _facet_filter(alias: str, category: str | None, tag: str | None) -> tuple[str, list]:
+def _facet_filter(
+    alias: str, category: str | None, tag: str | None
+) -> tuple[str, list]:
     """SQL fragment (+ params) AND-filtering by a category slug and/or tag name.
 
     Each filter is an ``AND friendly_token IN (...)`` subquery on the catalog row
@@ -191,7 +193,17 @@ class _CatalogMixin:
 
     # --- Catalog ---
 
-    async def browse(self, *, category: str | None = None, tag: str | None = None, page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default", recently_played_days: int = 0) -> list[dict]:
+    async def browse(
+        self,
+        *,
+        category: str | None = None,
+        tag: str | None = None,
+        page: int = 1,
+        per_page: int = 24,
+        show_hidden: bool = False,
+        sort: str = "default",
+        recently_played_days: int = 0,
+    ) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
             FROM catalog c
@@ -245,7 +257,14 @@ class _CatalogMixin:
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(query, params)
 
-    async def browse_count(self, *, category: str | None = None, tag: str | None = None, show_hidden: bool = False, recently_played_days: int = 0) -> int:
+    async def browse_count(
+        self,
+        *,
+        category: str | None = None,
+        tag: str | None = None,
+        show_hidden: bool = False,
+        recently_played_days: int = 0,
+    ) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
             WHERE c.friendly_token NOT IN (
@@ -284,8 +303,18 @@ class _CatalogMixin:
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
-    async def search(self, query_text: str, *, category: str | None = None, tag: str | None = None,
-                     page: int = 1, per_page: int = 24, show_hidden: bool = False, sort: str = "default", recently_played_days: int = 0) -> list[dict]:
+    async def search(
+        self,
+        query_text: str,
+        *,
+        category: str | None = None,
+        tag: str | None = None,
+        page: int = 1,
+        per_page: int = 24,
+        show_hidden: bool = False,
+        sort: str = "default",
+        recently_played_days: int = 0,
+    ) -> list[dict]:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
@@ -314,13 +343,24 @@ class _CatalogMixin:
         params.extend(facet_params)
         # Relevance is the natural default for a text query; other sort keys let
         # the user reorder the matched set explicitly.
-        sql += " ORDER BY rank " if (sort or "default") == "default" else _browse_order_clause(sort)
+        sql += (
+            " ORDER BY rank "
+            if (sort or "default") == "default"
+            else _browse_order_clause(sort)
+        )
         sql += " LIMIT ? OFFSET ? "
         params.extend([per_page, (page - 1) * per_page])
         return await self._fetch_all(sql, params)
 
-    async def search_count(self, query_text: str, *, category: str | None = None, tag: str | None = None,
-                           show_hidden: bool = False, recently_played_days: int = 0) -> int:
+    async def search_count(
+        self,
+        query_text: str,
+        *,
+        category: str | None = None,
+        tag: str | None = None,
+        show_hidden: bool = False,
+        recently_played_days: int = 0,
+    ) -> int:
         sql = """
             SELECT COUNT(*) as cnt
             FROM catalog_fts fts
@@ -360,7 +400,9 @@ class _CatalogMixin:
         return await self._fetch_one(sql, [friendly_token])
 
     async def get_item_admin(self, friendly_token: str) -> dict | None:
-        return await self._fetch_one("SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token])
+        return await self._fetch_one(
+            "SELECT * FROM catalog WHERE friendly_token = ?", [friendly_token]
+        )
 
     async def resolve_media(self, media_id: str) -> dict | None:
         """Resolve a now-playing identifier to its catalog row (token + duration).
@@ -376,8 +418,9 @@ class _CatalogMixin:
             [media_id, media_id],
         )
 
-    async def record_play_completion(self, *, friendly_token: str, duration_sec: int | None,
-                                     media_type: str = "cm") -> None:
+    async def record_play_completion(
+        self, *, friendly_token: str, duration_sec: int | None, media_type: str = "cm"
+    ) -> None:
         """Record a genuine play-completion, routing it to the correct hide rule.
 
         Short (<1h) episodes that belong to a mutable (TV-show) playlist are
@@ -449,7 +492,9 @@ class _CatalogMixin:
         )
         return {r["media_id"] for r in rows}
 
-    async def clear_play_state(self, friendly_token: str, *, media_type: str = "cm") -> dict:
+    async def clear_play_state(
+        self, friendly_token: str, *, media_type: str = "cm"
+    ) -> dict:
         """Remove all recently-played hide state for an item (admin test helper).
 
         Deletes both time-boxed ``play_completions`` rows and any
@@ -473,7 +518,10 @@ class _CatalogMixin:
             "DELETE FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
             [friendly_token, media_type],
         )
-        return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
+        return {
+            "completions": pc["c"] if pc else 0,
+            "playlist_pass": pip["c"] if pip else 0,
+        }
 
     async def purge_promo_hide_state(self) -> dict:
         """Remove any recently-played hide state recorded for promos/bumpers.
@@ -493,9 +541,16 @@ class _CatalogMixin:
             f"SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id IN ({sub})",
             sub_params,
         )
-        await self._execute(f"DELETE FROM play_completions WHERE media_id IN ({sub})", sub_params)
-        await self._execute(f"DELETE FROM playlist_item_played WHERE media_id IN ({sub})", sub_params)
-        return {"completions": pc["c"] if pc else 0, "playlist_pass": pip["c"] if pip else 0}
+        await self._execute(
+            f"DELETE FROM play_completions WHERE media_id IN ({sub})", sub_params
+        )
+        await self._execute(
+            f"DELETE FROM playlist_item_played WHERE media_id IN ({sub})", sub_params
+        )
+        return {
+            "completions": pc["c"] if pc else 0,
+            "playlist_pass": pip["c"] if pip else 0,
+        }
 
     async def get_recently_played_debug(self, days: int) -> dict:
         """Snapshot of what the recently-played rules currently hide (admin test).
@@ -524,7 +579,9 @@ class _CatalogMixin:
             "by_playlist_pass": by_playlist_pass,
         }
 
-    async def get_catalog_brief(self, tokens: list[str], manifest_urls: list[str]) -> dict[str, dict]:
+    async def get_catalog_brief(
+        self, tokens: list[str], manifest_urls: list[str]
+    ) -> dict[str, dict]:
         """Return a lookup of catalog metadata keyed by BOTH friendly_token and
         manifest_url, for enriching queue-shadow items that may only carry one.
         """
@@ -606,7 +663,9 @@ class _CatalogMixin:
         """
         return await self._fetch_all(sql, params)
 
-    async def get_tags(self, *, limit: int = 100, show_hidden: bool = False) -> list[dict]:
+    async def get_tags(
+        self, *, limit: int = 100, show_hidden: bool = False
+    ) -> list[dict]:
         """Most-used tags that have at least one catalog item, for facets."""
         sql = """
             SELECT t.id, t.name, COUNT(ct.friendly_token) AS cnt
@@ -628,7 +687,9 @@ class _CatalogMixin:
 
     async def upsert_category(self, name: str) -> int:
         """Insert a category by name (deriving a unique slug) and return its id."""
-        existing = await self._fetch_one("SELECT id FROM categories WHERE name = ?", [name])
+        existing = await self._fetch_one(
+            "SELECT id FROM categories WHERE name = ?", [name]
+        )
         if existing:
             return existing["id"]
         base = _slugify(name)
@@ -651,7 +712,9 @@ class _CatalogMixin:
         await self._db.commit()
         return cursor.lastrowid
 
-    async def set_catalog_categories(self, friendly_token: str, category_ids: list[int]):
+    async def set_catalog_categories(
+        self, friendly_token: str, category_ids: list[int]
+    ):
         """Replace the category memberships for a catalog item."""
         await self._db.execute(
             "DELETE FROM catalog_categories WHERE friendly_token = ?", [friendly_token]
@@ -778,7 +841,15 @@ class _CatalogMixin:
     async def finish_sync_log(self, log_id: int, stats: dict, status: str):
         await self._execute(
             "UPDATE sync_log SET ended_at=?, items_seen=?, items_new=?, items_updated=?, errors=?, status=? WHERE id=?",
-            [datetime.now(UTC).isoformat(), stats["seen"], stats["new"], stats["updated"], stats["errors"], status, log_id],
+            [
+                datetime.now(UTC).isoformat(),
+                stats["seen"],
+                stats["new"],
+                stats["updated"],
+                stats["errors"],
+                status,
+                log_id,
+            ],
         )
 
     async def get_sync_logs(self, limit: int = 10) -> list[dict]:
@@ -788,8 +859,9 @@ class _CatalogMixin:
 
     # --- Generic job runs ---
 
-    async def start_job_run(self, job_name: str, triggered_by: str | None = None,
-                            params: str | None = None) -> int:
+    async def start_job_run(
+        self, job_name: str, triggered_by: str | None = None, params: str | None = None
+    ) -> int:
         cursor = await self._db.execute(
             "INSERT INTO job_runs (job_name, started_at, status, triggered_by, params) "
             "VALUES (?, ?, 'running', ?, ?)",
@@ -806,11 +878,11 @@ class _CatalogMixin:
 
     async def update_job_run_detail(self, run_id: int, detail: str | None):
         """Update only a running job's detail column (used for live progress)."""
-        await self._execute(
-            "UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id]
-        )
+        await self._execute("UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id])
 
-    async def get_job_runs(self, job_name: str | None = None, limit: int = 10) -> list[dict]:
+    async def get_job_runs(
+        self, job_name: str | None = None, limit: int = 10
+    ) -> list[dict]:
         if job_name:
             return await self._fetch_all(
                 "SELECT * FROM job_runs WHERE job_name=? ORDER BY id DESC LIMIT ?",
@@ -855,4 +927,6 @@ class _CatalogMixin:
         return False
 
     async def cleanup_expired_otps(self):
-        await self._execute("DELETE FROM otps WHERE expires_at < datetime('now') OR used=1")
+        await self._execute(
+            "DELETE FROM otps WHERE expires_at < datetime('now') OR used=1"
+        )

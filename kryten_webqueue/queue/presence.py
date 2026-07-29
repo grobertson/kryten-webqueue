@@ -107,14 +107,15 @@ class PresenceRefundMonitor:
             except Exception:
                 # Inconclusive (robot/NATS hiccup): do not start the grace clock
                 # and do not clear an existing one — just skip this cycle.
-                logger.debug("Presence lookup failed for %s; skipping", owner, exc_info=True)
+                logger.debug(
+                    "Presence lookup failed for %s; skipping", owner, exc_info=True
+                )
                 continue
 
             status = self._classify(data)
             reason = "owner_left" if status == "gone" else "owner_afk"
-            actionable = (
-                (status == "gone" and self._config.on_leave)
-                or (status == "afk" and self._config.on_afk)
+            actionable = (status == "gone" and self._config.on_leave) or (
+                status == "afk" and self._config.on_afk
             )
 
             if not actionable:
@@ -152,26 +153,43 @@ class PresenceRefundMonitor:
         if not refunded:
             logger.warning(
                 "Presence cancel: no refundable spend for uid=%s (owner=%s); skipping",
-                uid, item.get("paid_by"),
+                uid,
+                item.get("paid_by"),
             )
             return False
         try:
             await self._api_gate.playlist_delete(uid)
         except Exception:
-            logger.warning("Presence cancel: failed to delete uid=%s from CyTube", uid, exc_info=True)
+            logger.warning(
+                "Presence cancel: failed to delete uid=%s from CyTube",
+                uid,
+                exc_info=True,
+            )
         try:
             await self._shadow.remove(uid)
         except Exception:
-            logger.warning("Presence cancel: failed to remove uid=%s from shadow", uid, exc_info=True)
+            logger.warning(
+                "Presence cancel: failed to remove uid=%s from shadow",
+                uid,
+                exc_info=True,
+            )
         try:
             from ..promos.director import remove_lead_in_for
-            await remove_lead_in_for(api_gate=self._api_gate, shadow=self._shadow, uid=uid)
+
+            await remove_lead_in_for(
+                api_gate=self._api_gate, shadow=self._shadow, uid=uid
+            )
         except Exception:
-            logger.debug("Presence cancel: lead-in cleanup failed for uid=%s", uid, exc_info=True)
+            logger.debug(
+                "Presence cancel: lead-in cleanup failed for uid=%s", uid, exc_info=True
+            )
         await self._notify_owner(item, reason)
         logger.info(
             "Presence cancel: refunded & removed uid=%s (%s) owner=%s reason=%s",
-            uid, item.get("title"), item.get("paid_by"), reason,
+            uid,
+            item.get("title"),
+            item.get("paid_by"),
+            reason,
         )
         return True
 
@@ -195,7 +213,7 @@ class PresenceRefundMonitor:
         try:
             await self._api_gate.send_pm(
                 owner,
-                f"Your queued item \"{title}\" was cancelled and refunded because you went AFK.",
+                f'Your queued item "{title}" was cancelled and refunded because you went AFK.',
             )
         except Exception:
             logger.debug("Presence cancel: failed to PM %s", owner, exc_info=True)
@@ -205,4 +223,6 @@ class PresenceRefundMonitor:
             state = await self._shadow.get_enriched_state(self._db)
             await self._ws_manager.broadcast({"type": "queue_state", "data": state})
         except Exception:
-            logger.debug("Failed to broadcast queue state after presence cancel", exc_info=True)
+            logger.debug(
+                "Failed to broadcast queue state after presence cancel", exc_info=True
+            )

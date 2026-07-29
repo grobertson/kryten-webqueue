@@ -10,6 +10,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templa
 
 # Expose the package version to every template (used in the footer).
 from .. import __version__ as _wq_version
+
 templates.env.globals["app_version"] = _wq_version
 
 router = APIRouter(tags=["pages"])
@@ -41,15 +42,17 @@ def _decorate_placeholder_art(request: Request, items: list[dict]) -> None:
             item["placeholder_art"] = random.choice(urls)
 
 
-
 def _get_user_or_none(request: Request) -> dict | None:
     """Non-throwing user extraction for page rendering."""
     token = request.cookies.get("session")
     if not token:
         return None
     import jwt
+
     try:
-        payload = jwt.decode(token, request.app.state.config.secret_key, algorithms=["HS256"])
+        payload = jwt.decode(
+            token, request.app.state.config.secret_key, algorithms=["HS256"]
+        )
         return {"username": payload["sub"], "rank": payload["rank"]}
     except Exception:
         return None
@@ -79,9 +82,14 @@ async def race_view(request: Request):
 
 
 @router.get("/catalog/browse", response_class=HTMLResponse)
-async def catalog_browse_page(request: Request, category: str | None = None,
-                              tag: str | None = None, page: int = 1,
-                              show_hidden: int = 0, sort: str = "default"):
+async def catalog_browse_page(
+    request: Request,
+    category: str | None = None,
+    tag: str | None = None,
+    page: int = 1,
+    show_hidden: int = 0,
+    sort: str = "default",
+):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
@@ -91,34 +99,58 @@ async def catalog_browse_page(request: Request, category: str | None = None,
     sort = sort if sort in _VALID_SORTS else "default"
     # Admins always see every title; regular users have recently-played items
     # hidden for the configured window.
-    recently_played_days = 0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
-    items = await db.browse(category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort, recently_played_days=recently_played_days)
-    total = await db.browse_count(category=category, tag=tag, show_hidden=show_hidden, recently_played_days=recently_played_days)
+    recently_played_days = (
+        0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
+    )
+    items = await db.browse(
+        category=category,
+        tag=tag,
+        page=page,
+        show_hidden=show_hidden,
+        sort=sort,
+        recently_played_days=recently_played_days,
+    )
+    total = await db.browse_count(
+        category=category,
+        tag=tag,
+        show_hidden=show_hidden,
+        recently_played_days=recently_played_days,
+    )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
     _decorate_placeholder_art(request, items)
-    return templates.TemplateResponse(request, "catalog/browse.html", {
-        "user": user,
-        "items": items,
-        "categories": categories,
-        "tags": tags,
-        "page": page,
-        "total_pages": total_pages,
-        "active_category": category,
-        "active_tag": tag,
-        "query": None,
-        "is_admin": is_admin,
-        "show_hidden": show_hidden,
-        "sort": sort,
-        "sort_options": SORT_OPTIONS,
-    })
+    return templates.TemplateResponse(
+        request,
+        "catalog/browse.html",
+        {
+            "user": user,
+            "items": items,
+            "categories": categories,
+            "tags": tags,
+            "page": page,
+            "total_pages": total_pages,
+            "active_category": category,
+            "active_tag": tag,
+            "query": None,
+            "is_admin": is_admin,
+            "show_hidden": show_hidden,
+            "sort": sort,
+            "sort_options": SORT_OPTIONS,
+        },
+    )
 
 
 @router.get("/catalog/search", response_class=HTMLResponse)
-async def catalog_search_page(request: Request, q: str = "", page: int = 1,
-                             category: str | None = None, tag: str | None = None,
-                             show_hidden: int = 0, sort: str = "default"):
+async def catalog_search_page(
+    request: Request,
+    q: str = "",
+    page: int = 1,
+    category: str | None = None,
+    tag: str | None = None,
+    show_hidden: int = 0,
+    sort: str = "default",
+):
     user = _get_user_or_none(request)
     if not user:
         return RedirectResponse("/auth/login")
@@ -128,28 +160,48 @@ async def catalog_search_page(request: Request, q: str = "", page: int = 1,
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
     sort = sort if sort in _VALID_SORTS else "default"
-    recently_played_days = 0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
-    items = await db.search(q, category=category, tag=tag, page=page, show_hidden=show_hidden, sort=sort, recently_played_days=recently_played_days)
-    total = await db.search_count(q, category=category, tag=tag, show_hidden=show_hidden, recently_played_days=recently_played_days)
+    recently_played_days = (
+        0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
+    )
+    items = await db.search(
+        q,
+        category=category,
+        tag=tag,
+        page=page,
+        show_hidden=show_hidden,
+        sort=sort,
+        recently_played_days=recently_played_days,
+    )
+    total = await db.search_count(
+        q,
+        category=category,
+        tag=tag,
+        show_hidden=show_hidden,
+        recently_played_days=recently_played_days,
+    )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(show_hidden=show_hidden)
     _decorate_placeholder_art(request, items)
-    return templates.TemplateResponse(request, "catalog/browse.html", {
-        "user": user,
-        "items": items,
-        "categories": categories,
-        "tags": tags,
-        "page": page,
-        "total_pages": total_pages,
-        "active_category": category,
-        "active_tag": tag,
-        "query": q,
-        "is_admin": is_admin,
-        "show_hidden": show_hidden,
-        "sort": sort,
-        "sort_options": SORT_OPTIONS,
-    })
+    return templates.TemplateResponse(
+        request,
+        "catalog/browse.html",
+        {
+            "user": user,
+            "items": items,
+            "categories": categories,
+            "tags": tags,
+            "page": page,
+            "total_pages": total_pages,
+            "active_category": category,
+            "active_tag": tag,
+            "query": q,
+            "is_admin": is_admin,
+            "show_hidden": show_hidden,
+            "sort": sort,
+            "sort_options": SORT_OPTIONS,
+        },
+    )
 
 
 @router.get("/queue", response_class=HTMLResponse)
@@ -172,12 +224,16 @@ async def catalog_item_page(request: Request, friendly_token: str):
             request, "catalog/item_not_found.html", {"user": user}, status_code=404
         )
     facets = await db.get_item_facets(friendly_token)
-    return templates.TemplateResponse(request, "catalog/item_detail.html", {
-        "user": user,
-        "item": item,
-        "categories": facets.get("categories") or [],
-        "tags": facets.get("tags") or [],
-    })
+    return templates.TemplateResponse(
+        request,
+        "catalog/item_detail.html",
+        {
+            "user": user,
+            "item": item,
+            "categories": facets.get("categories") or [],
+            "tags": facets.get("tags") or [],
+        },
+    )
 
 
 @router.get("/user/dashboard", response_class=HTMLResponse)

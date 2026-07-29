@@ -36,15 +36,17 @@ def _manifest(token):
 
 
 async def _add_catalog(db, token, title, duration_sec=600):
-    await db.insert_catalog({
-        "friendly_token": token,
-        "title": title,
-        "description": "",
-        "duration_sec": duration_sec,
-        "manifest_url": _manifest(token),
-        "thumbnail_url": "",
-        "synced_at": "2026-01-01T00:00:00+00:00",
-    })
+    await db.insert_catalog(
+        {
+            "friendly_token": token,
+            "title": title,
+            "description": "",
+            "duration_sec": duration_sec,
+            "manifest_url": _manifest(token),
+            "thumbnail_url": "",
+            "synced_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
 
 
 async def _browse_tokens(db, **kwargs):
@@ -52,6 +54,7 @@ async def _browse_tokens(db, **kwargs):
 
 
 # --- Time-window rule ------------------------------------------------------
+
 
 async def test_completed_item_hidden_for_users_visible_for_admins(db):
     await _add_catalog(db, "tok_recent", "Recent Movie", duration_sec=7200)
@@ -72,7 +75,9 @@ async def test_completed_item_hidden_for_users_visible_for_admins(db):
 
     # Admin (window disabled): every title visible.
     assert await _browse_tokens(db, recently_played_days=0) == {
-        "tok_recent", "tok_old", "tok_never",
+        "tok_recent",
+        "tok_old",
+        "tok_never",
     }
     assert await db.browse_count(recently_played_days=0) == 3
 
@@ -82,24 +87,40 @@ async def test_time_rule_applies_to_search(db):
     await _add_catalog(db, "tok_never", "Dragon Fresh", duration_sec=7200)
     await db.record_play_completion(friendly_token="tok_recent", duration_sec=7200)
 
-    user = {r["friendly_token"] for r in await db.search("Dragon", recently_played_days=21)}
+    user = {
+        r["friendly_token"] for r in await db.search("Dragon", recently_played_days=21)
+    }
     assert user == {"tok_never"}
     assert await db.search_count("Dragon", recently_played_days=21) == 1
 
-    admin = {r["friendly_token"] for r in await db.search("Dragon", recently_played_days=0)}
+    admin = {
+        r["friendly_token"] for r in await db.search("Dragon", recently_played_days=0)
+    }
     assert admin == {"tok_recent", "tok_never"}
 
 
 # --- Mutable-playlist pass rule -------------------------------------------
 
+
 async def _make_mutable_playlist(db, tokens, *, duration_sec):
     pid = await db.create_saved_playlist(
-        name="Show X", description=None, is_immutable=False, created_by="admin",
+        name="Show X",
+        description=None,
+        is_immutable=False,
+        created_by="admin",
     )
-    await db.replace_playlist_items(pid, [
-        {"media_type": "cm", "media_id": t, "title": t, "duration_sec": duration_sec}
-        for t in tokens
-    ])
+    await db.replace_playlist_items(
+        pid,
+        [
+            {
+                "media_type": "cm",
+                "media_id": t,
+                "title": t,
+                "duration_sec": duration_sec,
+            }
+            for t in tokens
+        ],
+    )
     return pid
 
 
@@ -147,16 +168,46 @@ async def test_multiple_playlists_any_unfinished_keeps_hidden(db):
     await _add_catalog(db, "a_last", "A Last", duration_sec=1500)
     await _add_catalog(db, "b_last", "B Last", duration_sec=1500)
     # 'shared' is a middle item of playlist A and also lives in playlist B.
-    pid_a = await db.create_saved_playlist(name="A", description=None, is_immutable=False, created_by="admin")
-    await db.replace_playlist_items(pid_a, [
-        {"media_type": "cm", "media_id": "shared", "title": "s", "duration_sec": 1500},
-        {"media_type": "cm", "media_id": "a_last", "title": "a", "duration_sec": 1500},
-    ])
-    pid_b = await db.create_saved_playlist(name="B", description=None, is_immutable=False, created_by="admin")
-    await db.replace_playlist_items(pid_b, [
-        {"media_type": "cm", "media_id": "shared", "title": "s", "duration_sec": 1500},
-        {"media_type": "cm", "media_id": "b_last", "title": "b", "duration_sec": 1500},
-    ])
+    pid_a = await db.create_saved_playlist(
+        name="A", description=None, is_immutable=False, created_by="admin"
+    )
+    await db.replace_playlist_items(
+        pid_a,
+        [
+            {
+                "media_type": "cm",
+                "media_id": "shared",
+                "title": "s",
+                "duration_sec": 1500,
+            },
+            {
+                "media_type": "cm",
+                "media_id": "a_last",
+                "title": "a",
+                "duration_sec": 1500,
+            },
+        ],
+    )
+    pid_b = await db.create_saved_playlist(
+        name="B", description=None, is_immutable=False, created_by="admin"
+    )
+    await db.replace_playlist_items(
+        pid_b,
+        [
+            {
+                "media_type": "cm",
+                "media_id": "shared",
+                "title": "s",
+                "duration_sec": 1500,
+            },
+            {
+                "media_type": "cm",
+                "media_id": "b_last",
+                "title": "b",
+                "duration_sec": 1500,
+            },
+        ],
+    )
 
     await db.record_play_completion(friendly_token="shared", duration_sec=1500)
     assert "shared" not in await _browse_tokens(db, recently_played_days=21)
@@ -168,16 +219,23 @@ async def test_multiple_playlists_any_unfinished_keeps_hidden(db):
 
 # --- CompletionRecorder threshold ----------------------------------------
 
+
 async def test_recorder_records_only_past_threshold(db):
     await _add_catalog(db, "played", "Played", duration_sec=100)
     await _add_catalog(db, "skipped", "Skipped", duration_sec=100)
     rec = CompletionRecorder(db=db)
 
     # 'played' reaches 60% then advances away -> recorded.
-    await rec.on_poll({"id": _manifest("played"), "type": "cm", "currentTime": 5, "seconds": 100})
-    await rec.on_poll({"id": _manifest("played"), "type": "cm", "currentTime": 60, "seconds": 100})
+    await rec.on_poll(
+        {"id": _manifest("played"), "type": "cm", "currentTime": 5, "seconds": 100}
+    )
+    await rec.on_poll(
+        {"id": _manifest("played"), "type": "cm", "currentTime": 60, "seconds": 100}
+    )
     # Advance to 'skipped', only reaches 30% then stops -> not recorded.
-    await rec.on_poll({"id": _manifest("skipped"), "type": "cm", "currentTime": 30, "seconds": 100})
+    await rec.on_poll(
+        {"id": _manifest("skipped"), "type": "cm", "currentTime": 30, "seconds": 100}
+    )
     await rec.on_poll({})  # playback stops -> finalize 'skipped'
 
     hidden = await db._fetch_all("SELECT media_id FROM play_completions")
@@ -191,15 +249,26 @@ async def test_recorder_ignores_item_that_never_played(db):
     await _add_catalog(db, "actually_played", "Played", duration_sec=100)
     rec = CompletionRecorder(db=db)
 
-    await rec.on_poll({"id": _manifest("actually_played"), "type": "cm", "currentTime": 90, "seconds": 100})
+    await rec.on_poll(
+        {
+            "id": _manifest("actually_played"),
+            "type": "cm",
+            "currentTime": 90,
+            "seconds": 100,
+        }
+    )
     await rec.on_poll({})  # advance -> record 'actually_played'
 
-    hidden = {r["media_id"] for r in await db._fetch_all("SELECT media_id FROM play_completions")}
+    hidden = {
+        r["media_id"]
+        for r in await db._fetch_all("SELECT media_id FROM play_completions")
+    }
     assert hidden == {"actually_played"}
     assert "refunded" not in hidden
 
 
 # --- Firing skips already-played episodes in the current pass -------------
+
 
 class _FakeApiGate:
     """Minimal api_gate stub recording adds (mirrors test_phase4_live_fixes)."""
@@ -213,7 +282,9 @@ class _FakeApiGate:
 
     async def playlist_add(self, *, media_type, media_id, position="end"):
         self._uid += 1
-        self.added.append({"media_type": media_type, "media_id": media_id, "uid": self._uid})
+        self.added.append(
+            {"media_type": media_type, "media_id": media_id, "uid": self._uid}
+        )
         return {"success": True, "uid": self._uid}
 
 
@@ -235,13 +306,20 @@ async def test_fire_skips_already_played_episodes(db):
     await db.record_play_completion(friendly_token="ep1", duration_sec=1500)
 
     sid = await db.create_schedule(
-        playlist_id=pid, label="Show",
+        playlist_id=pid,
+        label="Show",
         fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
-        is_active=1, created_by="admin",
+        is_active=1,
+        created_by="admin",
     )
     api = _FakeApiGate()
-    await fire_schedule(schedule_id=sid, api_gate=api, db=db,
-                        shadow=QueueShadow(db), ws_manager=_FakeWs())
+    await fire_schedule(
+        schedule_id=sid,
+        api_gate=api,
+        db=db,
+        shadow=QueueShadow(db),
+        ws_manager=_FakeWs(),
+    )
 
     assert [a["media_id"] for a in api.added] == ["ep2", "ep3"]
 
@@ -261,19 +339,27 @@ async def test_fire_loads_full_playlist_after_pass_reset(db):
     await db.record_play_completion(friendly_token="ep3", duration_sec=1500)
 
     sid = await db.create_schedule(
-        playlist_id=pid, label="Show",
+        playlist_id=pid,
+        label="Show",
         fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
-        is_active=1, created_by="admin",
+        is_active=1,
+        created_by="admin",
     )
     api = _FakeApiGate()
-    await fire_schedule(schedule_id=sid, api_gate=api, db=db,
-                        shadow=QueueShadow(db), ws_manager=_FakeWs())
+    await fire_schedule(
+        schedule_id=sid,
+        api_gate=api,
+        db=db,
+        shadow=QueueShadow(db),
+        ws_manager=_FakeWs(),
+    )
 
     # Pass was reset, so the whole collection loads again.
     assert [a["media_id"] for a in api.added] == ["ep1", "ep2", "ep3"]
 
 
 # --- Manual import honors the same skip (with a full-load override) -------
+
 
 async def test_import_skips_already_played_by_default(db):
     from kryten_webqueue.playlists.importer import PlaylistImporter
@@ -311,6 +397,7 @@ async def test_import_full_loads_entire_list(db):
 
 # --- Admin test helpers (mark-played / clear / debug) ---------------------
 
+
 async def test_clear_play_state_unhides_time_window_item(db):
     await _add_catalog(db, "movie", "Movie", duration_sec=7200)
     await db.record_play_completion(friendly_token="movie", duration_sec=7200)
@@ -340,8 +427,12 @@ async def test_recently_played_debug_reports_both_signals(db):
     await _add_catalog(db, "ep2", "Episode 2", duration_sec=1500)
     await _make_mutable_playlist(db, ["ep1", "ep2"], duration_sec=1500)
 
-    await db.record_play_completion(friendly_token="movie", duration_sec=7200)  # time window
-    await db.record_play_completion(friendly_token="ep1", duration_sec=1500)    # playlist pass
+    await db.record_play_completion(
+        friendly_token="movie", duration_sec=7200
+    )  # time window
+    await db.record_play_completion(
+        friendly_token="ep1", duration_sec=1500
+    )  # playlist pass
 
     debug = await db.get_recently_played_debug(21)
     assert debug["window_days"] == 21
@@ -354,12 +445,23 @@ async def test_promo_clips_are_exempt_from_hiding(db):
     # nor appear in the recently-played debug list.
     await _add_catalog(db, "promo1", "Bumper", duration_sec=30)
     pid = await db.create_saved_playlist(
-        name="Bumpers", description=None, is_immutable=False,
-        created_by="admin", promo_type="general",
+        name="Bumpers",
+        description=None,
+        is_immutable=False,
+        created_by="admin",
+        promo_type="general",
     )
-    await db.replace_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "promo1", "title": "Bumper", "duration_sec": 30},
-    ])
+    await db.replace_playlist_items(
+        pid,
+        [
+            {
+                "media_type": "cm",
+                "media_id": "promo1",
+                "title": "Bumper",
+                "duration_sec": 30,
+            },
+        ],
+    )
 
     await db.record_play_completion(friendly_token="promo1", duration_sec=30)
 
@@ -377,16 +479,31 @@ async def test_purge_promo_hide_state_removes_stale_rows(db):
     # at the data layer by purge_promo_hide_state (also run by migration v14).
     await _add_catalog(db, "promo1", "Bumper", duration_sec=30)
     pid = await db.create_saved_playlist(
-        name="Bumpers", description=None, is_immutable=False,
-        created_by="admin", promo_type="general",
+        name="Bumpers",
+        description=None,
+        is_immutable=False,
+        created_by="admin",
+        promo_type="general",
     )
-    await db.replace_playlist_items(pid, [
-        {"media_type": "cm", "media_id": "promo1", "title": "Bumper", "duration_sec": 30},
-    ])
+    await db.replace_playlist_items(
+        pid,
+        [
+            {
+                "media_type": "cm",
+                "media_id": "promo1",
+                "title": "Bumper",
+                "duration_sec": 30,
+            },
+        ],
+    )
     # Simulate a stale row written before the exemption existed.
-    await db._execute("INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'promo1')")
+    await db._execute(
+        "INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'promo1')"
+    )
     # Before the purge it shows in the (unfiltered) debug view.
-    assert {r["media_id"] for r in (await db.get_recently_played_debug(21))["by_completion"]} == {"promo1"}
+    assert {
+        r["media_id"] for r in (await db.get_recently_played_debug(21))["by_completion"]
+    } == {"promo1"}
 
     removed = await db.purge_promo_hide_state()
     assert removed["completions"] == 1
@@ -420,14 +537,10 @@ async def test_purge_removes_hidden_tag_promo_rows(db):
     await _add_catalog(db, "bumper", "CHANNEL Z - ITS 10PM", duration_sec=15)
     tid = await db.upsert_tag("channelz")
     await db.set_catalog_tags("bumper", [tid])
-    await db._execute("INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'bumper')")
+    await db._execute(
+        "INSERT INTO play_completions (media_type, media_id) VALUES ('cm', 'bumper')"
+    )
 
     removed = await db.purge_promo_hide_state()
     assert removed["completions"] == 1
     assert await db._fetch_all("SELECT media_id FROM play_completions") == []
-
-
-
-
-
-

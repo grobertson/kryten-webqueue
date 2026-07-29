@@ -10,7 +10,9 @@ logger = logging.getLogger(__name__)
 _queue_lock = asyncio.Lock()
 
 
-def _add_failure_reason(add_result: dict | None, exc: httpx.HTTPStatusError | None) -> str:
+def _add_failure_reason(
+    add_result: dict | None, exc: httpx.HTTPStatusError | None
+) -> str:
     """Extract a human-readable reason from a failed playlist add."""
     if exc is not None:
         try:
@@ -40,14 +42,48 @@ def _announcement_position(shadow, uid: int) -> int | None:
 
 
 _ONES_ORDINAL = {
-    "one": "first", "two": "second", "three": "third", "five": "fifth",
-    "eight": "eighth", "nine": "ninth", "twelve": "twelfth",
+    "one": "first",
+    "two": "second",
+    "three": "third",
+    "five": "fifth",
+    "eight": "eighth",
+    "nine": "ninth",
+    "twelve": "twelfth",
 }
-_ONES = ["", "one", "two", "three", "four", "five", "six", "seven", "eight",
-         "nine", "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen",
-         "sixteen", "seventeen", "eighteen", "nineteen"]
-_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy",
-         "eighty", "ninety"]
+_ONES = [
+    "",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+]
+_TENS = [
+    "",
+    "",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+]
 
 
 def _cardinal_words(n: int) -> str:
@@ -85,7 +121,9 @@ def _ordinal_words(n: int) -> str:
     return _to_ordinal_word(cardinal)
 
 
-async def _announce_paid_queued(api_gate, shadow, *, uid: int, title: str, username: str) -> None:
+async def _announce_paid_queued(
+    api_gate, shadow, *, uid: int, title: str, username: str
+) -> None:
     """Announce a paid queue placement to the channel chat.
 
     Position is counted from the currently-playing item, wrapping around the
@@ -182,7 +220,6 @@ def _last_pay_uid(shadow) -> int | None:
     return last
 
 
-
 async def _move_after(api_gate, *, uid: int, target_uid: int | None) -> None:
     """Move uid to immediately after target_uid. No-op when target is None."""
     if target_uid is not None:
@@ -218,7 +255,10 @@ async def insert_pay_queue(
                 request_id=request_id,
             )
         except httpx.HTTPStatusError as exc:
-            return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
+            return {
+                "success": False,
+                "error": f"Spend failed: {exc.response.status_code}",
+            }
 
         # Target position: immediately after the LAST item in the persistent
         # pay-queue list, or after the currently-playing item when none exist.
@@ -231,10 +271,17 @@ async def insert_pay_queue(
                 # No anchor to position against (robot KV not initialised).
                 # Cancel and refund rather than dumping the item at the end.
                 try:
-                    await api_gate.queue_refund(username=username, request_id=request_id, reason="no_now_playing")
+                    await api_gate.queue_refund(
+                        username=username,
+                        request_id=request_id,
+                        reason="no_now_playing",
+                    )
                 except Exception:
                     pass
-                return {"success": False, "error": "Queue position unavailable (now-playing unknown); refunded"}
+                return {
+                    "success": False,
+                    "error": "Queue position unavailable (now-playing unknown); refunded",
+                }
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -245,14 +292,20 @@ async def insert_pay_queue(
             )
         except httpx.HTTPStatusError as exc:
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="playlist_add_failed")
+                await api_gate.queue_refund(
+                    username=username,
+                    request_id=request_id,
+                    reason="playlist_add_failed",
+                )
             except Exception:
                 pass
             return {"success": False, "error": _add_failure_reason(None, exc)}
         if not add_result.get("success"):
             # Refund on failure
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+                await api_gate.queue_refund(
+                    username=username, request_id=request_id, reason="add_failed"
+                )
             except Exception:
                 pass
             return {"success": False, "error": _add_failure_reason(add_result, None)}
@@ -264,7 +317,9 @@ async def insert_pay_queue(
             await _move_after(api_gate, uid=uid, target_uid=target_uid)
         except httpx.HTTPStatusError:
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="move_failed")
+                await api_gate.queue_refund(
+                    username=username, request_id=request_id, reason="move_failed"
+                )
             except Exception:
                 pass
             try:
@@ -274,11 +329,18 @@ async def insert_pay_queue(
             return {"success": False, "error": "Failed to position item in queue"}
 
         # Record spend
-        _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
+        _ft = (
+            friendly_token
+            if friendly_token is not None
+            else (media_id if media_type == "cm" else None)
+        )
         await db.save_spend_request(
-            request_id, username=username, uid=uid,
+            request_id,
+            username=username,
+            uid=uid,
             friendly_token=_ft,
-            tier=tier, z_cost=z_cost,
+            tier=tier,
+            z_cost=z_cost,
         )
 
         # Update local shadow
@@ -301,19 +363,28 @@ async def insert_pay_queue(
 
         # Queue history
         await db.add_queue_history(
-            username=username, friendly_token=_ft,
-            title=title, tier=tier, z_cost=z_cost,
+            username=username,
+            friendly_token=_ft,
+            title=title,
+            tier=tier,
+            z_cost=z_cost,
         )
 
         # Announce placement to the channel
-        await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
+        await _announce_paid_queued(
+            api_gate, shadow, uid=uid, title=title, username=username
+        )
 
         # Insert a Viewer's Choice lead-in immediately before this paid item.
         if promo_director is not None:
             try:
                 await promo_director.insert_viewers_choice(uid)
             except Exception:
-                logger.warning("Viewer's Choice lead-in insert failed for uid=%s", uid, exc_info=True)
+                logger.warning(
+                    "Viewer's Choice lead-in insert failed for uid=%s",
+                    uid,
+                    exc_info=True,
+                )
 
         return {"success": True, "uid": uid, "request_id": request_id}
 
@@ -347,17 +418,25 @@ async def insert_pay_playnext(
                 request_id=request_id,
             )
         except httpx.HTTPStatusError as exc:
-            return {"success": False, "error": f"Spend failed: {exc.response.status_code}"}
+            return {
+                "success": False,
+                "error": f"Spend failed: {exc.response.status_code}",
+            }
 
         # Target position: immediately after the currently-playing item.
         target_uid = await _now_playing_uid(api_gate, shadow)
         if target_uid is None:
             # Cannot place "play next" without knowing the active item.
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="no_now_playing")
+                await api_gate.queue_refund(
+                    username=username, request_id=request_id, reason="no_now_playing"
+                )
             except Exception:
                 pass
-            return {"success": False, "error": "Play-next unavailable (now-playing unknown); refunded"}
+            return {
+                "success": False,
+                "error": "Play-next unavailable (now-playing unknown); refunded",
+            }
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -368,13 +447,19 @@ async def insert_pay_playnext(
             )
         except httpx.HTTPStatusError as exc:
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="playlist_add_failed")
+                await api_gate.queue_refund(
+                    username=username,
+                    request_id=request_id,
+                    reason="playlist_add_failed",
+                )
             except Exception:
                 pass
             return {"success": False, "error": _add_failure_reason(None, exc)}
         if not add_result.get("success"):
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="add_failed")
+                await api_gate.queue_refund(
+                    username=username, request_id=request_id, reason="add_failed"
+                )
             except Exception:
                 pass
             return {"success": False, "error": _add_failure_reason(add_result, None)}
@@ -386,7 +471,9 @@ async def insert_pay_playnext(
             await _move_after(api_gate, uid=uid, target_uid=target_uid)
         except httpx.HTTPStatusError:
             try:
-                await api_gate.queue_refund(username=username, request_id=request_id, reason="move_failed")
+                await api_gate.queue_refund(
+                    username=username, request_id=request_id, reason="move_failed"
+                )
             except Exception:
                 pass
             try:
@@ -396,11 +483,18 @@ async def insert_pay_playnext(
             return {"success": False, "error": "Failed to position item in queue"}
 
         # Record spend
-        _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
+        _ft = (
+            friendly_token
+            if friendly_token is not None
+            else (media_id if media_type == "cm" else None)
+        )
         await db.save_spend_request(
-            request_id, username=username, uid=uid,
+            request_id,
+            username=username,
+            uid=uid,
             friendly_token=_ft,
-            tier=tier, z_cost=z_cost,
+            tier=tier,
+            z_cost=z_cost,
         )
 
         # Update local shadow immediately after now-playing. Existing pay items
@@ -422,19 +516,28 @@ async def insert_pay_playnext(
         await shadow.insert_at(item, pos)
 
         await db.add_queue_history(
-            username=username, friendly_token=_ft,
-            title=title, tier=tier, z_cost=z_cost,
+            username=username,
+            friendly_token=_ft,
+            title=title,
+            tier=tier,
+            z_cost=z_cost,
         )
 
         # Announce placement to the channel
-        await _announce_paid_queued(api_gate, shadow, uid=uid, title=title, username=username)
+        await _announce_paid_queued(
+            api_gate, shadow, uid=uid, title=title, username=username
+        )
 
         # Insert a Viewer's Choice lead-in immediately before this paid item.
         if promo_director is not None:
             try:
                 await promo_director.insert_viewers_choice(uid)
             except Exception:
-                logger.warning("Viewer's Choice lead-in insert failed for uid=%s", uid, exc_info=True)
+                logger.warning(
+                    "Viewer's Choice lead-in insert failed for uid=%s",
+                    uid,
+                    exc_info=True,
+                )
 
         return {"success": True, "uid": uid, "request_id": request_id}
 
@@ -453,19 +556,26 @@ async def _refund_and_remove_pending_pay(api_gate, shadow, db) -> int:
         if uid is None or uid == np_uid:
             continue
         try:
-            await refund_item(api_gate=api_gate, db=db, uid=uid, reason="admin_playnext_refund")
+            await refund_item(
+                api_gate=api_gate, db=db, uid=uid, reason="admin_playnext_refund"
+            )
         except Exception:
-            logger.warning("Refund failed for uid %s during admin override", uid, exc_info=True)
+            logger.warning(
+                "Refund failed for uid %s during admin override", uid, exc_info=True
+            )
         try:
             await api_gate.playlist_delete(uid)
         except Exception:
-            logger.warning("Delete failed for uid %s during admin override", uid, exc_info=True)
+            logger.warning(
+                "Delete failed for uid %s during admin override", uid, exc_info=True
+            )
         try:
             await shadow.remove(uid)
         except Exception:
             pass
         try:
             from ..promos.director import remove_lead_in_for
+
             await remove_lead_in_for(api_gate=api_gate, shadow=shadow, uid=uid)
         except Exception:
             logger.debug("Lead-in cleanup failed for uid %s", uid, exc_info=True)
@@ -505,7 +615,10 @@ async def insert_admin_queue(
             removed = await _refund_and_remove_pending_pay(api_gate, shadow, db)
             target_uid = await _now_playing_uid(api_gate, shadow)
             if target_uid is None:
-                return {"success": False, "error": "Play-next unavailable (now-playing unknown)"}
+                return {
+                    "success": False,
+                    "error": "Play-next unavailable (now-playing unknown)",
+                }
         else:
             # after_purchased: immediately after the LAST persistent pay item,
             # or after the currently-playing item when none exist.
@@ -516,7 +629,10 @@ async def insert_admin_queue(
             else:
                 target_uid = await _now_playing_uid(api_gate, shadow)
                 if target_uid is None:
-                    return {"success": False, "error": "Queue position unavailable (now-playing unknown)"}
+                    return {
+                        "success": False,
+                        "error": "Queue position unavailable (now-playing unknown)",
+                    }
 
         # Add to CyTube playlist (always appended; repositioned below)
         try:
@@ -542,7 +658,11 @@ async def insert_admin_queue(
                 pass
             return {"success": False, "error": "Failed to position item in queue"}
 
-        _ft = friendly_token if friendly_token is not None else (media_id if media_type == "cm" else None)
+        _ft = (
+            friendly_token
+            if friendly_token is not None
+            else (media_id if media_type == "cm" else None)
+        )
 
         # Update local shadow as a non-paid item
         item = {
@@ -563,14 +683,16 @@ async def insert_admin_queue(
 
         # Queue history (zero cost, admin tier)
         await db.add_queue_history(
-            username=username, friendly_token=_ft,
-            title=title, tier="admin", z_cost=0,
+            username=username,
+            friendly_token=_ft,
+            title=title,
+            tier="admin",
+            z_cost=0,
         )
 
         # Admin queueing is intentionally NOT announced in the channel.
 
         return {"success": True, "uid": uid, "refunded": removed}
-
 
 
 async def refund_item(*, api_gate, db, uid: int, reason: str) -> bool:
@@ -580,7 +702,9 @@ async def refund_item(*, api_gate, db, uid: int, reason: str) -> bool:
         return False
 
     # Look up the spend to find username
-    row = await db._fetch_one("SELECT username FROM spend_requests WHERE request_id=?", [request_id])
+    row = await db._fetch_one(
+        "SELECT username FROM spend_requests WHERE request_id=?", [request_id]
+    )
     if not row:
         return False
 

@@ -59,7 +59,8 @@ async def lifespan(app: FastAPI):
     if purged["completions"] or purged["playlist_pass"]:
         logger.info(
             "Purged promo recently-played state: %d completion(s), %d pass row(s)",
-            purged["completions"], purged["playlist_pass"],
+            purged["completions"],
+            purged["playlist_pass"],
         )
     # Any job run still marked 'running' is an orphan from a prior crash/restart
     # (the running flag is in-memory only). Reconcile before registering jobs.
@@ -108,21 +109,42 @@ async def lifespan(app: FastAPI):
     # register regardless of optional deps; a missing dep fails the run fast
     # with a clear message rather than crashing startup.
     from .jobs.tasks import (
-        enrichtitles_job, enrichmeta_job, enrichtv_job,
-        fetch_job, fetchurls_job,
-        ENRICHTITLES_SCHEMA, ENRICHMETA_SCHEMA, ENRICHTV_SCHEMA,
-        FETCH_SCHEMA, FETCHURLS_SCHEMA,
+        enrichtitles_job,
+        enrichmeta_job,
+        enrichtv_job,
+        fetch_job,
+        fetchurls_job,
+        ENRICHTITLES_SCHEMA,
+        ENRICHMETA_SCHEMA,
+        ENRICHTV_SCHEMA,
+        FETCH_SCHEMA,
+        FETCHURLS_SCHEMA,
     )
-    job_manager.register("enrichtitles", enrichtitles_job,
-                         label="Enrich Titles", schema=ENRICHTITLES_SCHEMA)
-    job_manager.register("enrichmeta", enrichmeta_job,
-                         label="Enrich Movie Metadata", schema=ENRICHMETA_SCHEMA)
-    job_manager.register("enrichtv", enrichtv_job,
-                         label="Enrich TV Metadata", schema=ENRICHTV_SCHEMA)
-    job_manager.register("fetch", fetch_job,
-                         label="Fetch (download → MediaCMS)", schema=FETCH_SCHEMA)
-    job_manager.register("fetchurls", fetchurls_job,
-                         label="Fetch URLs (weekend workbook)", schema=FETCHURLS_SCHEMA)
+
+    job_manager.register(
+        "enrichtitles",
+        enrichtitles_job,
+        label="Enrich Titles",
+        schema=ENRICHTITLES_SCHEMA,
+    )
+    job_manager.register(
+        "enrichmeta",
+        enrichmeta_job,
+        label="Enrich Movie Metadata",
+        schema=ENRICHMETA_SCHEMA,
+    )
+    job_manager.register(
+        "enrichtv", enrichtv_job, label="Enrich TV Metadata", schema=ENRICHTV_SCHEMA
+    )
+    job_manager.register(
+        "fetch", fetch_job, label="Fetch (download → MediaCMS)", schema=FETCH_SCHEMA
+    )
+    job_manager.register(
+        "fetchurls",
+        fetchurls_job,
+        label="Fetch URLs (weekend workbook)",
+        schema=FETCHURLS_SCHEMA,
+    )
     app.state.job_manager = job_manager
 
     # WebSocket manager
@@ -143,7 +165,10 @@ async def lifespan(app: FastAPI):
 
     # Promo director (poller-driven; also used synchronously by the pay path)
     promo_director = PromoDirector(
-        api_gate=api_gate, db=db, shadow=shadow, config=config.promos,
+        api_gate=api_gate,
+        db=db,
+        shadow=shadow,
+        config=config.promos,
         add_delay_sec=config.playlist_bulk_add_delay_sec,
         add_max_retries=config.playlist_bulk_add_max_retries,
     )
@@ -174,7 +199,10 @@ async def lifespan(app: FastAPI):
 
     # Playlist scheduler
     scheduler = PlaylistScheduler(
-        db=db, api_gate=api_gate, shadow=shadow, ws_manager=ws_manager,
+        db=db,
+        api_gate=api_gate,
+        shadow=shadow,
+        ws_manager=ws_manager,
         add_delay_sec=config.playlist_bulk_add_delay_sec,
         add_max_retries=config.playlist_bulk_add_max_retries,
         promo_director=promo_director,
@@ -184,7 +212,10 @@ async def lifespan(app: FastAPI):
 
     # Presence-based cancel/refund monitor
     presence_monitor = PresenceRefundMonitor(
-        api_gate=api_gate, shadow=shadow, db=db, ws_manager=ws_manager,
+        api_gate=api_gate,
+        shadow=shadow,
+        db=db,
+        ws_manager=ws_manager,
         config=config.presence_refund,
     )
     await presence_monitor.start()
@@ -215,7 +246,8 @@ async def lifespan(app: FastAPI):
         while True:
             await asyncio.sleep(300)  # every 5 minutes
             try:
-                await db._execute("""
+                await db._execute(
+                    """
                     UPDATE saved_playlists SET is_immutable = 0
                     WHERE id IN (
                         SELECT sp.id FROM saved_playlists sp
@@ -230,7 +262,8 @@ async def lifespan(app: FastAPI):
                                 AND (ps2.immutability_expires_at IS NULL OR ps2.immutability_expires_at > datetime('now'))
                           )
                     )
-                """)
+                """
+                )
             except Exception as e:
                 logger.error(f"Immutability expiry error: {e}")
 
@@ -240,7 +273,9 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(_immutability_expiry_loop()),
     ]
 
-    logger.info(f"kryten-webqueue v{__version__} started on {config.host}:{config.port}")
+    logger.info(
+        f"kryten-webqueue v{__version__} started on {config.host}:{config.port}"
+    )
 
     yield
 

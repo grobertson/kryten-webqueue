@@ -21,7 +21,9 @@ def _normalize_level(level: str | None, default: str) -> str:
     return candidate if candidate in valid else default
 
 
-def build_log_config(log_level: str = "INFO", promo_log_level: str | None = None) -> dict:
+def build_log_config(
+    log_level: str = "INFO", promo_log_level: str | None = None
+) -> dict:
     """Return a ``logging.config.dictConfig`` dict for uvicorn + the app.
 
     Args:
@@ -86,7 +88,15 @@ def build_log_config(log_level: str = "INFO", promo_log_level: str | None = None
                 "propagate": False,
             },
             "uvicorn": {"level": "INFO", "handlers": ["console"], "propagate": False},
-            "uvicorn.error": {"level": "INFO", "handlers": ["console"], "propagate": False},
-            "uvicorn.access": {"level": "INFO", "handlers": ["access"], "propagate": False},
+            "uvicorn.error": {
+                "level": "INFO",
+                "handlers": ["console"],
+                "propagate": False,
+            },
+            "uvicorn.access": {
+                "level": "INFO",
+                "handlers": ["access"],
+                "propagate": False,
+            },
         },
     }

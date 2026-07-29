@@ -23,6 +23,7 @@ class StatusUpdate(BaseModel):
 
 # --- Feedback ---------------------------------------------------------------
 
+
 @router.get("/feedback")
 async def list_feedback(
     request: Request, status: str | None = None, user: dict = Depends(require_admin)
@@ -43,7 +44,9 @@ async def list_feedback(
 
 @router.post("/feedback/{feedback_id}/status")
 async def set_feedback_status(
-    feedback_id: int, payload: StatusUpdate, request: Request,
+    feedback_id: int,
+    payload: StatusUpdate,
+    request: Request,
     user: dict = Depends(require_admin),
 ):
     """Mark a feedback entry read/unread."""
@@ -68,6 +71,7 @@ async def delete_feedback(
 
 # --- Title suggestions ------------------------------------------------------
 
+
 @router.get("/suggestions")
 async def list_suggestions(
     request: Request, status: str | None = None, user: dict = Depends(require_admin)
@@ -88,7 +92,9 @@ async def list_suggestions(
 
 @router.post("/suggestions/{suggestion_id}/status")
 async def set_suggestion_status(
-    suggestion_id: int, payload: StatusUpdate, request: Request,
+    suggestion_id: int,
+    payload: StatusUpdate,
+    request: Request,
     user: dict = Depends(require_admin),
 ):
     """Mark a suggestion read/unread."""

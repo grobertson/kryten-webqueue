@@ -7,9 +7,19 @@ class _PlaylistsMixin:
         return await self._fetch_all("SELECT * FROM saved_playlists ORDER BY name")
 
     async def get_saved_playlist(self, playlist_id: int) -> dict | None:
-        return await self._fetch_one("SELECT * FROM saved_playlists WHERE id=?", [playlist_id])
+        return await self._fetch_one(
+            "SELECT * FROM saved_playlists WHERE id=?", [playlist_id]
+        )
 
-    async def create_saved_playlist(self, *, name: str, description: str | None, is_immutable: bool, created_by: str, promo_type: str | None = None) -> int:
+    async def create_saved_playlist(
+        self,
+        *,
+        name: str,
+        description: str | None,
+        is_immutable: bool,
+        created_by: str,
+        promo_type: str | None = None,
+    ) -> int:
         cursor = await self._db.execute(
             "INSERT INTO saved_playlists (name, description, is_immutable, created_by, promo_type) VALUES (?, ?, ?, ?, ?)",
             [name, description, int(is_immutable), created_by, promo_type],
@@ -17,7 +27,15 @@ class _PlaylistsMixin:
         await self._db.commit()
         return cursor.lastrowid
 
-    async def update_saved_playlist(self, playlist_id: int, *, name: str, description: str | None, is_immutable: bool, promo_type: str | None = None):
+    async def update_saved_playlist(
+        self,
+        playlist_id: int,
+        *,
+        name: str,
+        description: str | None,
+        is_immutable: bool,
+        promo_type: str | None = None,
+    ):
         await self._execute(
             "UPDATE saved_playlists SET name=?, description=?, is_immutable=?, promo_type=?, updated_at=datetime('now') WHERE id=?",
             [name, description, int(is_immutable), promo_type, playlist_id],
@@ -49,16 +67,26 @@ class _PlaylistsMixin:
 
     async def get_saved_playlist_items(self, playlist_id: int) -> list[dict]:
         return await self._fetch_all(
-            "SELECT * FROM saved_playlist_items WHERE playlist_id=? ORDER BY position", [playlist_id]
+            "SELECT * FROM saved_playlist_items WHERE playlist_id=? ORDER BY position",
+            [playlist_id],
         )
 
     async def replace_playlist_items(self, playlist_id: int, items: list[dict]):
-        await self._db.execute("DELETE FROM saved_playlist_items WHERE playlist_id=?", [playlist_id])
+        await self._db.execute(
+            "DELETE FROM saved_playlist_items WHERE playlist_id=?", [playlist_id]
+        )
         for i, item in enumerate(items):
             await self._db.execute(
                 "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                [playlist_id, i, item["media_type"], item["media_id"], item.get("title"), item.get("duration_sec")],
+                [
+                    playlist_id,
+                    i,
+                    item["media_type"],
+                    item["media_id"],
+                    item.get("title"),
+                    item.get("duration_sec"),
+                ],
             )
         await self._db.commit()
 
@@ -74,10 +102,18 @@ class _PlaylistsMixin:
         await self._db.execute(
             "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            [playlist_id, next_pos, item["media_type"], item["media_id"], item.get("title"), item.get("duration_sec")],
+            [
+                playlist_id,
+                next_pos,
+                item["media_type"],
+                item["media_id"],
+                item.get("title"),
+                item.get("duration_sec"),
+            ],
         )
         await self._db.execute(
-            "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?", [playlist_id]
+            "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?",
+            [playlist_id],
         )
         await self._db.commit()
         return count
@@ -86,7 +122,8 @@ class _PlaylistsMixin:
         """Append many items to the end of a playlist, skipping any whose
         ``media_id`` is already present. Returns the number actually added."""
         existing_rows = await self._fetch_all(
-            "SELECT media_id FROM saved_playlist_items WHERE playlist_id=?", [playlist_id]
+            "SELECT media_id FROM saved_playlist_items WHERE playlist_id=?",
+            [playlist_id],
         )
         seen = {r["media_id"] for r in existing_rows}
         row = await self._fetch_one(
@@ -103,14 +140,21 @@ class _PlaylistsMixin:
             await self._db.execute(
                 "INSERT INTO saved_playlist_items (playlist_id, position, media_type, media_id, title, duration_sec) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                [playlist_id, next_pos, item.get("media_type", "cm"), media_id,
-                 item.get("title"), item.get("duration_sec")],
+                [
+                    playlist_id,
+                    next_pos,
+                    item.get("media_type", "cm"),
+                    media_id,
+                    item.get("title"),
+                    item.get("duration_sec"),
+                ],
             )
             next_pos += 1
             added += 1
         if added:
             await self._db.execute(
-                "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?", [playlist_id]
+                "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?",
+                [playlist_id],
             )
         await self._db.commit()
         return added
@@ -149,10 +193,14 @@ class _PlaylistsMixin:
     # --- Schedules ---
 
     async def get_schedules(self) -> list[dict]:
-        return await self._fetch_all("SELECT * FROM playlist_schedules ORDER BY fire_at")
+        return await self._fetch_all(
+            "SELECT * FROM playlist_schedules ORDER BY fire_at"
+        )
 
     async def get_schedule(self, schedule_id: int) -> dict | None:
-        return await self._fetch_one("SELECT * FROM playlist_schedules WHERE id=?", [schedule_id])
+        return await self._fetch_one(
+            "SELECT * FROM playlist_schedules WHERE id=?", [schedule_id]
+        )
 
     async def create_schedule(self, **kwargs) -> int:
         keys = ", ".join(kwargs.keys())
@@ -176,7 +224,8 @@ class _PlaylistsMixin:
 
     async def mark_schedule_fired(self, schedule_id: int, fired_at: str):
         await self._execute(
-            "UPDATE playlist_schedules SET fired_at=? WHERE id=?", [fired_at, schedule_id]
+            "UPDATE playlist_schedules SET fired_at=? WHERE id=?",
+            [fired_at, schedule_id],
         )
 
     # --- Active schedule ---
@@ -184,14 +233,28 @@ class _PlaylistsMixin:
     async def get_active_schedule(self) -> dict | None:
         return await self._fetch_one("SELECT * FROM active_schedule WHERE id=1")
 
-    async def set_active_schedule(self, *, schedule_id: int, playlist_id: int,
-                                  is_immutable: bool, started_at: str, estimated_end_at: str,
-                                  last_item_uid: int | None = None):
+    async def set_active_schedule(
+        self,
+        *,
+        schedule_id: int,
+        playlist_id: int,
+        is_immutable: bool,
+        started_at: str,
+        estimated_end_at: str,
+        last_item_uid: int | None = None,
+    ):
         await self._execute(
             "INSERT OR REPLACE INTO active_schedule "
             "(id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at, last_item_uid, lock_disabled) "
             "VALUES (1, ?, ?, ?, ?, ?, ?, 0)",
-            [schedule_id, playlist_id, int(is_immutable), started_at, estimated_end_at, last_item_uid],
+            [
+                schedule_id,
+                playlist_id,
+                int(is_immutable),
+                started_at,
+                estimated_end_at,
+                last_item_uid,
+            ],
         )
 
     async def clear_active_schedule(self):
@@ -228,14 +291,16 @@ class _PlaylistsMixin:
         # string comparison that stays true from fire time until the calendar
         # day rolls over, so the lock lingered until midnight instead of
         # releasing at fire_at.
-        row = await self._fetch_one("""
+        row = await self._fetch_one(
+            """
             SELECT 1 FROM playlist_schedules
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND datetime(fire_at) > datetime('now')
             LIMIT 1
-        """)
+        """
+        )
         return row is not None
 
     async def get_active_pre_fire_lock(self) -> dict | None:
@@ -244,7 +309,8 @@ class _PlaylistsMixin:
         Used to give users a specific "pay-to-play closes before [event]"
         message instead of a generic locked error.
         """
-        return await self._fetch_one("""
+        return await self._fetch_one(
+            """
             SELECT * FROM playlist_schedules
             WHERE is_active = 1
               AND lock_disabled = 0
@@ -252,7 +318,8 @@ class _PlaylistsMixin:
               AND datetime(fire_at) > datetime('now')
             ORDER BY datetime(fire_at)
             LIMIT 1
-        """)
+        """
+        )
 
     async def disable_active_pre_fire_locks(self) -> int:
         """Lift ALL currently-active pre-fire locks in a single operation.
@@ -263,14 +330,16 @@ class _PlaylistsMixin:
         ``lock_disabled`` to 0 when they re-arm, so future firings still lock.
         Returns the number of schedules affected.
         """
-        cursor = await self._db.execute("""
+        cursor = await self._db.execute(
+            """
             UPDATE playlist_schedules
             SET lock_disabled = 1
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND datetime(fire_at) > datetime('now')
-        """)
+        """
+        )
         await self._db.commit()
         return cursor.rowcount
 

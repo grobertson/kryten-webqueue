@@ -35,10 +35,10 @@ class CompletionRecorder:
         self._db = db
         self._threshold = completion_threshold
         # State of the item currently occupying the now-playing slot.
-        self._cur_key: tuple | None = None      # (media_type, media_id)
-        self._cur_token: str | None = None      # resolved catalog friendly_token
+        self._cur_key: tuple | None = None  # (media_type, media_id)
+        self._cur_token: str | None = None  # resolved catalog friendly_token
         self._cur_duration: float = 0.0
-        self._max_ct: float = 0.0               # furthest observed currentTime
+        self._max_ct: float = 0.0  # furthest observed currentTime
 
     async def on_poll(self, now_playing: dict | None) -> None:
         """Called once per poll cycle with the latest now-playing payload."""
@@ -54,7 +54,9 @@ class CompletionRecorder:
             if ct > self._max_ct:
                 self._max_ct = ct
             if not self._cur_duration:
-                self._cur_duration = _to_seconds(np.get("seconds") or np.get("duration"))
+                self._cur_duration = _to_seconds(
+                    np.get("seconds") or np.get("duration")
+                )
             return
 
         # Now-playing advanced (or stopped): finalize the item that just left.
@@ -70,14 +72,18 @@ class CompletionRecorder:
             try:
                 meta = await self._db.resolve_media(media_id)
             except Exception:
-                logger.debug("Failed to resolve now-playing media %r", media_id, exc_info=True)
+                logger.debug(
+                    "Failed to resolve now-playing media %r", media_id, exc_info=True
+                )
                 meta = None
             if meta:
                 self._cur_token = meta.get("friendly_token")
                 if not self._cur_duration:
                     self._cur_duration = _to_seconds(meta.get("duration_sec"))
 
-    async def _finalize(self, token: str | None, duration: float, max_ct: float) -> None:
+    async def _finalize(
+        self, token: str | None, duration: float, max_ct: float
+    ) -> None:
         if not token:
             return  # not a resolvable catalog ('cm') item
         if duration <= 0:
@@ -90,4 +96,6 @@ class CompletionRecorder:
                 duration_sec=int(duration),
             )
         except Exception:
-            logger.warning("Failed to record play completion for %s", token, exc_info=True)
+            logger.warning(
+                "Failed to record play completion for %s", token, exc_info=True
+            )

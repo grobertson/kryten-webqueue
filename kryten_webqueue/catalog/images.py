@@ -21,7 +21,12 @@ def _clean_title(title: str) -> tuple[str, str | None]:
     # Remove year, episode tags, resolution tags, etc.
     cleaned = re.sub(r"\s*[\(\[]?(?:19|20)\d{2}[\)\]]?", "", title)
     cleaned = re.sub(r"\s*[Ss]\d{1,2}[Ee]\d{1,2}.*", "", cleaned)
-    cleaned = re.sub(r"\s*\b(?:720p|1080p|2160p|4K|HDR|BluRay|BDRip|WEB[-.]?DL|HDTV)\b.*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"\s*\b(?:720p|1080p|2160p|4K|HDR|BluRay|BDRip|WEB[-.]?DL|HDTV)\b.*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
     cleaned = cleaned.strip(" .-")
     return cleaned or title, year
 
@@ -31,8 +36,14 @@ class CoverArtResolver:
 
     WIDTHS = [200, 400, 800]
 
-    def __init__(self, *, image_dir: str, placeholder_dir: str,
-                 tmdb_api_key: str = "", omdb_api_key: str = ""):
+    def __init__(
+        self,
+        *,
+        image_dir: str,
+        placeholder_dir: str,
+        tmdb_api_key: str = "",
+        omdb_api_key: str = "",
+    ):
         self._image_dir = Path(image_dir)
         self._placeholder_dir = Path(placeholder_dir)
         self._tmdb_key = tmdb_api_key
@@ -64,7 +75,8 @@ class CoverArtResolver:
         exts = {".webp", ".jpg", ".jpeg", ".png", ".gif", ".avif"}
         try:
             files = sorted(
-                p.name for p in self._placeholder_dir.iterdir()
+                p.name
+                for p in self._placeholder_dir.iterdir()
                 if p.is_file() and p.suffix.lower() in exts
             )
         except OSError:
@@ -80,7 +92,6 @@ class CoverArtResolver:
         self._placeholder_cache_at = now
         return self._placeholder_urls
 
-
     async def resolve(self, friendly_token: str, title: str, db) -> str | None:
         """Try to fetch cover art; return relative path or None."""
         # Check if already cached
@@ -89,7 +100,9 @@ class CoverArtResolver:
             return existing["cover_art_path"]
 
         if not self._tmdb_key and not self._omdb_key:
-            logger.warning("No TMDB or OMDB API keys configured — cover art lookup skipped")
+            logger.warning(
+                "No TMDB or OMDB API keys configured — cover art lookup skipped"
+            )
             return None
 
         image_url = None
@@ -123,7 +136,9 @@ class CoverArtResolver:
         try:
             resp = await self._client.get(image_url)
             if resp.status_code != 200:
-                logger.warning(f"Cover art download failed for {friendly_token!r}: HTTP {resp.status_code} {image_url}")
+                logger.warning(
+                    f"Cover art download failed for {friendly_token!r}: HTTP {resp.status_code} {image_url}"
+                )
                 return None
             path = await self._save_responsive(friendly_token, resp.content, source, db)
             logger.info(f"Cover art saved for {friendly_token!r} ({source}): {path}")
@@ -143,7 +158,9 @@ class CoverArtResolver:
             result = await self._tmdb_search_both(cleaned, year=year)
         return result
 
-    async def _tmdb_search_both(self, title: str, year: str | None = None) -> str | None:
+    async def _tmdb_search_both(
+        self, title: str, year: str | None = None
+    ) -> str | None:
         """Search TMDB movie and TV endpoints in parallel, pick best poster by popularity."""
         movie_task = asyncio.create_task(self._tmdb_search_type("movie", title, year))
         tv_task = asyncio.create_task(self._tmdb_search_type("tv", title, year))
@@ -157,7 +174,9 @@ class CoverArtResolver:
         candidates.sort(key=lambda h: h[1], reverse=True)
         return candidates[0][0]
 
-    async def _tmdb_search_type(self, media_type: str, title: str, year: str | None = None) -> tuple[str | None, float]:
+    async def _tmdb_search_type(
+        self, media_type: str, title: str, year: str | None = None
+    ) -> tuple[str | None, float]:
         """Search a specific TMDB media type. Returns (poster_url_or_None, popularity)."""
         params: dict = {"api_key": self._tmdb_key, "query": title}
         if year and media_type == "movie":
@@ -170,7 +189,9 @@ class CoverArtResolver:
                 params=params,
             )
             if resp.status_code != 200:
-                logger.warning(f"TMDB {media_type} search returned {resp.status_code} for {title!r}")
+                logger.warning(
+                    f"TMDB {media_type} search returned {resp.status_code} for {title!r}"
+                )
                 return None, 0.0
             results = resp.json().get("results", [])
             for result in results:
@@ -250,7 +271,9 @@ class CoverArtResolver:
                 f"https://api.themoviedb.org/3/search/{media_type}", params=params
             )
             if resp.status_code != 200:
-                logger.warning(f"TMDB {media_type} suggest search returned {resp.status_code} for {query!r}")
+                logger.warning(
+                    f"TMDB {media_type} suggest search returned {resp.status_code} for {query!r}"
+                )
                 return []
             results = resp.json().get("results", [])
         except (httpx.HTTPError, ValueError) as e:
@@ -263,15 +286,19 @@ class CoverArtResolver:
                 continue
             date = r.get("release_date") or r.get("first_air_date") or ""
             poster = r.get("poster_path")
-            out.append({
-                "source": "tmdb",
-                "id": str(r.get("id") or ""),
-                "title": title,
-                "year": (date[:4] or None),
-                "media_type": "tv" if media_type == "tv" else "movie",
-                "poster_url": (f"https://image.tmdb.org/t/p/w185{poster}" if poster else None),
-                "_popularity": float(r.get("popularity") or 0.0),
-            })
+            out.append(
+                {
+                    "source": "tmdb",
+                    "id": str(r.get("id") or ""),
+                    "title": title,
+                    "year": (date[:4] or None),
+                    "media_type": "tv" if media_type == "tv" else "movie",
+                    "poster_url": (
+                        f"https://image.tmdb.org/t/p/w185{poster}" if poster else None
+                    ),
+                    "_popularity": float(r.get("popularity") or 0.0),
+                }
+            )
         return out
 
     async def _omdb_candidates(self, query: str) -> list[dict]:
@@ -293,18 +320,22 @@ class CoverArtResolver:
             if not title:
                 continue
             poster = r.get("Poster")
-            out.append({
-                "source": "omdb",
-                "id": str(r.get("imdbID") or ""),
-                "title": title,
-                "year": ((r.get("Year") or "")[:4] or None),
-                "media_type": (r.get("Type") or "movie"),
-                "poster_url": (poster if poster and poster != "N/A" else None),
-                "_popularity": 0.0,
-            })
+            out.append(
+                {
+                    "source": "omdb",
+                    "id": str(r.get("imdbID") or ""),
+                    "title": title,
+                    "year": ((r.get("Year") or "")[:4] or None),
+                    "media_type": (r.get("Type") or "movie"),
+                    "poster_url": (poster if poster and poster != "N/A" else None),
+                    "_popularity": 0.0,
+                }
+            )
         return out
 
-    async def _save_responsive(self, friendly_token: str, data: bytes, source: str, db) -> str:
+    async def _save_responsive(
+        self, friendly_token: str, data: bytes, source: str, db
+    ) -> str:
         """Save image in multiple responsive widths."""
         token_hash = hashlib.md5(friendly_token.encode()).hexdigest()[:8]
         base_dir = self._image_dir / token_hash

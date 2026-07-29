@@ -20,7 +20,9 @@ from ..config import Config
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="One-time SharePoint sign-in for fetchurls")
+    parser = argparse.ArgumentParser(
+        description="One-time SharePoint sign-in for fetchurls"
+    )
     parser.add_argument(
         "--config",
         default=os.environ.get("WQ_CONFIG", "/etc/kryten-webqueue/config.json"),

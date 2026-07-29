@@ -65,34 +65,106 @@ _VIDEO_EXT_RE = re.compile(
 # Order matters — longer tokens first to avoid partial matches.
 _SCENE_TAGS = [
     # Resolution
-    r"2160p", r"1080p", r"1080i", r"720p", r"480p", r"360p", r"4K", r"UHD",
+    r"2160p",
+    r"1080p",
+    r"1080i",
+    r"720p",
+    r"480p",
+    r"360p",
+    r"4K",
+    r"UHD",
     # Codecs
-    r"x\.?264", r"x\.?265", r"h\.?264", r"h\.?265", r"HEVC", r"AVC",
-    r"XviD", r"DivX", r"VP9", r"AV1", r"MPEG-?[24]",
+    r"x\.?264",
+    r"x\.?265",
+    r"h\.?264",
+    r"h\.?265",
+    r"HEVC",
+    r"AVC",
+    r"XviD",
+    r"DivX",
+    r"VP9",
+    r"AV1",
+    r"MPEG-?[24]",
     # Sources
-    r"Blu-?Ray", r"BRRip", r"BDRip", r"BD-?Remux", r"REMUX",
-    r"DVDRip", r"DVD-?R", r"DVD-?Scr", r"DVDScr",
-    r"WEB-?DL", r"WEBDL", r"WEBRip", r"WEB-?Rip", r"WEB",
-    r"HDRip", r"HDTV", r"PDTV", r"SDTV", r"DSR",
-    r"VHS-?Rip", r"VHSRip", r"LaserDisc", r"LD-?Rip",
-    r"CAM-?Rip", r"CAMRip", r"HDCAM", r"HDTS",
-    r"TS-?Rip", r"TSRip", r"TC-?Rip", r"TCRip",
-    r"SCR", r"SCREENER", r"R5", r"PPVRip",
+    r"Blu-?Ray",
+    r"BRRip",
+    r"BDRip",
+    r"BD-?Remux",
+    r"REMUX",
+    r"DVDRip",
+    r"DVD-?R",
+    r"DVD-?Scr",
+    r"DVDScr",
+    r"WEB-?DL",
+    r"WEBDL",
+    r"WEBRip",
+    r"WEB-?Rip",
+    r"WEB",
+    r"HDRip",
+    r"HDTV",
+    r"PDTV",
+    r"SDTV",
+    r"DSR",
+    r"VHS-?Rip",
+    r"VHSRip",
+    r"LaserDisc",
+    r"LD-?Rip",
+    r"CAM-?Rip",
+    r"CAMRip",
+    r"HDCAM",
+    r"HDTS",
+    r"TS-?Rip",
+    r"TSRip",
+    r"TC-?Rip",
+    r"TCRip",
+    r"SCR",
+    r"SCREENER",
+    r"R5",
+    r"PPVRip",
     # Audio
-    r"AAC\d?\.?\d?", r"AC-?3", r"DTS-?HD(?:\.?MA)?", r"DTS",
-    r"TrueHD", r"Atmos", r"FLAC", r"MP3", r"OGG",
-    r"DD\+?\d?\.?\d?", r"EAC-?3",
-    r"5\.1", r"7\.1", r"2\.0",
+    r"AAC\d?\.?\d?",
+    r"AC-?3",
+    r"DTS-?HD(?:\.?MA)?",
+    r"DTS",
+    r"TrueHD",
+    r"Atmos",
+    r"FLAC",
+    r"MP3",
+    r"OGG",
+    r"DD\+?\d?\.?\d?",
+    r"EAC-?3",
+    r"5\.1",
+    r"7\.1",
+    r"2\.0",
     # Scene tags
-    r"REPACK", r"PROPER", r"EXTENDED", r"UNRATED", r"UNCUT",
-    r"DIRECTORS?\.?CUT", r"DC", r"REMASTERED", r"RESTORED",
-    r"RETAIL", r"INTERNAL", r"LIMITED", r"THEATRICAL",
-    r"CRITERION", r"IMAX", r"3D", r"HDR\d*",
+    r"REPACK",
+    r"PROPER",
+    r"EXTENDED",
+    r"UNRATED",
+    r"UNCUT",
+    r"DIRECTORS?\.?CUT",
+    r"DC",
+    r"REMASTERED",
+    r"RESTORED",
+    r"RETAIL",
+    r"INTERNAL",
+    r"LIMITED",
+    r"THEATRICAL",
+    r"CRITERION",
+    r"IMAX",
+    r"3D",
+    r"HDR\d*",
     # Container hints that might appear mid-title
-    r"MKV", r"AVI", r"MP4",
+    r"MKV",
+    r"AVI",
+    r"MP4",
     # Misc
     r"HB",  # seen in actual data: "Love.And.A.45.[1994]HB.mp4"
-    r"MULTI", r"DUAL", r"DUBBED", r"SUBBED", r"SUB(?:S)?",
+    r"MULTI",
+    r"DUAL",
+    r"DUBBED",
+    r"SUBBED",
+    r"SUB(?:S)?",
 ]
 
 # Build one big alternation pattern (word-boundary aware, case-insensitive)
@@ -106,19 +178,19 @@ _AKA_RE = re.compile(r"\.Aka\.", re.IGNORECASE)
 
 # ── TV episode title helpers ───────────────────────────────────────────────────
 
-_FULLWIDTH_PIPE     = "\uff5c"  # ｜  used in YouTube rips as field separator
-_YOUTUBE_ID_RE      = re.compile(r"\[[a-zA-Z0-9_-]{11}\]")
-_TV_SEASON_RE       = re.compile(r"Season\s*(\d{1,2})", re.IGNORECASE)
-_TV_EPISODE_RE      = re.compile(r"(?:Episode|Ep\.?)\s*#?\s*(\d{1,3})", re.IGNORECASE)
-_TV_SXEX_RE         = re.compile(r"\b[Ss](\d{1,2})[EeXx](\d{1,3})\b")
-_TV_NXNN_RE         = re.compile(r"\b(\d{1,2})[Xx](\d{2,3})\b")
-_FULL_EPISODE_RE    = re.compile(r"\(?FULL\s+EPISODE\)?", re.IGNORECASE)
+_FULLWIDTH_PIPE = "\uff5c"  # ｜  used in YouTube rips as field separator
+_YOUTUBE_ID_RE = re.compile(r"\[[a-zA-Z0-9_-]{11}\]")
+_TV_SEASON_RE = re.compile(r"Season\s*(\d{1,2})", re.IGNORECASE)
+_TV_EPISODE_RE = re.compile(r"(?:Episode|Ep\.?)\s*#?\s*(\d{1,3})", re.IGNORECASE)
+_TV_SXEX_RE = re.compile(r"\b[Ss](\d{1,2})[EeXx](\d{1,3})\b")
+_TV_NXNN_RE = re.compile(r"\b(\d{1,2})[Xx](\d{2,3})\b")
+_FULL_EPISODE_RE = re.compile(r"\(?FULL\s+EPISODE\)?", re.IGNORECASE)
 # Leading playlist/sequence number: "01 Show Name - S01E01"
 # Must NOT match NxNN-at-start like "4x01 Some Show"
-_LEADING_SEQ_RE     = re.compile(r"^\d+\s+")
-_LEADING_NXNN_RE    = re.compile(r"^\d+[xX]\d+")
+_LEADING_SEQ_RE = re.compile(r"^\d+\s+")
+_LEADING_NXNN_RE = re.compile(r"^\d+[xX]\d+")
 # Bare split season+episode: "S04 Ep 20", "S04 Episode 20"
-_TV_S_EP_RE         = re.compile(r"\bS(\d{1,2})\s+[Ee]p(?:isode)?\.?\s*#?\s*(\d{1,3})\b")
+_TV_S_EP_RE = re.compile(r"\bS(\d{1,2})\s+[Ee]p(?:isode)?\.?\s*#?\s*(\d{1,3})\b")
 
 
 def _try_clean_tv_title(raw: str) -> str | None:
@@ -166,10 +238,10 @@ def _try_clean_tv_title(raw: str) -> str | None:
         m = _TV_SXEX_RE.search(raw)
         if m:
             seq_end = _LEADING_SEQ_RE.match(raw).end()
-            show_part = raw[seq_end:m.start()]
+            show_part = raw[seq_end : m.start()]
             show_part = re.sub(r"[\s\-\u2013\u2014]+$", "", show_part)
             show_part = re.sub(r"\s+", " ", show_part).strip()
-            season  = int(m.group(1))
+            season = int(m.group(1))
             episode = int(m.group(2))
             if show_part:
                 return f"{show_part} S{season:02d}E{episode:02d}"
@@ -179,13 +251,13 @@ def _try_clean_tv_title(raw: str) -> str | None:
     # Handles both leading-sequence and plain titles.
     m = _TV_S_EP_RE.search(raw)
     if m:
-        show_part = raw[:m.start()]
+        show_part = raw[: m.start()]
         ls = _LEADING_SEQ_RE.match(show_part)
         if ls:
-            show_part = show_part[ls.end():]
+            show_part = show_part[ls.end() :]
         show_part = re.sub(r"[\s\-\u2013\u2014]+$", "", show_part)
         show_part = re.sub(r"\s+", " ", show_part).strip()
-        season  = int(m.group(1))
+        season = int(m.group(1))
         episode = int(m.group(2))
         if show_part:
             return f"{show_part} S{season:02d}E{episode:02d}"
@@ -198,22 +270,24 @@ def _try_clean_tv_title(raw: str) -> str | None:
 
         m = _TV_SXEX_RE.search(stripped)
         if m:
-            show_part = stripped[:m.start()]
-            season    = int(m.group(1))
-            episode   = int(m.group(2))
+            show_part = stripped[: m.start()]
+            season = int(m.group(1))
+            episode = int(m.group(2))
         else:
             m = _TV_NXNN_RE.search(stripped)
             if m:
-                show_part = stripped[:m.start()]
-                season    = int(m.group(1))
-                episode   = int(m.group(2))
+                show_part = stripped[: m.start()]
+                season = int(m.group(1))
+                episode = int(m.group(2))
 
         if show_part is not None and season is not None and episode is not None:
             if show_part.strip() and re.search(r"[a-zA-Z]", show_part):
                 show_part = show_part.replace(".", " ").replace("_", " ")
                 show_part = _SCENE_RE.sub(" ", show_part)
                 show_part = _FULL_EPISODE_RE.sub("", show_part)
-                show_part = re.sub(r"\s+", " ", show_part).strip().strip("-\u2013\u2014 ")
+                show_part = (
+                    re.sub(r"\s+", " ", show_part).strip().strip("-\u2013\u2014 ")
+                )
                 if show_part:
                     return f"{show_part} S{season:02d}E{episode:02d}"
 
@@ -241,7 +315,7 @@ def clean_title(raw: str) -> str | None:
 
     # ── Movie cleaning ────────────────────────────────────────────────────
     has_bracket_year = bool(_YEAR_BRACKET_RE.search(raw))
-    has_video_ext    = bool(_VIDEO_EXT_RE.search(raw))
+    has_video_ext = bool(_VIDEO_EXT_RE.search(raw))
     if not has_bracket_year and not has_video_ext:
         return None
 
@@ -284,16 +358,20 @@ def clean_title(raw: str) -> str | None:
 
 # ── Data model ─────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class TitleChange:
     friendly_token: str
     old_title: str
     new_title: str
     url: str
-    cms_user: str = ""   # original uploader — captured before any PUT so we can restore it
+    cms_user: str = (
+        ""  # original uploader — captured before any PUT so we can restore it
+    )
 
 
 # ── API helpers ────────────────────────────────────────────────────────────────
+
 
 def fetch_all_media(session: requests.Session) -> list[dict]:
     """Paginate through /manage_media to get every media item."""
@@ -308,8 +386,10 @@ def fetch_all_media(session: requests.Session) -> list[dict]:
     )
 
     if resp.status_code == 403:
-        print("⚠  /manage_media returned 403. Falling back to /media (may be capped).",
-              file=sys.stderr)
+        print(
+            "⚠  /manage_media returned 403. Falling back to /media (may be capped).",
+            file=sys.stderr,
+        )
         return _fetch_media_fallback(session)
 
     resp.raise_for_status()
@@ -366,7 +446,9 @@ def _fetch_media_fallback(session: requests.Session) -> list[dict]:
     return all_items
 
 
-def update_title(session: requests.Session, friendly_token: str, new_title: str) -> bool:
+def update_title(
+    session: requests.Session, friendly_token: str, new_title: str
+) -> bool:
     """PUT a new title to /media/{token}. Returns True on success."""
     resp = session.put(
         f"{API_BASE}/media/{friendly_token}",
@@ -405,6 +487,7 @@ def _restore_owner(
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
+
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
@@ -460,6 +543,7 @@ def main(argv: list[str] | None = None) -> int:
     # Windows console UTF-8 fix
     if sys.stdout.encoding and sys.stdout.encoding.lower().replace("-", "") != "utf8":
         import io
+
         sys.stdout = io.TextIOWrapper(
             sys.stdout.buffer, encoding="utf-8", errors="replace"
         )
@@ -491,13 +575,16 @@ def main(argv: list[str] | None = None) -> int:
 
     # ── Filter by upload date ─────────────────────────────────────────────
     if args.days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=args.days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(days=args.days)
+        ).strftime("%Y-%m-%d")
         before = len(all_media)
-        all_media = [i for i in all_media
-                     if (i.get("add_date") or "")[:10] >= cutoff]
-        print(f"  Filtered to {len(all_media)}/{before} item(s) "
-              f"uploaded in the last {args.days} day(s).\n")
+        all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
+        print(
+            f"  Filtered to {len(all_media)}/{before} item(s) "
+            f"uploaded in the last {args.days} day(s).\n"
+        )
 
     # ── Find candidates ────────────────────────────────────────────────────
     print("🔍  Scanning for titles to clean …\n")
@@ -509,13 +596,15 @@ def main(argv: list[str] | None = None) -> int:
         if new is None:
             continue
 
-        changes.append(TitleChange(
-            friendly_token=item.get("friendly_token", ""),
-            old_title=old,
-            new_title=new,
-            url=item.get("url", ""),
-            cms_user=item.get("user", ""),
-        ))
+        changes.append(
+            TitleChange(
+                friendly_token=item.get("friendly_token", ""),
+                old_title=old,
+                new_title=new,
+                url=item.get("url", ""),
+                cms_user=item.get("user", ""),
+            )
+        )
 
         if args.limit and len(changes) >= args.limit:
             break
@@ -531,7 +620,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {'CURRENT TITLE':<{col_w}} → NEW TITLE")
     print(f"  {'─' * col_w}   {'─' * 40}")
     for c in changes:
-        old_display = c.old_title if len(c.old_title) <= col_w else c.old_title[:col_w - 1] + "…"
+        old_display = (
+            c.old_title if len(c.old_title) <= col_w else c.old_title[: col_w - 1] + "…"
+        )
         print(f"  {old_display:<{col_w}} → {c.new_title}")
 
     print(f"\n  Found {len(changes)} title(s) to update.\n")
@@ -565,6 +656,7 @@ def main(argv: list[str] | None = None) -> int:
 
 # ── Headless entry point for the webqueue job runner ───────────────────────────
 
+
 def run(params: dict, *, config, progress=None) -> dict:
     """Run title cleanup headlessly (no argparse, no interactive prompts).
 
@@ -591,8 +683,9 @@ def run(params: dict, *, config, progress=None) -> dict:
     all_media = fetch_all_media(session)
 
     if days:
-        cutoff = (datetime.datetime.now(datetime.timezone.utc)
-                  - datetime.timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (
+            datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=days)
+        ).strftime("%Y-%m-%d")
         all_media = [i for i in all_media if (i.get("add_date") or "")[:10] >= cutoff]
 
     changes: list[TitleChange] = []
@@ -601,13 +694,15 @@ def run(params: dict, *, config, progress=None) -> dict:
         new = clean_title(old)
         if new is None:
             continue
-        changes.append(TitleChange(
-            friendly_token=item.get("friendly_token", ""),
-            old_title=old,
-            new_title=new,
-            url=item.get("url", ""),
-            cms_user=item.get("user", ""),
-        ))
+        changes.append(
+            TitleChange(
+                friendly_token=item.get("friendly_token", ""),
+                old_title=old,
+                new_title=new,
+                url=item.get("url", ""),
+                cms_user=item.get("user", ""),
+            )
+        )
         if limit and len(changes) >= limit:
             break
 

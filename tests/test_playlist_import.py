@@ -27,44 +27,57 @@ async def db(tmp_path):
 
 
 async def _add_item(db, token, title="Title", *, duration=600):
-    await db.insert_catalog({
-        "friendly_token": token,
-        "title": title,
-        "description": "",
-        "duration_sec": duration,
-        "manifest_url": f"{MEDIACMS}/api/v1/media/cytube/{token}.json?format=json",
-        "thumbnail_url": "",
-        "synced_at": "2026-01-01T00:00:00+00:00",
-    })
+    await db.insert_catalog(
+        {
+            "friendly_token": token,
+            "title": title,
+            "description": "",
+            "duration_sec": duration,
+            "manifest_url": f"{MEDIACMS}/api/v1/media/cytube/{token}.json?format=json",
+            "thumbnail_url": "",
+            "synced_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
 
 
 # --- pure URL helpers ---
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
-    ("https://youtu.be/dQw4w9WgXcQ?t=42", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&t=10", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/watch?list=PL123&v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/embed/dQw4w9WgXcQ?start=5", "dQw4w9WgXcQ"),
-    ("https://www.youtube.com/playlist?list=PL123", None),
-])
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://youtu.be/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://youtu.be/dQw4w9WgXcQ?t=42", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PL123&t=10", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/watch?list=PL123&v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/embed/dQw4w9WgXcQ?start=5", "dQw4w9WgXcQ"),
+        ("https://www.youtube.com/playlist?list=PL123", None),
+    ],
+)
 def test_extract_youtube_id(url, expected):
     assert extract_youtube_id(url) == expected
 
 
-@pytest.mark.parametrize("url,expected", [
-    ("https://www.dropsugar.co/view?m=kBl82FCgy", "kBl82FCgy"),
-    ("https://www.dropsugar.co/view?m=kBl82FCgy&foo=bar", "kBl82FCgy"),
-    ("https://www.dropsugar.com/api/v1/media/cytube/abc123.json?format=json", "abc123"),
-    ("https://www.dropsugar.co/", None),
-])
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("https://www.dropsugar.co/view?m=kBl82FCgy", "kBl82FCgy"),
+        ("https://www.dropsugar.co/view?m=kBl82FCgy&foo=bar", "kBl82FCgy"),
+        (
+            "https://www.dropsugar.com/api/v1/media/cytube/abc123.json?format=json",
+            "abc123",
+        ),
+        ("https://www.dropsugar.co/", None),
+    ],
+)
 def test_extract_dropsugar_token(url, expected):
     assert extract_dropsugar_token(url) == expected
 
 
 # --- full parse ---
+
 
 async def test_youtube_links_stripped_to_yt_items(db):
     text = (
@@ -80,26 +93,32 @@ async def test_youtube_links_stripped_to_yt_items(db):
 async def test_dropsugar_url_resolves_catalog(db):
     await _add_item(db, "kBl82FCgy", "Hollis Live")
     out = await import_playlist_text(
-        db, "https://www.dropsugar.co/view?m=kBl82FCgy - Hollis Live on Channel-Z",
+        db,
+        "https://www.dropsugar.co/view?m=kBl82FCgy - Hollis Live on Channel-Z",
         mediacms_url=MEDIACMS,
     )
     assert len(out["items"]) == 1
     it = out["items"][0]
     assert it["media_type"] == "cm"
-    assert it["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/kBl82FCgy.json?format=json"
+    assert (
+        it["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/kBl82FCgy.json?format=json"
+    )
     assert it["title"] == "Hollis Live"
     assert not out["errors"]
 
 
 async def test_dropsugar_url_not_in_catalog_constructs_manifest(db):
     out = await import_playlist_text(
-        db, "https://www.dropsugar.co/view?m=newtoken123 - Some Title",
+        db,
+        "https://www.dropsugar.co/view?m=newtoken123 - Some Title",
         mediacms_url=MEDIACMS,
     )
     assert len(out["items"]) == 1
     it = out["items"][0]
     assert it["media_type"] == "cm"
-    assert it["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/newtoken123.json?format=json"
+    assert (
+        it["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/newtoken123.json?format=json"
+    )
     assert it["title"] == "Some Title"  # trailing text used as title hint
 
 
@@ -132,6 +151,9 @@ async def test_legacy_tokens_still_work(db):
     # bare1 resolves to its manifest URL; cm:cmtoken (not in catalog) now falls
     # back to a constructed manifest URL so not-yet-synced items still play.
     assert any(i["media_id"].endswith("bare1.json?format=json") for i in cm)
-    assert any(i["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/cmtoken.json?format=json" for i in cm)
+    assert any(
+        i["media_id"] == f"{MEDIACMS}/api/v1/media/cytube/cmtoken.json?format=json"
+        for i in cm
+    )
     # unknownbare is not in catalog -> error
     assert any(e["token"] == "unknownbare" for e in out["errors"])

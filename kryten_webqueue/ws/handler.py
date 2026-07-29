@@ -101,4 +101,3 @@ async def race_websocket_endpoint(ws: WebSocket):
         logger.debug(f"Race WS error: {e}")
     finally:
         await manager.disconnect(conn_id)
-

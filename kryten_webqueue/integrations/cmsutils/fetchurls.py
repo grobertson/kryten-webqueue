@@ -110,12 +110,14 @@ import yaml
 # ── Optional dependencies (checked at runtime) ────────────────────────────────
 try:
     import openpyxl
+
     _HAS_OPENPYXL = True
 except ImportError:
     _HAS_OPENPYXL = False
 
 try:
     import msal
+
     _HAS_MSAL = True
 except ImportError:
     _HAS_MSAL = False
@@ -130,67 +132,70 @@ GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 GRAPH_SCOPES = ["https://graph.microsoft.com/Files.ReadWrite.All"]
 
 # Column indices in the Excel sheet (0-based when using openpyxl cell.column)
-COL_SECTION = 1   # Column A — section headers
-COL_URL     = 5   # Column E — source URLs
+COL_SECTION = 1  # Column A — section headers
+COL_URL = 5  # Column E — source URLs
 
 # Section-name substrings → output playlist slug.
 # Order matters: more specific keys must precede broader ones (see
 # _classify_section, which returns the first substring match).
 SECTION_MAP = {
-    "friday":   "friday",
+    "friday": "friday",
     "saturday morning": "saturday-morning",
-    "saturday": "saturday-night",   # must come AFTER "saturday morning"
-    "sunday morning":   "sunday-morning",
+    "saturday": "saturday-night",  # must come AFTER "saturday morning"
+    "sunday morning": "sunday-morning",
     "sunday afternoon": "sunday-daytime",
 }
 
 DROPSUGAR_HOST = "dropsugar.co"
-OFFSITE_HOSTS  = ("youtube.com", "youtu.be", "tubi.tv", "tubitv.com")
+OFFSITE_HOSTS = ("youtube.com", "youtu.be", "tubi.tv", "tubitv.com")
 
-REQUEST_TIMEOUT = 20    # seconds for HEAD validation
-FETCH_TIMEOUT   = 900   # 15 min per URL (download + encode + upload)
+REQUEST_TIMEOUT = 20  # seconds for HEAD validation
+FETCH_TIMEOUT = 900  # 15 min per URL (download + encode + upload)
 
 # ── Data structures ───────────────────────────────────────────────────────────
 
+
 @dataclass
 class Config:
-    fetch_script:      str  = "../yt-pipe/fetch.ps1"
-    api_url:           str  = "https://www.dropsugar.co/api/v1"
-    api_token:         str  = ""
-    sp_tenant_id:      str  = ""
-    sp_client_id:      str  = ""
-    sp_sharing_url:    str  = ""
-    sp_token_cache:    str  = ".fetchurls_tokens.bin"  # persisted MSAL cache
+    fetch_script: str = "../yt-pipe/fetch.ps1"
+    api_url: str = "https://www.dropsugar.co/api/v1"
+    api_token: str = ""
+    sp_tenant_id: str = ""
+    sp_client_id: str = ""
+    sp_sharing_url: str = ""
+    sp_token_cache: str = ".fetchurls_tokens.bin"  # persisted MSAL cache
 
 
 @dataclass
 class ProcessResult:
-    original_url:  str
-    resolved_url:  str
-    success:       bool
-    note:          str = ""
-    row_number:    int = 0   # 1-based Excel row; 0 = not from a spreadsheet
+    original_url: str
+    resolved_url: str
+    success: bool
+    note: str = ""
+    row_number: int = 0  # 1-based Excel row; 0 = not from a spreadsheet
 
 
 @dataclass
 class WritebackContext:
     """Holds Graph API credentials needed to write column F incrementally."""
-    token:      str
-    drive_id:   str
-    item_id:    str
+
+    token: str
+    drive_id: str
+    item_id: str
     sheet_name: str
-    dry_run:    bool = False
-    session_id: str  = ""     # Graph workbook session for reliable writes
+    dry_run: bool = False
+    session_id: str = ""  # Graph workbook session for reliable writes
     # Auth details for automatic token refresh (tokens expire after ~1 hour)
-    tenant_id:  str  = ""
-    client_id:  str  = ""
-    cache_path: str  = ""
+    tenant_id: str = ""
+    client_id: str = ""
+    cache_path: str = ""
     # Tracking
-    writes_ok:   int = 0
+    writes_ok: int = 0
     writes_fail: int = 0
 
 
 # ── Configuration ─────────────────────────────────────────────────────────────
+
 
 def load_config(config_path: Path) -> Config:
     cfg = Config()
@@ -200,12 +205,12 @@ def load_config(config_path: Path) -> Config:
         raw = yaml.safe_load(f) or {}
 
     api = raw.get("api", {})
-    cfg.api_url   = api.get("url",   cfg.api_url)
+    cfg.api_url = api.get("url", cfg.api_url)
     cfg.api_token = api.get("token", cfg.api_token)
 
     sp = raw.get("sharepoint", {})
-    cfg.sp_tenant_id   = sp.get("tenant_id",   cfg.sp_tenant_id)
-    cfg.sp_client_id   = sp.get("client_id",   cfg.sp_client_id)
+    cfg.sp_tenant_id = sp.get("tenant_id", cfg.sp_tenant_id)
+    cfg.sp_client_id = sp.get("client_id", cfg.sp_client_id)
     cfg.sp_sharing_url = sp.get("sharing_url", cfg.sp_sharing_url)
     cfg.sp_token_cache = sp.get("token_cache", cfg.sp_token_cache)
 
@@ -217,18 +222,16 @@ def load_config(config_path: Path) -> Config:
 
 # ── SharePoint / Graph API ────────────────────────────────────────────────────
 
+
 def _check_msal():
     if not _HAS_MSAL:
-        sys.exit(
-            "ERROR: 'msal' package not installed.\n"
-            "  pip install msal\n"
-        )
+        sys.exit("ERROR: 'msal' package not installed.\n" "  pip install msal\n")
+
 
 def _check_openpyxl():
     if not _HAS_OPENPYXL:
         sys.exit(
-            "ERROR: 'openpyxl' package not installed.\n"
-            "  pip install openpyxl\n"
+            "ERROR: 'openpyxl' package not installed.\n" "  pip install openpyxl\n"
         )
 
 
@@ -282,7 +285,7 @@ def acquire_graph_token(tenant_id: str, client_id: str, cache_path: str = "") ->
 
     print()
     print("━" * 60)
-    print(flow["message"])   # "Go to https://... and enter code ABCDEFGH"
+    print(flow["message"])  # "Go to https://... and enter code ABCDEFGH"
     print("━" * 60)
     print()
 
@@ -295,7 +298,9 @@ def acquire_graph_token(tenant_id: str, client_id: str, cache_path: str = "") ->
     return result["access_token"]
 
 
-def acquire_graph_token_silent(tenant_id: str, client_id: str, cache_path: str) -> Optional[str]:
+def acquire_graph_token_silent(
+    tenant_id: str, client_id: str, cache_path: str
+) -> Optional[str]:
     """Return a Graph access token from a pre-seeded MSAL cache, or None.
 
     Unlike :func:`acquire_graph_token`, this NEVER prompts interactively — it is
@@ -331,7 +336,6 @@ def acquire_graph_token_silent(tenant_id: str, client_id: str, cache_path: str) 
     return None
 
 
-
 def _encode_sharing_url(url: str) -> str:
     """Encode a SharePoint sharing/document URL for use with the Graph shares API."""
     encoded = base64.urlsafe_b64encode(url.encode()).decode().rstrip("=")
@@ -360,8 +364,10 @@ def download_sharepoint_xlsx(token: str, sharing_url: str) -> tuple[bytes, str, 
     item = r.json()
 
     # Always capture drive/item IDs for later writeback
-    drive_id = item.get("parentReference", {}).get("driveId") or item.get("remoteItem", {}).get("parentReference", {}).get("driveId", "")
-    item_id  = item.get("id", "")
+    drive_id = item.get("parentReference", {}).get("driveId") or item.get(
+        "remoteItem", {}
+    ).get("parentReference", {}).get("driveId", "")
+    item_id = item.get("id", "")
 
     download_url = item.get("@microsoft.graph.downloadUrl") or item.get("downloadUrl")
 
@@ -393,7 +399,7 @@ def download_sharepoint_xlsx(token: str, sharing_url: str) -> tuple[bytes, str, 
 # ── Sheet auto-detection ─────────────────────────────────────────────────────
 
 # Matches sheet names like "3.6-3.7", "3.13-3.14", "2.7 - 2.8"
-_SHEET_DATE_RE = re.compile(r'^(\d{1,2})\.(\d{1,2})\s*-\s*\d{1,2}\.\d{1,2}$')
+_SHEET_DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\s*-\s*\d{1,2}\.\d{1,2}$")
 
 
 def _auto_select_sheet(sheet_names: list[str]) -> Optional[str]:
@@ -404,7 +410,7 @@ def _auto_select_sheet(sheet_names: list[str]) -> Optional[str]:
     Falls back to the nearest upcoming date sheet, then the raw last sheet.
     """
     today = datetime.date.today()
-    year  = today.year
+    year = today.year
 
     candidates: list[tuple[datetime.date, str]] = []
     for name in sheet_names:
@@ -434,6 +440,7 @@ def _auto_select_sheet(sheet_names: list[str]) -> Optional[str]:
 
 
 # ── Excel parsing ─────────────────────────────────────────────────────────────
+
 
 def _classify_section(cell_value: str) -> Optional[str]:
     """
@@ -476,17 +483,16 @@ def parse_excel_sections(
     if sheet_name not in wb.sheetnames:
         available = ", ".join(wb.sheetnames)
         sys.exit(
-            f"ERROR: Sheet '{sheet_name}' not found.\n"
-            f"Available sheets: {available}"
+            f"ERROR: Sheet '{sheet_name}' not found.\n" f"Available sheets: {available}"
         )
 
     ws = wb[sheet_name]
     sections: dict[str, list[tuple[int, str, str]]] = {
-        "friday":           [],
-        "saturday-night":   [],
+        "friday": [],
+        "saturday-night": [],
         "saturday-morning": [],
-        "sunday-morning":   [],
-        "sunday-daytime":   [],
+        "sunday-morning": [],
+        "sunday-daytime": [],
     }
     current_section: Optional[str] = None
 
@@ -520,6 +526,7 @@ def parse_text_file(path: Path) -> list[str]:
 
 # ── URL classification ────────────────────────────────────────────────────────
 
+
 def is_dropsugar(url: str) -> bool:
     return DROPSUGAR_HOST in url.lower()
 
@@ -550,6 +557,7 @@ def validate_dropsugar(url: str) -> tuple[bool, str]:
 
 # ── fetch.ps1 invocation ──────────────────────────────────────────────────────
 
+
 def _is_wsl() -> bool:
     """Return True when running inside Windows Subsystem for Linux."""
     try:
@@ -569,7 +577,9 @@ def _to_windows_path(p: Path) -> str:
     try:
         result = subprocess.run(
             ["wslpath", "-w", str(p)],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -596,6 +606,7 @@ def _strip_playlist_params(url: str) -> str:
     if "list=" not in url:
         return url
     from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
     p = urlparse(url)
     qs = parse_qs(p.query, keep_blank_values=True)
     qs.pop("list", None)
@@ -606,7 +617,9 @@ def _strip_playlist_params(url: str) -> str:
     return cleaned
 
 
-def run_fetch(url: str, fetch_script: Path, dry_run: bool = False) -> tuple[bool, str, str]:
+def run_fetch(
+    url: str, fetch_script: Path, dry_run: bool = False
+) -> tuple[bool, str, str]:
     """
     Run ../yt-pipe/fetch.ps1 with the given URL.
 
@@ -627,8 +640,10 @@ def run_fetch(url: str, fetch_script: Path, dry_run: bool = False) -> tuple[bool
 
     cmd = [
         "powershell.exe",
-        "-ExecutionPolicy", "Bypass",
-        "-File", script_arg,
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        script_arg,
         url,
     ]
 
@@ -645,7 +660,7 @@ def run_fetch(url: str, fetch_script: Path, dry_run: bool = False) -> tuple[bool
             encoding="utf-8",
             errors="replace",
             timeout=FETCH_TIMEOUT if FETCH_TIMEOUT > 0 else None,
-            cwd=fetch_script.parent,   # fetch.ps1 uses relative paths internally
+            cwd=fetch_script.parent,  # fetch.ps1 uses relative paths internally
             env=env,
         )
     except subprocess.TimeoutExpired:
@@ -696,7 +711,11 @@ def _extract_line(text: str, pattern: str) -> Optional[str]:
 
 def _classify_failure(text: str) -> str:
     lower = text.lower()
-    if "sign in to confirm" in lower or "age-restricted" in lower or "age restricted" in lower:
+    if (
+        "sign in to confirm" in lower
+        or "age-restricted" in lower
+        or "age restricted" in lower
+    ):
         return "age-restricted (YouTube) — cookies required"
     if "drm" in lower or "widevine" in lower or "not available" in lower:
         return "DRM-protected or geo-restricted"
@@ -712,6 +731,7 @@ def _classify_failure(text: str) -> str:
 
 # ── Processing ────────────────────────────────────────────────────────────────
 
+
 def process_url(
     url: str,
     fetch_script: Path,
@@ -725,9 +745,13 @@ def process_url(
         if validate:
             ok, note = validate_dropsugar(url)
             if ok:
-                return ProcessResult(url, url, True, f"dropsugar (validated: {note})", row_number)
+                return ProcessResult(
+                    url, url, True, f"dropsugar (validated: {note})", row_number
+                )
             else:
-                return ProcessResult(url, url, False, f"dropsugar validation failed: {note}", row_number)
+                return ProcessResult(
+                    url, url, False, f"dropsugar validation failed: {note}", row_number
+                )
         return ProcessResult(url, url, True, "dropsugar (not validated)", row_number)
 
     if is_offsite(url):
@@ -760,16 +784,24 @@ def process_section(
         # If column F already has a resolved URL from a previous run:
         #   • validate=True  → re-check it; fall through to re-process if stale
         #   • validate=False → trust it as-is (--no-validate speeds up reruns)
-        if col_f and DROPSUGAR_HOST in col_f.lower() and col_f.lower().startswith("http"):
+        if (
+            col_f
+            and DROPSUGAR_HOST in col_f.lower()
+            and col_f.lower().startswith("http")
+        ):
             if not validate:
-                r = ProcessResult(url, col_f, True, "col F kept (validation skipped)", row_num)
+                r = ProcessResult(
+                    url, col_f, True, "col F kept (validation skipped)", row_num
+                )
                 print(f"         ✓  {r.note}")
                 results.append(r)
                 revalidated += 1
                 continue
             ok, note = validate_dropsugar(col_f)
             if ok:
-                r = ProcessResult(url, col_f, True, f"col F revalidated ({note})", row_num)
+                r = ProcessResult(
+                    url, col_f, True, f"col F revalidated ({note})", row_num
+                )
                 print(f"         ✓  {r.note}")
                 results.append(r)
                 revalidated += 1
@@ -777,7 +809,9 @@ def process_section(
             # Stale — fall through and re-process col_e
             print(f"         ⚠  col F no longer valid ({note}), re-processing…")
 
-        r = process_url(url, fetch_script, dry_run=dry_run, validate=validate, row_number=row_num)
+        r = process_url(
+            url, fetch_script, dry_run=dry_run, validate=validate, row_number=row_num
+        )
         status = "✓" if r.success else "✗"
         print(f"         {status}  {r.note}")
         results.append(r)
@@ -793,9 +827,9 @@ def process_section(
 
 # ── SharePoint writeback ─────────────────────────────────────────────────────
 
-WRITEBACK_MAX_RETRIES = 4       # retry transient Graph API failures
-WRITEBACK_DELAY       = 1.0     # seconds between writes (avoids rate limits)
-WRITEBACK_TIMEOUT     = 30      # per-request timeout (Excel API can be slow)
+WRITEBACK_MAX_RETRIES = 4  # retry transient Graph API failures
+WRITEBACK_DELAY = 1.0  # seconds between writes (avoids rate limits)
+WRITEBACK_TIMEOUT = 30  # per-request timeout (Excel API can be slow)
 
 
 def _workbook_api_base(ctx: WritebackContext) -> str:
@@ -844,11 +878,16 @@ def _open_fresh_session(ctx: WritebackContext) -> None:
     if ctx.session_id:
         close_url = f"{_workbook_api_base(ctx)}/closeSession"
         try:
-            requests.post(close_url, headers={
-                "Authorization": f"Bearer {ctx.token}",
-                "Content-Type": "application/json",
-                "workbook-session-id": ctx.session_id,
-            }, data="{}", timeout=WRITEBACK_TIMEOUT)
+            requests.post(
+                close_url,
+                headers={
+                    "Authorization": f"Bearer {ctx.token}",
+                    "Content-Type": "application/json",
+                    "workbook-session-id": ctx.session_id,
+                },
+                data="{}",
+                timeout=WRITEBACK_TIMEOUT,
+            )
         except requests.RequestException:
             pass
         ctx.session_id = ""
@@ -857,7 +896,7 @@ def _open_fresh_session(ctx: WritebackContext) -> None:
     url = f"{_workbook_api_base(ctx)}/createSession"
     headers = {
         "Authorization": f"Bearer {ctx.token}",
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
     }
     body = json.dumps({"persistChanges": True})
     try:
@@ -870,7 +909,9 @@ def _open_fresh_session(ctx: WritebackContext) -> None:
         # 401 means token expired — try refresh once
         if resp.status_code == 401 and _refresh_token(ctx):
             headers["Authorization"] = f"Bearer {ctx.token}"
-            resp = requests.post(url, headers=headers, data=body, timeout=WRITEBACK_TIMEOUT)
+            resp = requests.post(
+                url, headers=headers, data=body, timeout=WRITEBACK_TIMEOUT
+            )
             if resp.status_code in (200, 201):
                 sid = resp.json().get("id", "")
                 if sid:
@@ -888,8 +929,8 @@ def _close_workbook_session(ctx: WritebackContext) -> None:
         return
     url = f"{_workbook_api_base(ctx)}/closeSession"
     headers = {
-        "Authorization":       f"Bearer {ctx.token}",
-        "Content-Type":        "application/json",
+        "Authorization": f"Bearer {ctx.token}",
+        "Content-Type": "application/json",
         "workbook-session-id": ctx.session_id,
     }
     try:
@@ -938,17 +979,22 @@ def _write_cell_f(ctx: WritebackContext, r: ProcessResult) -> bool:
     for attempt in range(1, WRITEBACK_MAX_RETRIES + 1):
         headers = {
             "Authorization": f"Bearer {ctx.token}",
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
         }
         if ctx.session_id:
             headers["workbook-session-id"] = ctx.session_id
 
         try:
-            resp = requests.patch(url, headers=headers, data=body,
-                                  timeout=WRITEBACK_TIMEOUT)
+            resp = requests.patch(
+                url, headers=headers, data=body, timeout=WRITEBACK_TIMEOUT
+            )
 
             if resp.status_code in (200, 204):
-                short_url = r.resolved_url if len(r.resolved_url) <= 60 else r.resolved_url[:57] + "…"
+                short_url = (
+                    r.resolved_url
+                    if len(r.resolved_url) <= 60
+                    else r.resolved_url[:57] + "…"
+                )
                 print(f"    ✓ wrote F{r.row_number} = {short_url}")
                 ctx.writes_ok += 1
                 time.sleep(WRITEBACK_DELAY)
@@ -959,7 +1005,7 @@ def _write_cell_f(ctx: WritebackContext, r: ProcessResult) -> bool:
                 print(f"    ⚠ writeback F{r.row_number}: HTTP 401 (token expired)")
                 if _refresh_token(ctx):
                     _open_fresh_session(ctx)
-                    continue   # retry with new token + session
+                    continue  # retry with new token + session
                 print(f"    ✗ writeback F{r.row_number}: could not refresh token")
                 break
 
@@ -967,32 +1013,41 @@ def _write_cell_f(ctx: WritebackContext, r: ProcessResult) -> bool:
             if resp.status_code == 404:
                 print(f"    ⚠ writeback F{r.row_number}: HTTP 404 (session expired?)")
                 _open_fresh_session(ctx)
-                continue   # retry with new session
+                continue  # retry with new session
 
             # Retryable server-side errors
-            if resp.status_code in (409, 423, 429, 503) and attempt < WRITEBACK_MAX_RETRIES:
-                wait = 2 ** attempt
+            if (
+                resp.status_code in (409, 423, 429, 503)
+                and attempt < WRITEBACK_MAX_RETRIES
+            ):
+                wait = 2**attempt
                 retry_after = resp.headers.get("Retry-After")
                 if retry_after:
                     try:
                         wait = max(wait, int(retry_after))
                     except ValueError:
                         pass
-                print(f"    ⚠ writeback F{r.row_number}: HTTP {resp.status_code}, "
-                      f"retrying in {wait}s ({attempt}/{WRITEBACK_MAX_RETRIES})")
+                print(
+                    f"    ⚠ writeback F{r.row_number}: HTTP {resp.status_code}, "
+                    f"retrying in {wait}s ({attempt}/{WRITEBACK_MAX_RETRIES})"
+                )
                 time.sleep(wait)
                 continue
 
             # Non-retryable error
-            print(f"    ✗ writeback F{r.row_number}: HTTP {resp.status_code} — "
-                  f"{resp.text[:200]}")
+            print(
+                f"    ✗ writeback F{r.row_number}: HTTP {resp.status_code} — "
+                f"{resp.text[:200]}"
+            )
             break
 
         except requests.RequestException as exc:
             if attempt < WRITEBACK_MAX_RETRIES:
-                wait = 2 ** attempt
-                print(f"    ⚠ writeback F{r.row_number}: {exc}, "
-                      f"retrying in {wait}s ({attempt}/{WRITEBACK_MAX_RETRIES})")
+                wait = 2**attempt
+                print(
+                    f"    ⚠ writeback F{r.row_number}: {exc}, "
+                    f"retrying in {wait}s ({attempt}/{WRITEBACK_MAX_RETRIES})"
+                )
                 time.sleep(wait)
                 continue
             print(f"    ✗ writeback F{r.row_number}: {exc}")
@@ -1005,19 +1060,19 @@ def _write_cell_f(ctx: WritebackContext, r: ProcessResult) -> bool:
 # ── Output ────────────────────────────────────────────────────────────────────
 
 SECTION_SLUGS = {
-    "friday":           "friday",
-    "saturday-night":   "saturday-night",
+    "friday": "friday",
+    "saturday-night": "saturday-night",
     "saturday-morning": "saturday-morning",
-    "sunday-morning":   "sunday-morning",
-    "sunday-daytime":   "sunday-daytime",
+    "sunday-morning": "sunday-morning",
+    "sunday-daytime": "sunday-daytime",
 }
 
 SECTION_LABELS = {
-    "friday":           "Friday Night",
-    "saturday-night":   "Saturday Night",
+    "friday": "Friday Night",
+    "saturday-night": "Saturday Night",
     "saturday-morning": "Saturday Morning",
-    "sunday-morning":   "Sunday Morning",
-    "sunday-daytime":   "Sunday Daytime",
+    "sunday-morning": "Sunday Morning",
+    "sunday-daytime": "Sunday Daytime",
 }
 
 
@@ -1052,6 +1107,7 @@ def write_failures(path: Path, all_results: dict[str, list[ProcessResult]]) -> i
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Import off-site media and build dropsugar.co playlist files.",
@@ -1060,46 +1116,58 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     src = p.add_mutually_exclusive_group()
     src.add_argument(
-        "--file", metavar="PATH",
+        "--file",
+        metavar="PATH",
         help="Path to a local Excel workbook (instead of downloading from SharePoint)",
     )
     src.add_argument(
-        "--text", metavar="PATH",
+        "--text",
+        metavar="PATH",
         help="Path to a plain-text file with one URL per line (skips Excel parsing)",
     )
 
     p.add_argument(
-        "--sheet", metavar="NAME",
+        "--sheet",
+        metavar="NAME",
         help='Sheet name in the workbook, e.g. "3.6-3.7". '
-             'Defaults to the most recent sheet.',
+        "Defaults to the most recent sheet.",
     )
     p.add_argument(
-        "--label", metavar="NAME",
+        "--label",
+        metavar="NAME",
         help="Label to use for output filenames when --text is used (e.g. '3.6-3.7').",
     )
     p.add_argument(
-        "--config", metavar="PATH", default="config.yaml",
+        "--config",
+        metavar="PATH",
+        default="config.yaml",
         help="Path to config file (default: config.yaml)",
     )
     p.add_argument(
-        "--out-dir", metavar="DIR", default="playlists",
+        "--out-dir",
+        metavar="DIR",
+        default="playlists",
         help="Directory for output playlist files (default: playlists/)",
     )
     p.add_argument(
-        "--dry-run", action="store_true",
+        "--dry-run",
+        action="store_true",
         help="Show what would happen without running fetch.ps1",
     )
     p.add_argument(
-        "--no-validate", action="store_true",
+        "--no-validate",
+        action="store_true",
         help="Skip HEAD validation of existing dropsugar.co URLs",
     )
     p.add_argument(
-        "--section", metavar="SLUG",
+        "--section",
+        metavar="SLUG",
         choices=list(SECTION_SLUGS),
         help="Process only one section (friday / saturday-night / saturday-morning)",
     )
     p.add_argument(
-        "--no-writeback", action="store_true",
+        "--no-writeback",
+        action="store_true",
         help="Skip writing resolved URLs back to column F in the SharePoint spreadsheet",
     )
     return p
@@ -1140,13 +1208,15 @@ def main() -> None:
             sys.exit(f"ERROR: Text file not found: {text_path}")
 
         label = args.label or text_path.stem
-        urls  = parse_text_file(text_path)
+        urls = parse_text_file(text_path)
         print(f"  Source       : {text_path} ({len(urls)} URLs)")
         print(f"  Label        : {label}")
         print()
 
         url_rows = [(0, u, "") for u in urls]  # no Excel row numbers in text-file mode
-        results = process_section("all", url_rows, fetch_script, args.dry_run, not args.no_validate)
+        results = process_section(
+            "all", url_rows, fetch_script, args.dry_run, not args.no_validate
+        )
 
         out_dir = Path(args.out_dir)
         write_playlist(out_dir / f"{label}-imported.txt", results)
@@ -1157,8 +1227,8 @@ def main() -> None:
         _check_openpyxl()
 
         sp_drive_id = ""
-        sp_item_id  = ""
-        token       = ""
+        sp_item_id = ""
+        token = ""
 
         if args.file:
             file_path = Path(args.file)
@@ -1176,19 +1246,22 @@ def main() -> None:
                     "  Or use --file to supply a local Excel file."
                 )
             if not cfg.sp_sharing_url:
-                sys.exit(
-                    "ERROR: sharepoint.sharing_url must be set in config.yaml."
-                )
+                sys.exit("ERROR: sharepoint.sharing_url must be set in config.yaml.")
 
             print("  Source       : SharePoint (Graph API)")
             print("  Authenticating …")
-            token    = acquire_graph_token(cfg.sp_tenant_id, cfg.sp_client_id, cfg.sp_token_cache)
+            token = acquire_graph_token(
+                cfg.sp_tenant_id, cfg.sp_client_id, cfg.sp_token_cache
+            )
             print("  Downloading workbook …")
-            wb_bytes, sp_drive_id, sp_item_id = download_sharepoint_xlsx(token, cfg.sp_sharing_url)
+            wb_bytes, sp_drive_id, sp_item_id = download_sharepoint_xlsx(
+                token, cfg.sp_sharing_url
+            )
             print(f"  Downloaded   : {len(wb_bytes):,} bytes")
 
         # Determine sheet name
         import openpyxl as _oxl
+
         wb_peek = _oxl.load_workbook(io.BytesIO(wb_bytes), read_only=True)
         all_sheets = wb_peek.sheetnames
         wb_peek.close()
@@ -1198,10 +1271,14 @@ def main() -> None:
             auto = _auto_select_sheet(all_sheets)
             if auto:
                 sheet_name = auto
-                print(f"  Sheet        : '{sheet_name}' (auto-selected, current weekend)")
+                print(
+                    f"  Sheet        : '{sheet_name}' (auto-selected, current weekend)"
+                )
             else:
                 sheet_name = all_sheets[-1]
-                print(f"  Sheet        : '{sheet_name}' (auto-selected, last in workbook)")
+                print(
+                    f"  Sheet        : '{sheet_name}' (auto-selected, last in workbook)"
+                )
         else:
             print(f"  Sheet        : '{sheet_name}'")
 
@@ -1211,7 +1288,9 @@ def main() -> None:
         # Parse sections
         sections = parse_excel_sections(wb_bytes, sheet_name)
         total_urls = sum(len(v) for v in sections.values())
-        print(f"  Found {total_urls} URLs across {sum(1 for v in sections.values() if v)} section(s)")
+        print(
+            f"  Found {total_urls} URLs across {sum(1 for v in sections.values() if v)} section(s)"
+        )
 
         # Filter to one section if requested
         if args.section:
@@ -1239,11 +1318,17 @@ def main() -> None:
         try:
             for slug, url_rows in sections.items():
                 if not url_rows:
-                    print(f"\n  ── {SECTION_LABELS.get(slug, slug).upper()} — no URLs found, skipping")
+                    print(
+                        f"\n  ── {SECTION_LABELS.get(slug, slug).upper()} — no URLs found, skipping"
+                    )
                     continue
                 label_str = SECTION_LABELS.get(slug, slug)
                 results = process_section(
-                    label_str, url_rows, fetch_script, args.dry_run, not args.no_validate,
+                    label_str,
+                    url_rows,
+                    fetch_script,
+                    args.dry_run,
+                    not args.no_validate,
                     wb_ctx=wb_ctx,
                 )
                 all_results[slug] = results
@@ -1262,7 +1347,7 @@ def main() -> None:
 
         # Summary
         total_processed = sum(len(v) for v in all_results.values())
-        total_ok        = sum(r.success for v in all_results.values() for r in v)
+        total_ok = sum(r.success for v in all_results.values() for r in v)
         print()
         print(f"  ── Summary ──────────────────────────────────")
         print(f"     Processed : {total_processed}")
@@ -1278,6 +1363,7 @@ def main() -> None:
 
 # ── Headless entry point for the webqueue job runner ───────────────────────────
 
+
 def upcoming_weekend_sheet(today=None) -> tuple[str, "datetime.date", "datetime.date"]:
     """Return (sheet_name, friday, saturday) for the upcoming weekend.
 
@@ -1286,6 +1372,7 @@ def upcoming_weekend_sheet(today=None) -> tuple[str, "datetime.date", "datetime.
     Sheet name matches ``_SHEET_DATE_RE`` (e.g. ``3.6-3.7``).
     """
     import datetime as _dt
+
     today = today or _dt.date.today()
     friday = today + _dt.timedelta(days=((4 - today.weekday()) % 7))
     saturday = friday + _dt.timedelta(days=1)
@@ -1305,7 +1392,11 @@ def _make_inprocess_fetch(config):
 
     api_url = f"{config.mediacms_url.rstrip('/')}/api/v1"
     cookies = getattr(config, "fetch_cookies_path", "") or None
-    download_dir = str(Path(config.image_dir).parent / "fetch-tmp") if getattr(config, "image_dir", None) else None
+    download_dir = (
+        str(Path(config.image_dir).parent / "fetch-tmp")
+        if getattr(config, "image_dir", None)
+        else None
+    )
 
     def _fetch(url: str, fetch_script, dry_run: bool = False):
         if dry_run:
@@ -1313,14 +1404,20 @@ def _make_inprocess_fetch(config):
         try:
             url2 = _yt.clean_youtube_url(url)
             uploader = _yt.MediaDownloaderToMediaCMS(
-                api_url=api_url, api_token=config.mediacms_token,
-                download_dir=download_dir, cookies_file=cookies,
+                api_url=api_url,
+                api_token=config.mediacms_token,
+                download_dir=download_dir,
+                cookies_file=cookies,
             )
             result = uploader.process_video(url=url2, quality="medium", cleanup=True)
             token = result.get("friendly_token")
             if token:
                 manifest = f"{config.mediacms_url.rstrip('/')}/api/v1/media/cytube/{token}.json?format=json"
-                return True, manifest, ("already exists" if result.get("already_exists") else "uploaded")
+                return (
+                    True,
+                    manifest,
+                    ("already exists" if result.get("already_exists") else "uploaded"),
+                )
             return False, "", result.get("error") or "no token returned"
         except Exception as exc:  # noqa: BLE001 - surface as a per-URL failure
             return False, "", f"{type(exc).__name__}: {exc}"
@@ -1382,7 +1479,9 @@ def run(params: dict, *, config, progress=None) -> dict:
             )
         _emit({"phase": "download", "source": "sharepoint"})
         try:
-            wb_bytes, drive_id, item_id = download_sharepoint_xlsx(graph_token, sp_share)
+            wb_bytes, drive_id, item_id = download_sharepoint_xlsx(
+                graph_token, sp_share
+            )
         except SystemExit as exc:  # the vendored reader uses sys.exit on failure
             raise RuntimeError(f"SharePoint download failed: {exc}") from exc
     else:
@@ -1404,7 +1503,9 @@ def run(params: dict, *, config, progress=None) -> dict:
     if sheet_name not in all_sheets:
         # Suggest only date-format weekend sheets (ignore Sheet1/Played Movies/etc).
         weekend_sheets = [s for s in all_sheets if _SHEET_DATE_RE.match(s.strip())]
-        available = ", ".join(weekend_sheets) if weekend_sheets else ", ".join(all_sheets)
+        available = (
+            ", ".join(weekend_sheets) if weekend_sheets else ", ".join(all_sheets)
+        )
         raise RuntimeError(
             f"This weekend's worksheet '{sheet_name}' was not found in the workbook. "
             f"Add a sheet named '{sheet_name}' (Friday.date-Saturday.date), or check "
@@ -1419,9 +1520,14 @@ def run(params: dict, *, config, progress=None) -> dict:
     # Build the writeback context (SharePoint only, non-dry-run, writeback on).
     if use_sharepoint and writeback and not dry_run:
         wb_ctx = WritebackContext(
-            token=graph_token, drive_id=drive_id, item_id=item_id,
-            sheet_name=sheet_name, dry_run=False,
-            tenant_id=sp_tenant, client_id=sp_client, cache_path=sp_cache,
+            token=graph_token,
+            drive_id=drive_id,
+            item_id=item_id,
+            sheet_name=sheet_name,
+            dry_run=False,
+            tenant_id=sp_tenant,
+            client_id=sp_client,
+            cache_path=sp_cache,
         )
 
     # Swap in the in-process fetch (no fetch.ps1 subprocess in a service).
@@ -1429,7 +1535,11 @@ def run(params: dict, *, config, progress=None) -> dict:
     original_run_fetch = run_fetch
     run_fetch = _make_inprocess_fetch(config)
 
-    out_dir = Path(config.image_dir).parent / "fetchurls-playlists" if getattr(config, "image_dir", None) else Path("fetchurls-playlists")
+    out_dir = (
+        Path(config.image_dir).parent / "fetchurls-playlists"
+        if getattr(config, "image_dir", None)
+        else Path("fetchurls-playlists")
+    )
     out_dir.mkdir(parents=True, exist_ok=True)
 
     resolved = 0
@@ -1450,7 +1560,12 @@ def run(params: dict, *, config, progress=None) -> dict:
             label = SECTION_LABELS.get(slug, slug)
             section_labels[slug] = label
             results = process_section(
-                label, url_rows, Path("."), dry_run, validate, wb_ctx=wb_ctx,
+                label,
+                url_rows,
+                Path("."),
+                dry_run,
+                validate,
+                wb_ctx=wb_ctx,
             )
             all_results[slug] = results
             write_playlist(out_dir / f"{sheet_name}-{slug}.txt", results)
@@ -1468,12 +1583,14 @@ def run(params: dict, *, config, progress=None) -> dict:
                 else:
                     failures += 1
                     sec_failed += 1
-                    failure_details.append({
-                        "section": label,
-                        "row": r.row_number,
-                        "url": r.original_url,
-                        "note": r.note,
-                    })
+                    failure_details.append(
+                        {
+                            "section": label,
+                            "row": r.row_number,
+                            "url": r.original_url,
+                            "note": r.note,
+                        }
+                    )
             section_lines[slug] = lines
             section_summary[label] = {"resolved": sec_resolved, "failed": sec_failed}
         write_failures(out_dir / f"{sheet_name}-failures.txt", all_results)
@@ -1489,7 +1606,14 @@ def run(params: dict, *, config, progress=None) -> dict:
     if wb_ctx is not None:
         writeback_stats = {"ok": wb_ctx.writes_ok, "failed": wb_ctx.writes_fail}
 
-    _emit({"phase": "done", "sheet": sheet_name, "resolved": resolved, "failures": failures})
+    _emit(
+        {
+            "phase": "done",
+            "sheet": sheet_name,
+            "resolved": resolved,
+            "failures": failures,
+        }
+    )
     return {
         "sheet": sheet_name,
         "source": "sharepoint" if use_sharepoint else "local",

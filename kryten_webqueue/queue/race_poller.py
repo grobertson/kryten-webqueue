@@ -44,7 +44,8 @@ class RacePoller:
         self._task = asyncio.create_task(self._loop())
         logger.info(
             "RacePoller started (active=%.1fs idle=%.1fs)",
-            self._active_interval, self._idle_interval,
+            self._active_interval,
+            self._idle_interval,
         )
 
     async def stop(self):
@@ -98,7 +99,9 @@ class RacePoller:
         if tl is None:
             # No timeline (betting/finished) — pass through, reset on new race.
             if frame.get("phase") != "racing":
-                self._bcast_race_id = None if frame.get("phase") == "finished" else self._bcast_race_id
+                self._bcast_race_id = (
+                    None if frame.get("phase") == "finished" else self._bcast_race_id
+                )
             return frame
         if rid == self._bcast_race_id:
             light = dict(frame)

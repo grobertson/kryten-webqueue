@@ -57,7 +57,9 @@ class QueueShadow:
         """Load initial state from database."""
         self._items = await self._db.get_shadow_items()
 
-    async def apply_poll_result(self, playlist_items: list[dict], now_playing: dict | None):
+    async def apply_poll_result(
+        self, playlist_items: list[dict], now_playing: dict | None
+    ):
         """Reconcile polled state with local shadow."""
         async with self._lock:
             self._now_playing = now_playing
@@ -79,7 +81,11 @@ class QueueShadow:
                 # CyTube playlist items nest the media metadata under a "media"
                 # key ({uid, temp, queueby, media: {id, title, seconds, type}}).
                 # Fall back to flat keys for forward/backward compatibility.
-                media = polled.get("media") if isinstance(polled.get("media"), dict) else polled
+                media = (
+                    polled.get("media")
+                    if isinstance(polled.get("media"), dict)
+                    else polled
+                )
                 title = media.get("title") or polled.get("title") or ""
                 media_type = media.get("type") or polled.get("type") or "unknown"
                 media_id = media.get("id") or polled.get("id") or ""
@@ -97,7 +103,10 @@ class QueueShadow:
                         merged["duration_sec"] = duration_sec
                     if not merged.get("media_id"):
                         merged["media_id"] = media_id
-                    if not merged.get("media_type") or merged.get("media_type") == "unknown":
+                    if (
+                        not merged.get("media_type")
+                        or merged.get("media_type") == "unknown"
+                    ):
                         merged["media_type"] = media_type
                     # Persist the reconciled position so DB-backed queries
                     # (e.g. last paid item) don't drift from true play order.
@@ -152,7 +161,9 @@ class QueueShadow:
         try:
             if cur_uid is not None and int(cur_uid) == int(last_uid):
                 await self._db.disable_active_lock()
-                logger.info("Scheduled-event lock lifted: last scheduled item now playing")
+                logger.info(
+                    "Scheduled-event lock lifted: last scheduled item now playing"
+                )
         except (TypeError, ValueError):
             return
 
@@ -193,7 +204,9 @@ class QueueShadow:
                         continue
                 if not present:
                     await self._db.clear_active_schedule()
-                    logger.info("Active schedule cleared: last scheduled item has played out")
+                    logger.info(
+                        "Active schedule cleared: last scheduled item has played out"
+                    )
                     return
 
         # Time safety net: estimated end well in the past.
@@ -261,8 +274,12 @@ class QueueShadow:
         # Seconds left on the current item before the next one starts.
         remaining = 0.0
         if self._now_playing:
-            np_total = _to_seconds(self._now_playing.get("seconds", self._now_playing.get("duration")))
-            remaining = max(0.0, np_total - _to_seconds(self._now_playing.get("currentTime")))
+            np_total = _to_seconds(
+                self._now_playing.get("seconds", self._now_playing.get("duration"))
+            )
+            remaining = max(
+                0.0, np_total - _to_seconds(self._now_playing.get("currentTime"))
+            )
 
         np_index = self._now_playing_index()
 
@@ -272,7 +289,9 @@ class QueueShadow:
             offset = remaining
             for item in self._items:
                 item["estimated_start_in_sec"] = round(offset)
-                item["estimated_start_at"] = (now + timedelta(seconds=offset)).isoformat()
+                item["estimated_start_at"] = (
+                    now + timedelta(seconds=offset)
+                ).isoformat()
                 offset += _to_seconds(item.get("duration_sec"))
             return
 
@@ -338,11 +357,15 @@ class QueueShadow:
         try:
             lookup = await db.get_catalog_brief(tokens, manifests)
         except Exception:
-            logger.warning("Failed to enrich queue state with catalog metadata", exc_info=True)
+            logger.warning(
+                "Failed to enrich queue state with catalog metadata", exc_info=True
+            )
             return state
 
         def _meta_for(obj: dict, id_key: str) -> dict | None:
-            return lookup.get(obj.get("friendly_token") or "") or lookup.get(obj.get(id_key) or "")
+            return lookup.get(obj.get("friendly_token") or "") or lookup.get(
+                obj.get(id_key) or ""
+            )
 
         enriched_items = []
         for it in items:
@@ -385,11 +408,12 @@ class QueueShadow:
                 try:
                     facets = await db.get_item_facets(np["friendly_token"])
                     np.setdefault("description", facets.get("description"))
-                    np["categories"] = [c["name"] for c in (facets.get("categories") or [])]
+                    np["categories"] = [
+                        c["name"] for c in (facets.get("categories") or [])
+                    ]
                     np["tags"] = facets.get("tags") or []
                 except Exception:
                     logger.debug("Failed to enrich now-playing facets", exc_info=True)
             state["now_playing"] = np
 
         return state
-

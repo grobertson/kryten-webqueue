@@ -18,7 +18,12 @@ async def list_jobs(request: Request, user: dict = Depends(require_admin)):
 
 
 @router.get("/runs")
-async def job_runs(request: Request, user: dict = Depends(require_admin), job: str | None = None, limit: int = 10):
+async def job_runs(
+    request: Request,
+    user: dict = Depends(require_admin),
+    job: str | None = None,
+    limit: int = 10,
+):
     """Recent run history, optionally filtered by job name."""
     db = request.app.state.db
     return await db.get_job_runs(job_name=job, limit=limit)
@@ -51,7 +56,9 @@ async def run_job(request: Request, name: str, user: dict = Depends(require_admi
     except Exception:
         params = None  # empty/non-JSON body → run with no params
     try:
-        result = await job_manager.run(name, triggered_by=user["username"], params=params)
+        result = await job_manager.run(
+            name, triggered_by=user["username"], params=params
+        )
     except KeyError:
         raise HTTPException(404, f"Unknown job: {name}")
     except ValueError as exc:

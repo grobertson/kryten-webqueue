@@ -10,7 +10,9 @@ from .fire import fire_schedule
 logger = logging.getLogger(__name__)
 
 
-def _next_occurrence(rrule_str: str, dtstart: datetime, after: datetime) -> datetime | None:
+def _next_occurrence(
+    rrule_str: str, dtstart: datetime, after: datetime
+) -> datetime | None:
     """Return the next RRULE occurrence strictly after ``after``.
 
     ``dtstart`` anchors the recurrence pattern (typically the schedule's current
@@ -20,15 +22,26 @@ def _next_occurrence(rrule_str: str, dtstart: datetime, after: datetime) -> date
         rule = rrulestr(rrule_str, dtstart=dtstart)
         return rule.after(after, inc=False)
     except Exception as e:
-        logger.warning(f"Could not compute next occurrence for rrule {rrule_str!r}: {e}")
+        logger.warning(
+            f"Could not compute next occurrence for rrule {rrule_str!r}: {e}"
+        )
         return None
 
 
 class PlaylistScheduler:
     """APScheduler-based scheduler for playlist fire events."""
 
-    def __init__(self, *, db, api_gate, shadow, ws_manager, add_delay_sec: float = 0.0, add_max_retries: int = 0,
-                 promo_director=None):
+    def __init__(
+        self,
+        *,
+        db,
+        api_gate,
+        shadow,
+        ws_manager,
+        add_delay_sec: float = 0.0,
+        add_max_retries: int = 0,
+        promo_director=None,
+    ):
         self._db = db
         self._api_gate = api_gate
         self._shadow = shadow
@@ -75,7 +88,10 @@ class PlaylistScheduler:
                 if nxt:
                     nxt_utc = nxt.astimezone(UTC)
                     await self._db.update_schedule(
-                        sched["id"], fire_at=nxt_utc.isoformat(), fired_at=None, lock_disabled=0
+                        sched["id"],
+                        fire_at=nxt_utc.isoformat(),
+                        fired_at=None,
+                        lock_disabled=0,
                     )
                     self._add_job(sched["id"], nxt_utc)
                     logger.info(

@@ -97,7 +97,9 @@ def validate_params(schema: list[dict] | None, raw: dict | None) -> dict:
             cleaned[name] = _coerce(field, raw[name])
         except (ValueError, TypeError) as exc:
             msg = str(exc)
-            errors.append(f"{label} {msg}" if msg.startswith("must") else f"{label} is invalid")
+            errors.append(
+                f"{label} {msg}" if msg.startswith("must") else f"{label} is invalid"
+            )
 
     if errors:
         raise ValueError("; ".join(errors))
@@ -112,7 +114,9 @@ class JobContext:
     can show live status for long-running jobs.
     """
 
-    def __init__(self, *, db, api_gate, config, run_id: int, triggered_by: str | None = None):
+    def __init__(
+        self, *, db, api_gate, config, run_id: int, triggered_by: str | None = None
+    ):
         self.db = db
         self.api_gate = api_gate
         self.config = config
@@ -123,7 +127,9 @@ class JobContext:
         try:
             await self.db.update_job_run_detail(self.run_id, json.dumps(detail))
         except Exception:  # noqa: BLE001 - progress is best-effort
-            logger.debug("Failed to persist progress for run %s", self.run_id, exc_info=True)
+            logger.debug(
+                "Failed to persist progress for run %s", self.run_id, exc_info=True
+            )
 
 
 class JobManager:
@@ -134,10 +140,20 @@ class JobManager:
         self._jobs: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
 
-    def register(self, name: str, func: JobFunc, *, label: str | None = None,
-                 schema: list[dict] | None = None):
+    def register(
+        self,
+        name: str,
+        func: JobFunc,
+        *,
+        label: str | None = None,
+        schema: list[dict] | None = None,
+    ):
         """Register a named job with an optional parameter schema."""
-        self._jobs[name] = {"func": func, "label": label or name, "schema": schema or []}
+        self._jobs[name] = {
+            "func": func,
+            "label": label or name,
+            "schema": schema or [],
+        }
 
     def list_jobs(self) -> list[dict]:
         return [
@@ -172,8 +188,9 @@ class JobManager:
             task.cancel()
         await asyncio.gather(*self._running.values(), return_exceptions=True)
 
-    async def run(self, name: str, *, triggered_by: str | None = None,
-                  params: dict | None = None) -> dict:
+    async def run(
+        self, name: str, *, triggered_by: str | None = None, params: dict | None = None
+    ) -> dict:
         """Start a job in the background. Returns immediately.
 
         Raises ``KeyError`` if the job is unknown and ``ValueError`` if the
@@ -189,16 +206,23 @@ class JobManager:
         validated = validate_params(meta["schema"], params)  # may raise ValueError
 
         params_json = json.dumps(validated) if validated else None
-        run_id = await self._db.start_job_run(name, triggered_by=triggered_by, params=params_json)
+        run_id = await self._db.start_job_run(
+            name, triggered_by=triggered_by, params=params_json
+        )
         task = asyncio.create_task(self._execute(name, run_id, validated, triggered_by))
         self._running[name] = task
         return {"started": True, "run_id": run_id}
 
-    async def _execute(self, name: str, run_id: int, params: dict, triggered_by: str | None = None):
+    async def _execute(
+        self, name: str, run_id: int, params: dict, triggered_by: str | None = None
+    ):
         func = self._jobs[name]["func"]
         ctx = JobContext(
-            db=self._db, api_gate=self._api_gate, config=self._config,
-            run_id=run_id, triggered_by=triggered_by,
+            db=self._db,
+            api_gate=self._api_gate,
+            config=self._config,
+            run_id=run_id,
+            triggered_by=triggered_by,
         )
         try:
             result = await func(params, ctx)
@@ -208,7 +232,10 @@ class JobManager:
             try:
                 await self._db.finish_job_run(run_id, "cancelled", None)
             except Exception:  # noqa: BLE001
-                logger.debug("Could not persist 'cancelled' status for job '%s' (DB unavailable)", name)
+                logger.debug(
+                    "Could not persist 'cancelled' status for job '%s' (DB unavailable)",
+                    name,
+                )
             raise
         except JobError as exc:
             # Expected, user-facing failure (bad input/config): record a clean
@@ -219,14 +246,22 @@ class JobManager:
                     run_id, "failed", json.dumps({"error": str(exc)})
                 )
             except Exception:  # noqa: BLE001
-                logger.debug("Could not persist 'failed' status for job '%s' (DB unavailable)", name)
+                logger.debug(
+                    "Could not persist 'failed' status for job '%s' (DB unavailable)",
+                    name,
+                )
         except Exception as exc:  # noqa: BLE001 - record any failure
             logger.exception("Job '%s' failed", name)
             try:
                 await self._db.finish_job_run(
-                    run_id, "failed", json.dumps({"error": f"{type(exc).__name__}: {exc}"})
+                    run_id,
+                    "failed",
+                    json.dumps({"error": f"{type(exc).__name__}: {exc}"}),
                 )
             except Exception:  # noqa: BLE001
-                logger.debug("Could not persist 'failed' status for job '%s' (DB unavailable)", name)
+                logger.debug(
+                    "Could not persist 'failed' status for job '%s' (DB unavailable)",
+                    name,
+                )
         finally:
             self._running.pop(name, None)

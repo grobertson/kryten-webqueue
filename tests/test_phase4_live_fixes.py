@@ -32,11 +32,17 @@ def _polled(uid: int, *, seconds: int = 100):
     return {
         "uid": uid,
         "queueby": None,
-        "media": {"id": f"m{uid}", "type": "cm", "title": f"Item {uid}", "seconds": seconds},
+        "media": {
+            "id": f"m{uid}",
+            "type": "cm",
+            "title": f"Item {uid}",
+            "seconds": seconds,
+        },
     }
 
 
 # --- #1 ETA wrap-around ---
+
 
 async def test_eta_wraps_from_current_item(db):
     shadow = QueueShadow(db)
@@ -64,6 +70,7 @@ async def test_eta_without_now_playing_starts_at_head(db):
 
 
 # --- #2 paid FIFO anchor from in-memory shadow ---
+
 
 async def test_last_pay_uid_from_shadow_order(db):
     shadow = QueueShadow(db)
@@ -93,6 +100,7 @@ async def test_poll_persists_positions(db):
 
 
 # --- #4 scheduled-event lock ---
+
 
 async def _make_event(db, *, is_immutable=True, last_item_uid=99):
     pid = await db.create_saved_playlist(
@@ -154,12 +162,14 @@ async def test_event_lock_stays_until_last_item(db):
 
 # --- active-schedule auto-expiry (v0.18.0) ---
 
+
 async def test_active_schedule_cleared_when_last_item_plays_out(db):
     await _make_event(db, last_item_uid=3)
     shadow = QueueShadow(db)
     # The last scheduled item (uid=3) is still in the queue -> row kept.
     await shadow.apply_poll_result(
-        [_polled(1), _polled(2), _polled(3)], {"uid": 2, "seconds": 100, "currentTime": 0}
+        [_polled(1), _polled(2), _polled(3)],
+        {"uid": 2, "seconds": 100, "currentTime": 0},
     )
     assert (await db.get_active_schedule()) is not None
     # uid=3 has now left the queue (played out, temp item removed) -> row cleared.
@@ -184,21 +194,30 @@ async def test_active_schedule_cleared_when_estimated_end_passed(db):
         name="Stale", description=None, is_immutable=True, created_by="admin"
     )
     sid = await db.create_schedule(
-        playlist_id=pid, label="Stale", fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
-        is_active=1, created_by="admin",
+        playlist_id=pid,
+        label="Stale",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1,
+        created_by="admin",
     )
     past = datetime.now(UTC) - timedelta(hours=1)
     await db.set_active_schedule(
-        schedule_id=sid, playlist_id=pid, is_immutable=True,
+        schedule_id=sid,
+        playlist_id=pid,
+        is_immutable=True,
         started_at=(past - timedelta(hours=1)).isoformat(),
-        estimated_end_at=past.isoformat(), last_item_uid=None,
+        estimated_end_at=past.isoformat(),
+        last_item_uid=None,
     )
     shadow = QueueShadow(db)
-    await shadow.apply_poll_result([_polled(1)], {"uid": 1, "seconds": 100, "currentTime": 0})
+    await shadow.apply_poll_result(
+        [_polled(1)], {"uid": 1, "seconds": 100, "currentTime": 0}
+    )
     assert (await db.get_active_schedule()) is None
 
 
 # --- #4 pre-fire lock override ---
+
 
 async def test_pre_fire_lock_can_be_disabled(db):
     pid = await db.create_saved_playlist(
@@ -206,8 +225,12 @@ async def test_pre_fire_lock_can_be_disabled(db):
     )
     fire_at = (datetime.now(UTC) + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%S")
     sid = await db.create_schedule(
-        playlist_id=pid, label="Soon", fire_at=fire_at,
-        pre_fire_lock_minutes=15, is_active=1, created_by="admin",
+        playlist_id=pid,
+        label="Soon",
+        fire_at=fire_at,
+        pre_fire_lock_minutes=15,
+        is_active=1,
+        created_by="admin",
     )
     # Within the 15-min pre-fire window (fires in 5 min).
     assert await db.is_pre_fire_lock_active() is True
@@ -217,6 +240,7 @@ async def test_pre_fire_lock_can_be_disabled(db):
 
 
 # --- #2 (v0.9.4) scheduled-event fallback playlist ---
+
 
 class _FakeApiGate:
     """Minimal api_gate stub recording playlist_add calls."""
@@ -231,7 +255,9 @@ class _FakeApiGate:
 
     async def playlist_add(self, *, media_type, media_id, position="end"):
         self._uid += 1
-        self.added.append({"media_type": media_type, "media_id": media_id, "uid": self._uid})
+        self.added.append(
+            {"media_type": media_type, "media_id": media_id, "uid": self._uid}
+        )
         return {"success": True, "uid": self._uid}
 
 
@@ -246,25 +272,36 @@ async def test_fire_appends_fallback_after_event(db):
     event_pid = await db.create_saved_playlist(
         name="Event", description=None, is_immutable=True, created_by="admin"
     )
-    await db.replace_playlist_items(event_pid, [
-        {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
-        {"media_type": "cm", "media_id": "e2", "title": "E2", "duration_sec": 100},
-    ])
+    await db.replace_playlist_items(
+        event_pid,
+        [
+            {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
+            {"media_type": "cm", "media_id": "e2", "title": "E2", "duration_sec": 100},
+        ],
+    )
     fallback_pid = await db.create_saved_playlist(
         name="Filler", description=None, is_immutable=False, created_by="admin"
     )
-    await db.replace_playlist_items(fallback_pid, [
-        {"media_type": "cm", "media_id": "f1", "title": "F1", "duration_sec": 100},
-    ])
+    await db.replace_playlist_items(
+        fallback_pid,
+        [
+            {"media_type": "cm", "media_id": "f1", "title": "F1", "duration_sec": 100},
+        ],
+    )
     sid = await db.create_schedule(
-        playlist_id=event_pid, label="Event",
+        playlist_id=event_pid,
+        label="Event",
         fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
-        is_active=1, created_by="admin", fallback_playlist_id=fallback_pid,
+        is_active=1,
+        created_by="admin",
+        fallback_playlist_id=fallback_pid,
     )
 
     api = _FakeApiGate()
     shadow = QueueShadow(db)
-    await fire_schedule(schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs())
+    await fire_schedule(
+        schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs()
+    )
 
     # Event items first, fallback appended after.
     assert [a["media_id"] for a in api.added] == ["e1", "e2", "f1"]
@@ -281,16 +318,23 @@ async def test_fire_without_fallback_only_adds_event(db):
     event_pid = await db.create_saved_playlist(
         name="Event", description=None, is_immutable=True, created_by="admin"
     )
-    await db.replace_playlist_items(event_pid, [
-        {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
-    ])
+    await db.replace_playlist_items(
+        event_pid,
+        [
+            {"media_type": "cm", "media_id": "e1", "title": "E1", "duration_sec": 100},
+        ],
+    )
     sid = await db.create_schedule(
-        playlist_id=event_pid, label="Event",
+        playlist_id=event_pid,
+        label="Event",
         fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
-        is_active=1, created_by="admin",
+        is_active=1,
+        created_by="admin",
     )
 
     api = _FakeApiGate()
     shadow = QueueShadow(db)
-    await fire_schedule(schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs())
+    await fire_schedule(
+        schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs()
+    )
     assert [a["media_id"] for a in api.added] == ["e1"]

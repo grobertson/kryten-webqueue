@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.1] — 2026-07-29
+
+### Changed
+
+- **Applied `black` formatting across the codebase.** Repository-wide `black` pass (default profile) to bring all source and test modules — including the vendored `integrations/cmsutils/*` tools — into a consistent style. No behavioral changes; purely cosmetic.
+
 ## [0.33.0] — 2026-07-29
 
 ### Added

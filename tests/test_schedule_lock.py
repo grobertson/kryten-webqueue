@@ -119,12 +119,11 @@ async def test_disable_active_pre_fire_locks_noop_when_unlocked(db):
 async def test_disable_active_pre_fire_locks_leaves_future_windows(db):
     """Lifting the current lockout must not pre-emptively unlock a later event
     whose pre-fire window has not opened yet."""
-    soon = datetime.now(UTC) + timedelta(minutes=5)    # in-window now
-    later = datetime.now(UTC) + timedelta(hours=4)     # window opens much later
+    soon = datetime.now(UTC) + timedelta(minutes=5)  # in-window now
+    later = datetime.now(UTC) + timedelta(hours=4)  # window opens much later
     await _make_schedule(db, fire_at=_iso_offset(soon), lock_minutes=15)
     later_id = await _make_schedule(db, fire_at=_iso_offset(later), lock_minutes=15)
 
     assert await db.disable_active_pre_fire_locks() == 1
     later_sched = await db.get_schedule(later_id)
     assert later_sched["lock_disabled"] == 0
-

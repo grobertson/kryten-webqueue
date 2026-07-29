@@ -42,11 +42,15 @@ class MediaCMSClient:
         self._base = _normalize_base(mediacms_url)
         self._headers = {"Authorization": f"Token {token}"}
 
-    async def _get_media(self, client: httpx.AsyncClient, friendly_token: str) -> dict | None:
+    async def _get_media(
+        self, client: httpx.AsyncClient, friendly_token: str
+    ) -> dict | None:
         resp = await client.get(f"{self._base}/api/v1/media/{friendly_token}")
         if resp.status_code != 200:
             logger.warning(
-                "MediaCMS GET media %s failed: HTTP %s", friendly_token, resp.status_code
+                "MediaCMS GET media %s failed: HTTP %s",
+                friendly_token,
+                resp.status_code,
             )
             return None
         return resp.json()
@@ -54,24 +58,30 @@ class MediaCMSClient:
     @staticmethod
     def _current_tags(media: dict) -> list[str]:
         tags: list[str] = []
-        for t in (media.get("tags_info") or []):
+        for t in media.get("tags_info") or []:
             name = t.get("title") if isinstance(t, dict) else t
             if name:
                 tags.append(str(name))
         # Fall back to a flat ``tags`` list if present.
         if not tags:
-            for t in (media.get("tags") or []):
+            for t in media.get("tags") or []:
                 if t:
                     tags.append(str(t))
         return tags
 
-    async def _restore_owner(self, client: httpx.AsyncClient, friendly_token: str, owner: str | None):
+    async def _restore_owner(
+        self, client: httpx.AsyncClient, friendly_token: str, owner: str | None
+    ):
         if not owner:
             return
         try:
             await client.post(
                 f"{self._base}/api/v1/media/user/bulk_actions",
-                json={"action": "change_owner", "media_ids": [friendly_token], "owner": owner},
+                json={
+                    "action": "change_owner",
+                    "media_ids": [friendly_token],
+                    "owner": owner,
+                },
             )
         except httpx.HTTPError:
             pass  # best-effort; never fail the hide over ownership restoration
@@ -106,7 +116,9 @@ class MediaCMSClient:
             if not ok:
                 logger.warning(
                     "MediaCMS tag write for %s failed: HTTP %s — %s",
-                    friendly_token, resp.status_code, resp.text[:200],
+                    friendly_token,
+                    resp.status_code,
+                    resp.text[:200],
                 )
             await self._restore_owner(client, friendly_token, owner)
             return ok

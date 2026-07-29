@@ -63,8 +63,16 @@ def _manifest_url_for_token(token: str, mediacms_url: str | None) -> str | None:
 class PlaylistImporter:
     """Imports items from a saved playlist into the live CyTube queue."""
 
-    def __init__(self, *, api_gate, db, shadow, add_delay_sec: float = 0.0, add_max_retries: int = 0,
-                 promo_director=None):
+    def __init__(
+        self,
+        *,
+        api_gate,
+        db,
+        shadow,
+        add_delay_sec: float = 0.0,
+        add_max_retries: int = 0,
+        promo_director=None,
+    ):
         self._api_gate = api_gate
         self._db = db
         self._shadow = shadow
@@ -72,7 +80,9 @@ class PlaylistImporter:
         self._add_max_retries = add_max_retries
         self._promo_director = promo_director
 
-    async def import_playlist(self, playlist_id: int, *, skip_played: bool = True) -> dict:
+    async def import_playlist(
+        self, playlist_id: int, *, skip_played: bool = True
+    ) -> dict:
         """Import items from a saved playlist into the live queue.
 
         By default (``skip_played=True``) already-played episodes of the current
@@ -132,7 +142,9 @@ class PlaylistImporter:
         return {"success": True, "added": added, "errors": errors, "skipped": skipped}
 
 
-async def import_playlist_text(db, text: str, *, mediacms_url: str | None = None) -> dict:
+async def import_playlist_text(
+    db, text: str, *, mediacms_url: str | None = None
+) -> dict:
     """Parse the plain-text playlist import format into resolved items.
 
     Tolerant by design — never raises; unrecognised lines are reported in
@@ -170,51 +182,73 @@ async def import_playlist_text(db, text: str, *, mediacms_url: str | None = None
         if url_match:
             url = url_match.group(0).rstrip(".,;")
             # Free text after the URL is a title hint (e.g. " - My Title").
-            trailing = line[url_match.end():].strip().lstrip("-–").strip()
+            trailing = line[url_match.end() :].strip().lstrip("-–").strip()
             title_hint = trailing or None
             host = re.sub(r"^https?://", "", url).split("/", 1)[0]
 
             if _is_youtube(host):
                 vid = extract_youtube_id(url)
                 if vid:
-                    items.append({
-                        "media_type": "yt",
-                        "media_id": vid,
-                        "title": title_hint,
-                        "duration_sec": None,
-                    })
+                    items.append(
+                        {
+                            "media_type": "yt",
+                            "media_id": vid,
+                            "title": title_hint,
+                            "duration_sec": None,
+                        }
+                    )
                 else:
-                    errors.append({"line": line_num, "token": url, "reason": "youtube_no_video_id"})
+                    errors.append(
+                        {
+                            "line": line_num,
+                            "token": url,
+                            "reason": "youtube_no_video_id",
+                        }
+                    )
                 continue
 
             if _is_dropsugar(host):
                 token = extract_dropsugar_token(url)
                 if not token:
-                    errors.append({"line": line_num, "token": url, "reason": "no_token_in_url"})
+                    errors.append(
+                        {"line": line_num, "token": url, "reason": "no_token_in_url"}
+                    )
                     continue
                 catalog_item = await db.get_item_admin(token)
                 if catalog_item:
-                    items.append({
-                        "media_type": "cm",
-                        "media_id": catalog_item["manifest_url"],
-                        "title": catalog_item.get("title") or title_hint,
-                        "duration_sec": catalog_item.get("duration_sec"),
-                    })
+                    items.append(
+                        {
+                            "media_type": "cm",
+                            "media_id": catalog_item["manifest_url"],
+                            "title": catalog_item.get("title") or title_hint,
+                            "duration_sec": catalog_item.get("duration_sec"),
+                        }
+                    )
                 else:
                     manifest = _manifest_url_for_token(token, mediacms_url)
                     if manifest:
-                        items.append({
-                            "media_type": "cm",
-                            "media_id": manifest,
-                            "title": title_hint,
-                            "duration_sec": None,
-                        })
+                        items.append(
+                            {
+                                "media_type": "cm",
+                                "media_id": manifest,
+                                "title": title_hint,
+                                "duration_sec": None,
+                            }
+                        )
                     else:
-                        errors.append({"line": line_num, "token": token, "reason": "not_in_catalog"})
+                        errors.append(
+                            {
+                                "line": line_num,
+                                "token": token,
+                                "reason": "not_in_catalog",
+                            }
+                        )
                 continue
 
             # Any other site — skip tolerantly.
-            errors.append({"line": line_num, "token": url, "reason": "unsupported_site"})
+            errors.append(
+                {"line": line_num, "token": url, "reason": "unsupported_site"}
+            )
             continue
 
         # --- legacy token forms (no URL on the line) ---
@@ -227,32 +261,43 @@ async def import_playlist_text(db, text: str, *, mediacms_url: str | None = None
                 # Not yet in the local catalog (e.g. freshly downloaded by the
                 # fetch/fetchurls job before a sync) — construct the CyTube
                 # manifest URL from the token so it still plays.
-                resolved_media = _manifest_url_for_token(media_id, mediacms_url) or media_id
-            items.append({
-                "media_type": "cm",
-                "media_id": resolved_media,
-                "title": catalog_item["title"] if catalog_item else None,
-                "duration_sec": catalog_item["duration_sec"] if catalog_item else None,
-            })
+                resolved_media = (
+                    _manifest_url_for_token(media_id, mediacms_url) or media_id
+                )
+            items.append(
+                {
+                    "media_type": "cm",
+                    "media_id": resolved_media,
+                    "title": catalog_item["title"] if catalog_item else None,
+                    "duration_sec": (
+                        catalog_item["duration_sec"] if catalog_item else None
+                    ),
+                }
+            )
         elif line.startswith("yt:"):
-            items.append({
-                "media_type": "yt",
-                "media_id": line[3:].strip(),
-                "title": None,
-                "duration_sec": None,
-            })
+            items.append(
+                {
+                    "media_type": "yt",
+                    "media_id": line[3:].strip(),
+                    "title": None,
+                    "duration_sec": None,
+                }
+            )
         else:
             # Bare token — resolve from catalog.
             catalog_item = await db.get_item_admin(line)
             if catalog_item:
-                items.append({
-                    "media_type": "cm",
-                    "media_id": catalog_item["manifest_url"],
-                    "title": catalog_item["title"],
-                    "duration_sec": catalog_item["duration_sec"],
-                })
+                items.append(
+                    {
+                        "media_type": "cm",
+                        "media_id": catalog_item["manifest_url"],
+                        "title": catalog_item["title"],
+                        "duration_sec": catalog_item["duration_sec"],
+                    }
+                )
             else:
-                errors.append({"line": line_num, "token": line, "reason": "not_in_catalog"})
+                errors.append(
+                    {"line": line_num, "token": line, "reason": "not_in_catalog"}
+                )
 
     return {"items": items, "errors": errors}
-

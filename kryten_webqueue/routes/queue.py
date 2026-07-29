@@ -168,8 +168,12 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
 
 
 @router.get("/preview")
-async def cost_preview(request: Request, friendly_token: str, tier: str = "queue",
-                       user: dict = Depends(get_current_user)):
+async def cost_preview(
+    request: Request,
+    friendly_token: str,
+    tier: str = "queue",
+    user: dict = Depends(get_current_user),
+):
     """Preview the cost of queuing an item as a confirmation receipt.
 
     Returns the catalog title, pricing breakdown (base cost, discount, total)
@@ -198,7 +202,9 @@ async def cost_preview(request: Request, friendly_token: str, tier: str = "queue
             base_cost = round(cost_z / (1 - discount_pct / 100))
         else:
             base_cost = cost_z
-    discount_amount = (base_cost - cost_z) if (base_cost is not None and cost_z is not None) else 0
+    discount_amount = (
+        (base_cost - cost_z) if (base_cost is not None and cost_z is not None) else 0
+    )
 
     balance = None
     try:
@@ -207,7 +213,9 @@ async def cost_preview(request: Request, friendly_token: str, tier: str = "queue
     except Exception:
         balance = None
 
-    balance_after = (balance - cost_z) if (balance is not None and cost_z is not None) else None
+    balance_after = (
+        (balance - cost_z) if (balance is not None and cost_z is not None) else None
+    )
 
     return {
         **preview,
@@ -223,13 +231,19 @@ async def cost_preview(request: Request, friendly_token: str, tier: str = "queue
 
 
 @router.get("/history")
-async def queue_history(request: Request, limit: int = 20, offset: int = 0,
-                        user: dict = Depends(get_current_user)):
+async def queue_history(
+    request: Request,
+    limit: int = 20,
+    offset: int = 0,
+    user: dict = Depends(get_current_user),
+):
     """Get user's queue history (paginated, most recent first)."""
     limit = max(1, min(limit, 100))
     offset = max(0, offset)
     db = request.app.state.db
-    items = await db.get_user_queue_history(user["username"], limit=limit, offset=offset)
+    items = await db.get_user_queue_history(
+        user["username"], limit=limit, offset=offset
+    )
     total = await db.get_user_queue_history_count(user["username"])
     return {"items": items, "total": total, "limit": limit, "offset": offset}
 

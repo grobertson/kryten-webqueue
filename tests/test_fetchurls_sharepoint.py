@@ -29,7 +29,8 @@ def _config(**fu):
     return SimpleNamespace(
         mediacms_url="https://cms.example",
         mediacms_token="tok",
-        tmdb_api_key="", omdb_api_key="",
+        tmdb_api_key="",
+        omdb_api_key="",
         image_dir="/tmp/kqimg",
         fetch_cookies_path="",
         fetchurls=SimpleNamespace(
@@ -43,10 +44,13 @@ def _config(**fu):
 
 
 def _ctx(db, config=None):
-    return JobContext(db=db, api_gate=None, config=config or _config(), run_id=1, triggered_by="admin")
+    return JobContext(
+        db=db, api_gate=None, config=config or _config(), run_id=1, triggered_by="admin"
+    )
 
 
 # --- silent token guard ---
+
 
 def test_silent_token_none_without_cache(tmp_path):
     missing = str(tmp_path / "nope.bin")
@@ -56,9 +60,11 @@ def test_silent_token_none_without_cache(tmp_path):
 
 # --- run() source selection / clear error ---
 
+
 def test_run_sharepoint_without_token_raises_clear_error(tmp_path):
     config = _config(
-        sharepoint_tenant_id="t", sharepoint_client_id="c",
+        sharepoint_tenant_id="t",
+        sharepoint_client_id="c",
         sharepoint_sharing_url="https://sp/share",
         token_cache_path=str(tmp_path / "absent.bin"),
     )
@@ -73,6 +79,7 @@ def test_run_no_source_raises(tmp_path):
 
 # --- vendored RuntimeError → JobError translation ---
 
+
 async def test_run_vendored_translates_runtimeerror_to_joberror(db, monkeypatch):
     from kryten_webqueue.jobs.manager import JobError
 
@@ -80,7 +87,9 @@ async def test_run_vendored_translates_runtimeerror_to_joberror(db, monkeypatch)
         raise RuntimeError("This weekend's worksheet was not found.")
 
     fake_mod = SimpleNamespace(run=boom)
-    monkeypatch.setattr(tasks.importlib, "import_module", lambda name, *a, **k: fake_mod)
+    monkeypatch.setattr(
+        tasks.importlib, "import_module", lambda name, *a, **k: fake_mod
+    )
 
     with pytest.raises(JobError, match="worksheet was not found"):
         await tasks._run_vendored("whatever", {}, _ctx(db), deps=[])
@@ -88,12 +97,19 @@ async def test_run_vendored_translates_runtimeerror_to_joberror(db, monkeypatch)
 
 # --- fixed section-label playlist names + immutable preserve ---
 
+
 async def _add_catalog(db, token, title="T"):
-    await db.insert_catalog({
-        "friendly_token": token, "title": title, "description": "",
-        "duration_sec": 600, "manifest_url": f"https://cms/api/v1/media/cytube/{token}.json",
-        "thumbnail_url": "", "synced_at": "2026-01-01T00:00:00+00:00",
-    })
+    await db.insert_catalog(
+        {
+            "friendly_token": token,
+            "title": title,
+            "description": "",
+            "duration_sec": 600,
+            "manifest_url": f"https://cms/api/v1/media/cytube/{token}.json",
+            "thumbnail_url": "",
+            "synced_at": "2026-01-01T00:00:00+00:00",
+        }
+    )
 
 
 async def test_fetchurls_job_uses_fixed_label_names(db, monkeypatch):
@@ -102,9 +118,15 @@ async def test_fetchurls_job_uses_fixed_label_names(db, monkeypatch):
 
     async def fake_run_vendored(module_path, params, ctx, *, deps):
         return {
-            "sheet": "3.6-3.7", "dry_run": False, "resolved": 2, "failures": 0,
+            "sheet": "3.6-3.7",
+            "dry_run": False,
+            "resolved": 2,
+            "failures": 0,
             "section_lines": {"friday": ["cm:f1"], "saturday-night": ["cm:s1"]},
-            "section_labels": {"friday": "Friday Night", "saturday-night": "Saturday Night"},
+            "section_labels": {
+                "friday": "Friday Night",
+                "saturday-night": "Saturday Night",
+            },
         }
 
     monkeypatch.setattr(tasks, "_run_vendored", fake_run_vendored)
@@ -123,24 +145,35 @@ async def test_fetchurls_import_preserves_existing_immutability(db, monkeypatch)
     await _add_catalog(db, "f2")
     # Pre-existing MUTABLE playlist with the fixed name, created by someone else.
     pid = await db.create_saved_playlist(
-        name="Friday Night", description=None, is_immutable=False, created_by="other-admin",
+        name="Friday Night",
+        description=None,
+        is_immutable=False,
+        created_by="other-admin",
     )
 
-    info = await tasks._import_section_as_playlist(_ctx(db), "Friday Night", ["cm:f1", "cm:f2"], "admin")
-    assert info["id"] == pid                      # reused, not duplicated
+    info = await tasks._import_section_as_playlist(
+        _ctx(db), "Friday Night", ["cm:f1", "cm:f2"], "admin"
+    )
+    assert info["id"] == pid  # reused, not duplicated
     pl = await db.get_playlist_by_name_any("Friday Night")
-    assert pl["is_immutable"] == 0                # existing flag preserved (not forced)
-    assert pl["created_by"] == "other-admin"      # original owner kept
+    assert pl["is_immutable"] == 0  # existing flag preserved (not forced)
+    assert pl["created_by"] == "other-admin"  # original owner kept
     items = await db.get_saved_playlist_items(pid)
     assert len(items) == 2
 
 
 # --- importer cm: manifest fallback for not-yet-synced items ---
 
+
 async def test_importer_cm_fallback_builds_manifest(db):
-    out = await import_playlist_text(db, "cm:freshtoken", mediacms_url="https://cms.example")
+    out = await import_playlist_text(
+        db, "cm:freshtoken", mediacms_url="https://cms.example"
+    )
     assert len(out["items"]) == 1
-    assert out["items"][0]["media_id"] == "https://cms.example/api/v1/media/cytube/freshtoken.json?format=json"
+    assert (
+        out["items"][0]["media_id"]
+        == "https://cms.example/api/v1/media/cytube/freshtoken.json?format=json"
+    )
 
 
 async def test_importer_cm_uses_catalog_when_present(db):

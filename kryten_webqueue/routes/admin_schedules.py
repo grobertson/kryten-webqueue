@@ -30,7 +30,9 @@ async def get_next(request: Request, user: dict = Depends(require_admin)):
 
 
 @router.get("/{schedule_id}")
-async def get_schedule(request: Request, schedule_id: int, user: dict = Depends(require_admin)):
+async def get_schedule(
+    request: Request, schedule_id: int, user: dict = Depends(require_admin)
+):
     """Get a specific schedule."""
     db = request.app.state.db
     sched = await db.get_schedule(schedule_id)
@@ -66,7 +68,9 @@ async def create_schedule(request: Request, user: dict = Depends(require_admin))
 
 
 @router.put("/{schedule_id}")
-async def update_schedule(request: Request, schedule_id: int, user: dict = Depends(require_admin)):
+async def update_schedule(
+    request: Request, schedule_id: int, user: dict = Depends(require_admin)
+):
     """Update a schedule."""
     body = await request.json()
     db = request.app.state.db
@@ -88,7 +92,9 @@ async def update_schedule(request: Request, schedule_id: int, user: dict = Depen
 
 
 @router.delete("/{schedule_id}")
-async def delete_schedule(request: Request, schedule_id: int, user: dict = Depends(require_admin)):
+async def delete_schedule(
+    request: Request, schedule_id: int, user: dict = Depends(require_admin)
+):
     """Delete a schedule."""
     db = request.app.state.db
     scheduler = request.app.state.scheduler
@@ -103,7 +109,9 @@ async def delete_schedule(request: Request, schedule_id: int, user: dict = Depen
 
 
 @router.post("/{schedule_id}/fire")
-async def fire_now(request: Request, schedule_id: int, user: dict = Depends(require_admin)):
+async def fire_now(
+    request: Request, schedule_id: int, user: dict = Depends(require_admin)
+):
     """Manually fire a schedule immediately."""
     from ..playlists.fire import fire_schedule
 
