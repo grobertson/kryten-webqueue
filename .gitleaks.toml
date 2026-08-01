@@ -1,0 +1,6 @@
+title = "kryten-webqueue gitleaks configuration"
+
+# Start from gitleaks' built-in ruleset. Add a narrow allowlist only for genuine
+# test fixtures if any are introduced; never allowlist a real credential.
+[extend]
+useDefault = true
