@@ -77,3 +77,6 @@ test-output/
 
 # uv
 uv.lock
+
+# Runtime configs (local only; keep config.example.* tracked)
+config.yaml
