@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 import random
 
-from ..auth.session import get_current_user
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 

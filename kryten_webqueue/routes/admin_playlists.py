@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
-from datetime import datetime
 
 from ..auth.session import require_admin
 from ..promos import PROMO_TYPES

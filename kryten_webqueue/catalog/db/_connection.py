@@ -1,6 +1,5 @@
 import aiosqlite
 from pathlib import Path
-from datetime import datetime, UTC
 
 
 MIGRATIONS = [

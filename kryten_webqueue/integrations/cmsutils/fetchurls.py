@@ -100,7 +100,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -613,7 +613,7 @@ def _strip_playlist_params(url: str) -> str:
     qs.pop("index", None)
     cleaned = urlunparse(p._replace(query=urlencode(qs, doseq=True)))
     if cleaned != url:
-        print(f"    (stripped playlist params from URL)")
+        print("    (stripped playlist params from URL)")
     return cleaned
 
 
@@ -629,7 +629,7 @@ def run_fetch(
     """
     if dry_run:
         print(f"    [DRY-RUN] Would run: fetch.ps1 {url}")
-        return True, f"https://www.dropsugar.co/view?m=DRY_RUN", "dry-run"
+        return True, "https://www.dropsugar.co/view?m=DRY_RUN", "dry-run"
 
     # Strip YouTube playlist params so fetch.ps1 processes only the single video
     url = _strip_playlist_params(url)
@@ -647,7 +647,7 @@ def run_fetch(
         url,
     ]
 
-    print(f"    Running fetch.ps1 …", flush=True)
+    print("    Running fetch.ps1 …", flush=True)
     # Force UTF-8 mode for any Python child processes spawned by fetch.ps1.
     # Without this, piped stdout on Windows defaults to cp1252 which chokes
     # on emoji / non-Latin characters in youtube_to_mediacms.py output.
@@ -853,7 +853,7 @@ def _refresh_token(ctx: WritebackContext) -> bool:
         new_token = acquire_graph_token(ctx.tenant_id, ctx.client_id, ctx.cache_path)
         if new_token and new_token != ctx.token:
             ctx.token = new_token
-            print(f"    (refreshed Graph API token)")
+            print("    (refreshed Graph API token)")
             return True
     except SystemExit:
         # acquire_graph_token calls sys.exit on failure — catch it
@@ -936,7 +936,7 @@ def _close_workbook_session(ctx: WritebackContext) -> None:
     try:
         resp = requests.post(url, headers=headers, data="{}", timeout=WRITEBACK_TIMEOUT)
         if resp.status_code in (200, 204):
-            print(f"  Closed workbook session")
+            print("  Closed workbook session")
         else:
             print(f"  ⚠ closeSession HTTP {resp.status_code}: {resp.text[:120]}")
     except requests.RequestException as exc:
@@ -1096,7 +1096,7 @@ def write_failures(path: Path, all_results: dict[str, list[ProcessResult]]) -> i
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
-        f.write(f"# fetchurls failure log\n")
+        f.write("# fetchurls failure log\n")
         f.write(f"# {len(failures)} unresolved URL(s)\n\n")
         for section, r in failures:
             f.write(f"# [{SECTION_LABELS.get(section, section)}] {r.note}\n")
@@ -1309,7 +1309,7 @@ def main() -> None:
                 client_id=cfg.sp_client_id,
                 cache_path=cfg.sp_token_cache,
             )
-            print(f"  Writeback    : enabled (column F)")
+            print("  Writeback    : enabled (column F)")
 
         # Process each section
         out_dir = Path(args.out_dir)
@@ -1349,7 +1349,7 @@ def main() -> None:
         total_processed = sum(len(v) for v in all_results.values())
         total_ok = sum(r.success for v in all_results.values() for r in v)
         print()
-        print(f"  ── Summary ──────────────────────────────────")
+        print("  ── Summary ──────────────────────────────────")
         print(f"     Processed : {total_processed}")
         print(f"     Success   : {total_ok}")
         print(f"     Failures  : {n_failures}")

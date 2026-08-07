@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.33.3] — 2026-08-06
+
+### Fixed
+
+- **yt-dlp JS runtime and remote challenge solver enabled.** Deno 2.9.5 is now installed system-wide on the server (`/usr/local/bin/deno`), resolving the "No supported JavaScript runtime could be found" warning that caused some YouTube formats to be missing. Additionally, `remote_components = ["ejs:github", "ejs:npm"]` is now set in the central `_YoutubeDLWithJSRuntimes` wrapper so yt-dlp can fetch and cache the EJS challenge solver script and NPM package on first use.
+
+## [0.33.3] — 2026-08-06
+
+### Fixed
+
+- **yt-dlp JS runtime and remote challenge solver enabled.** Deno 2.9.5 is now installed system-wide on the server (`/usr/local/bin/deno`), resolving the "No supported JavaScript runtime could be found" warning that caused some YouTube formats to be missing. Additionally, `remote_components = ["ejs:github", "ejs:npm"]` is now set in the central `_YoutubeDLWithJSRuntimes` wrapper so yt-dlp can fetch and cache the EJS challenge solver script and NPM package on first use.
+
 ## [0.33.2] — 2026-07-29
 
 ### Added

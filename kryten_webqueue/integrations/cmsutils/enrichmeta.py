@@ -1896,7 +1896,7 @@ def main(argv: list[str] | None = None) -> int:
         f"  Movies: duration >= {dur_mins} min  |  Score threshold: < {args.min_score}"
     )
     if args.tubi_upgrade:
-        print(f"  Tubi upgrade: ON (re-enrich Tubi-sourced items regardless of score)")
+        print("  Tubi upgrade: ON (re-enrich Tubi-sourced items regardless of score)")
     if args.days:
         print(f"  Window: last {args.days} day(s)")
     if args.limit:

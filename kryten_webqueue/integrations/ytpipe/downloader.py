@@ -23,7 +23,6 @@ import json
 import os
 import re
 import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -45,13 +44,20 @@ from slugify import slugify
 # yt-dlp expects ``js_runtimes`` as a dict of ``{runtime: {config}}`` (an empty
 # dict means default config for that runtime); passing a list raises
 # "Invalid js_runtimes format, expected a dict of {runtime: {config}}".
+#
+# ``remote_components`` allows yt-dlp to download the EJS challenge solver
+# script and NPM package at runtime (both are cached locally after first fetch).
+# "ejs:github" is the recommended source for the solver script; "ejs:npm" covers
+# the NPM-distributed package that the deno extractor also uses.
 _JS_RUNTIMES = {"deno": {}, "node": {}}
+_REMOTE_COMPONENTS = ["ejs:github", "ejs:npm"]
 
 
 class _YoutubeDLWithJSRuntimes(yt_dlp.YoutubeDL):
     def __init__(self, params=None, *args, **kwargs):  # noqa: D107
         merged = dict(params or {})
         merged.setdefault("js_runtimes", dict(_JS_RUNTIMES))
+        merged.setdefault("remote_components", list(_REMOTE_COMPONENTS))
         super().__init__(merged, *args, **kwargs)
 
 
@@ -102,7 +108,7 @@ def clean_youtube_url(url: str) -> str:
                 # Try to print info (may fail on Windows with emoji issues, but that's OK)
                 try:
                     print(
-                        f"[INFO] Detected YouTube Mix/Radio playlist (infinite) - stripping playlist parameter"
+                        "[INFO] Detected YouTube Mix/Radio playlist (infinite) - stripping playlist parameter"
                     )
                     print(f"       Original: {url}")
                     print(f"       Cleaned:  {clean_url}")
@@ -123,7 +129,7 @@ def clean_youtube_url(url: str) -> str:
 
             try:
                 print(
-                    f"[INFO] Detected YouTube Radio start parameter - stripping playlist parameters"
+                    "[INFO] Detected YouTube Radio start parameter - stripping playlist parameters"
                 )
                 print(f"       Original: {url}")
                 print(f"       Cleaned:  {clean_url}")
@@ -735,7 +741,7 @@ class MediaDownloaderToMediaCMS:
 
         if not enrichable:
             print(
-                f"\n✅ Nothing to enrich — all items are either up to date or missing source URLs"
+                "\n✅ Nothing to enrich — all items are either up to date or missing source URLs"
             )
             self.print_source_media_report(source, media_list)
             return []
@@ -766,10 +772,10 @@ class MediaDownloaderToMediaCMS:
 
                 if result.get("enriched"):
                     enriched_count += 1
-                    print(f"  ✨ Enriched!")
+                    print("  ✨ Enriched!")
                 else:
                     skipped_count += 1
-                    print(f"  ⏭️  Already up to date")
+                    print("  ⏭️  Already up to date")
 
                 result["source_url"] = item["original_url"]
                 results.append(result)
@@ -804,7 +810,7 @@ class MediaDownloaderToMediaCMS:
         print(f"Errors:           {error_count}")
 
         if enriched_count > 0:
-            print(f"\n✨ Enriched items:")
+            print("\n✨ Enriched items:")
             for r in results:
                 if r.get("enriched"):
                     print(f"  • {r.get('title')}  (ID: {r.get('friendly_token')})")
@@ -967,14 +973,14 @@ class MediaDownloaderToMediaCMS:
         )
 
         if response and response.status_code in (200, 201):
-            print(f"  ✅ Metadata updated successfully")
+            print("  ✅ Metadata updated successfully")
             return True
         elif response:
             print(
                 f"  ⚠️  Metadata update failed (status {response.status_code}): {response.text[:200]}"
             )
         else:
-            print(f"  ⚠️  Metadata update failed after retries")
+            print("  ⚠️  Metadata update failed after retries")
 
         return False
 
@@ -1021,7 +1027,7 @@ class MediaDownloaderToMediaCMS:
         print(f"  📋 Fetching existing metadata for '{existing_title}'...")
         existing_details = self.fetch_existing_media_details(friendly_token)
         if not existing_details:
-            print(f"  ⚠️  Could not fetch existing details — skipping enrichment")
+            print("  ⚠️  Could not fetch existing details — skipping enrichment")
             return result
 
         existing_desc = existing_details.get("description", "") or ""
@@ -1044,7 +1050,7 @@ class MediaDownloaderToMediaCMS:
         )
 
         # ── 2. Extract fresh metadata (no download needed) ──────────────
-        print(f"  🔄 Extracting fresh metadata from source...")
+        print("  🔄 Extracting fresh metadata from source...")
         try:
             fresh_info = self.extract_video_info(url)
         except Exception as e:
@@ -1133,7 +1139,7 @@ class MediaDownloaderToMediaCMS:
 
         # ── 5. Apply updates if any improvements found ──────────────────
         if not improvements:
-            print(f"  ✅ Metadata is already up to date — no enrichment needed")
+            print("  ✅ Metadata is already up to date — no enrichment needed")
             return result
 
         print(f"  🔧 Found {len(improvements)} improvement(s):")
@@ -1161,7 +1167,7 @@ class MediaDownloaderToMediaCMS:
                 result["enriched"] = True
 
         if result["enriched"]:
-            print(f"  🎉 Media enriched successfully!")
+            print("  🎉 Media enriched successfully!")
             self.enriched_media.append(
                 {
                     "url": url,
@@ -1296,7 +1302,7 @@ class MediaDownloaderToMediaCMS:
                 # Check if we hit the limit
                 entries = info.get("entries", [])
                 if len(entries) >= 100:
-                    print(f"⚠️  Playlist has 100+ videos, limiting to first 100")
+                    print("⚠️  Playlist has 100+ videos, limiting to first 100")
 
                 return info
         except Exception as e:
@@ -1322,7 +1328,7 @@ class MediaDownloaderToMediaCMS:
         extended = {}
 
         try:
-            print(f"[INFO] Fetching extended Tubi metadata...")
+            print("[INFO] Fetching extended Tubi metadata...")
 
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -1352,7 +1358,7 @@ class MediaDownloaderToMediaCMS:
                 )
 
             if not data_match:
-                print(f"[WARN] Could not find window.__data in Tubi page")
+                print("[WARN] Could not find window.__data in Tubi page")
                 return extended
 
             try:
@@ -1368,7 +1374,7 @@ class MediaDownloaderToMediaCMS:
 
                     data = json.loads(ytdl_js_to_json(raw_json))
                 except Exception:
-                    print(f"[WARN] Could not parse Tubi JSON data")
+                    print("[WARN] Could not parse Tubi JSON data")
                     return extended
 
             # Extract the video data - navigate to video.byId.{video_id}
@@ -1382,7 +1388,7 @@ class MediaDownloaderToMediaCMS:
                     break
 
             if not video_data:
-                print(f"[WARN] Could not find video data in Tubi JSON")
+                print("[WARN] Could not find video data in Tubi JSON")
                 return extended
 
             # Extract cast/actors
@@ -1965,11 +1971,11 @@ class MediaDownloaderToMediaCMS:
 
                     # Show concise error for common issues
                     if "Requested format is not available" in error_msg:
-                        print(f"   ❌ Format not available")
+                        print("   ❌ Format not available")
                     elif "Postprocessing" in error_msg:
-                        print(f"   ❌ Merge failed")
+                        print("   ❌ Merge failed")
                     elif "Video unavailable" in error_msg:
-                        print(f"   ❌ Video unavailable")
+                        print("   ❌ Video unavailable")
                     else:
                         print(f"   ❌ Failed: {error_msg[:100]}...")
 
@@ -2145,7 +2151,7 @@ class MediaDownloaderToMediaCMS:
             playlist_url = (
                 playlist_info.get("webpage_url", "None") if playlist_info else "None"
             )
-            print(f"[DEBUG] No series detected:")
+            print("[DEBUG] No series detected:")
             print(f"         Title: '{info.get('title', '')}'")
             print(f"         URL: '{url}'")
             print(f"         Playlist URL: '{playlist_url}'")
@@ -2557,7 +2563,7 @@ class MediaDownloaderToMediaCMS:
             True if tags were added, False if failed
         """
         if not existing_tags:
-            print(f"[DEBUG] No existing tags to add")
+            print("[DEBUG] No existing tags to add")
             return True
 
         # Use bulk actions API to add existing tags
@@ -2603,7 +2609,7 @@ class MediaDownloaderToMediaCMS:
                 f"⚠️  Failed to add tags (status {response.status_code}): {response.text}"
             )
         else:
-            print(f"⚠️  Failed to add tags after retries")
+            print("⚠️  Failed to add tags after retries")
 
         return False
 
@@ -2879,7 +2885,7 @@ class MediaDownloaderToMediaCMS:
                     if media_id:
                         self.add_tags_to_media(media_id, existing_tags)
                     else:
-                        print(f"⚠️  Could not get media ID for tag addition")
+                        print("⚠️  Could not get media ID for tag addition")
 
                 return result
             else:
@@ -3024,7 +3030,7 @@ class MediaDownloaderToMediaCMS:
             print(f"Processing video: {url}")
 
         # Check if this media has already been imported to MediaCMS
-        print(f"🔍 Checking if already imported...")
+        print("🔍 Checking if already imported...")
         existing = self.check_media_already_imported(url)
         if existing:
             existing_title = existing.get("title", "Unknown")
@@ -3032,7 +3038,7 @@ class MediaDownloaderToMediaCMS:
             print(
                 f"📌 Found existing import: '{existing_title}' (ID: {existing_token})"
             )
-            print(f"  🔎 Checking metadata quality...")
+            print("  🔎 Checking metadata quality...")
 
             # Enrich metadata if the existing item is below current standards
             enrich_result = self.enrich_existing_media(
@@ -3052,7 +3058,7 @@ class MediaDownloaderToMediaCMS:
                 )
 
             return enrich_result
-        print(f"✅ Not found in MediaCMS - proceeding with import")
+        print("✅ Not found in MediaCMS - proceeding with import")
 
         # Download video
         if not playlist_info:
@@ -3324,7 +3330,7 @@ def process_batch_file(
     print(f"Failed:              {failed}")
 
     if enriched_count > 0:
-        print(f"\n✨ Enriched (metadata updated):")
+        print("\n✨ Enriched (metadata updated):")
         for result in results:
             if result.get("enriched"):
                 mid = result.get("mediacms_id", result.get("existing_token", "?"))
@@ -3336,7 +3342,7 @@ def process_batch_file(
                     print(f"     • {imp}")
 
     if skipped > 0:
-        print(f"\n⏭️  Skipped (already up to date):")
+        print("\n⏭️  Skipped (already up to date):")
         for result in results:
             if result.get("skipped"):
                 mid = result.get("mediacms_id", result.get("existing_token", "?"))
@@ -3345,7 +3351,7 @@ def process_batch_file(
                 )
 
     if successful > 0:
-        print(f"\n✅ Uploaded (new):")
+        print("\n✅ Uploaded (new):")
         for result in results:
             if (
                 result["success"]
@@ -3355,7 +3361,7 @@ def process_batch_file(
                 print(f"  {result.get('index', '?')}. {result.get('title', '?')}")
 
     if failed > 0:
-        print(f"\n❌ Failed to process:")
+        print("\n❌ Failed to process:")
         for result in results:
             if not result["success"]:
                 print(f"  {result['index']}. {result['url']}: {result['error']}")
@@ -3658,7 +3664,7 @@ Examples:
             print(f"Failed:              {len(failed)}")
 
             if uploaded:
-                print(f"\n✅ Uploaded (new):")
+                print("\n✅ Uploaded (new):")
                 for result in uploaded:
                     media_id = result["mediacms_response"].get(
                         "friendly_token", "Unknown"
@@ -3668,7 +3674,7 @@ Examples:
                     )
 
             if enriched:
-                print(f"\n✨ Enriched (metadata updated):")
+                print("\n✨ Enriched (metadata updated):")
                 for result in enriched:
                     token = result.get("existing_token", "?")
                     print(
@@ -3678,7 +3684,7 @@ Examples:
                         print(f"     • {imp}")
 
             if skipped:
-                print(f"\n⏭️  Skipped (already up to date):")
+                print("\n⏭️  Skipped (already up to date):")
                 for result in skipped:
                     token = result.get("existing_token", "?")
                     print(
@@ -3686,7 +3692,7 @@ Examples:
                     )
 
             if failed:
-                print(f"\n❌ Failed uploads:")
+                print("\n❌ Failed uploads:")
                 for result in failed:
                     print(
                         f"  {result['playlist_index']}. {result['video_title']}: {result['error']}"
