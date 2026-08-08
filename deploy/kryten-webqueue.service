@@ -6,17 +6,18 @@ After=network.target
 Type=simple
 User=kryten
 Group=kryten
-WorkingDirectory=/opt/kryten-webqueue
+WorkingDirectory=/home/kryten
 Environment=WQ_CONFIG=/etc/kryten-webqueue/config.json
-ExecStart=/opt/kryten-webqueue/.venv/bin/python -m kryten_webqueue
+ExecStart=/home/kryten/.local/bin/kryten-webqueue
 Restart=always
 RestartSec=5
 
 # Hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
-ReadWritePaths=/var/lib/kryten-webqueue
+# ProtectHome must be off — executable and venv live in ~/.local/pipx
+ProtectHome=false
+ReadWritePaths=/var/lib/kryten-webqueue /home/kryten/.local /home/kryten/emote_backups
 PrivateTmp=true
 
 [Install]

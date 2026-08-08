@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.33.6] - 2026-08-07
+
+### Fixed
+- `deploy/kryten-webqueue.service`: updated for pipx deployment — `ExecStart`
+  now points to `~/.local/bin/kryten-webqueue`, `WorkingDirectory` set to
+  `/home/kryten`, `ProtectHome=false`, and `ReadWritePaths` extended to cover
+  `~/.local` (pipx venv) and `~/emote_backups` (rehost job backups).
+
 ## [0.33.5] - 2026-08-07
 
 ### Fixed
