@@ -3,6 +3,24 @@ from pydantic import BaseModel, PrivateAttr
 import json
 
 
+class EmoteRehostConfig(BaseModel):
+    """Settings for the emote rehost job."""
+
+    enabled: bool = True
+    # Emotes whose image URL contains this string are considered already rehosted.
+    rehost_domain: str = "dropsugar.co"
+    # Local directory where rehosted image files are written.
+    static_dir: str = "/home/mediacms.io/mediacms/static/emotes"
+    # Public base URL served from static_dir; final URL: {base_url}/{bare_name}{ext}
+    base_url: str = "https://www.dropsugar.co/static/emotes"
+    # Directory for timestamped backup JSON files (created if absent).
+    backup_dir: str = "/home/kryten/emote_backups"
+    # Background check interval in hours; 0 disables the periodic loop.
+    check_interval_hours: float = 24.0
+    download_max_retries: int = 5
+    inter_emote_delay_sec: float = 2.0
+
+
 class FetchUrlsConfig(BaseModel):
     """Settings for the fetchurls job.
 
@@ -130,6 +148,7 @@ class Config(BaseModel):
     # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
     fetch_cookies_path: str = ""  # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()
+    emote_rehost: EmoteRehostConfig = EmoteRehostConfig()
 
     # Presence-based cancel/refund of pending paid items
     presence_refund: PresenceRefundConfig = PresenceRefundConfig()

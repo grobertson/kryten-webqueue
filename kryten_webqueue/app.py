@@ -144,6 +144,14 @@ async def lifespan(app: FastAPI):
         label="Fetch URLs (weekend workbook)",
         schema=FETCHURLS_SCHEMA,
     )
+    from .jobs.rehost_emotes import rehost_emotes_job, REHOST_EMOTES_SCHEMA
+
+    job_manager.register(
+        "rehost_emotes",
+        rehost_emotes_job,
+        label="Rehost Emotes (download & serve from dropsugar.co)",
+        schema=REHOST_EMOTES_SCHEMA,
+    )
     app.state.job_manager = job_manager
 
     # WebSocket manager
@@ -271,10 +279,24 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 logger.error(f"Immutability expiry error: {e}")
 
+    async def _emote_rehost_loop():
+        interval_hours = config.emote_rehost.check_interval_hours
+        if not config.emote_rehost.enabled or interval_hours <= 0:
+            return
+        interval = interval_hours * 3600
+        # Mirror catalog_sync pattern: don't run immediately on startup.
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await job_manager.run("rehost_emotes", triggered_by="scheduler")
+            except Exception as e:
+                logger.exception("Emote rehost periodic run error: %s", e)
+
     bg_tasks = [
         asyncio.create_task(_catalog_sync_loop()),
         asyncio.create_task(_otp_cleanup_loop()),
         asyncio.create_task(_immutability_expiry_loop()),
+        asyncio.create_task(_emote_rehost_loop()),
     ]
 
     logger.info(

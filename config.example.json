@@ -65,5 +65,16 @@
   "playlist_bulk_add_delay_sec": 0.5,
   "playlist_bulk_add_max_retries": 2,
 
+  "emote_rehost": {
+    "enabled": true,
+    "rehost_domain": "dropsugar.co",
+    "static_dir": "/home/mediacms.io/mediacms/static/emotes",
+    "base_url": "https://www.dropsugar.co/static/emotes",
+    "backup_dir": "/home/kryten/emote_backups",
+    "check_interval_hours": 24.0,
+    "download_max_retries": 5,
+    "inter_emote_delay_sec": 2.0
+  },
+
   "prometheus_port": 28292
 }

@@ -1,4 +1,5 @@
 import httpx
+from urllib.parse import quote
 
 
 class ApiGateClient:
@@ -188,6 +189,18 @@ class ApiGateClient:
 
     async def moderator_ping(self) -> dict:
         return await self.get("/moderator/ping")
+
+    # --- Emotes ---
+
+    async def get_emotes(self) -> list[dict]:
+        result = await self.get("/emotes/")
+        return result.get("emotes", [])
+
+    async def update_emote(self, name: str, image: str) -> dict:
+        """Update a single emote URL. name may include the '#' prefix."""
+        return await self.put(
+            f"/emotes/{quote(name, safe='')}", json={"image": image}
+        )
 
     async def moderator_health(self) -> dict:
         return await self.get("/moderator/health")

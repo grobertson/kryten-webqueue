@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.33.4] - 2026-08-07
+
+### Added
+- `rehost_emotes` job: fetches the current channel emote list, downloads any
+  images not yet hosted on `dropsugar.co`, places them in
+  `/home/mediacms.io/mediacms/static/emotes/{bare_name}{ext}` with `www-data`
+  group ownership, updates each emote URL via api-gate, and saves timestamped
+  before/after JSON backups in `~/emote_backups/`. Runnable on demand from
+  Admin → Jobs or automatically on a configurable interval (default 24 h).
+  New config section `emote_rehost` (see `config.example.json`).
+- `ApiGateClient.get_emotes()` and `ApiGateClient.update_emote()` methods.
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
