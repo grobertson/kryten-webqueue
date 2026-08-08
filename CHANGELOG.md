@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.33.5] - 2026-08-07
+
+### Fixed
+- Ensure console script entry points (`kryten-webqueue`) are present in the
+  published wheel so `pipx install kryten-webqueue` exposes the executable.
+
 ## [0.33.4] - 2026-08-07
 
 ### Added
