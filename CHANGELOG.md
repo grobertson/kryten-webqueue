@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.33.9] - 2026-08-11
+
+### Fixed
+
+- `rehost_emotes` job: per-emote "downloading" log line promoted from DEBUG to INFO so it appears before the download starts, not after.
+
 ## [0.33.8] - 2026-08-11
 
 ### Added

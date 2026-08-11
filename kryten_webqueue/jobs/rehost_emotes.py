@@ -255,7 +255,7 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             url = emote["image"]
             bare = name.lstrip("#")
 
-            logger.debug("[%d/%d] downloading %s", i, len(to_rehost), name)
+            logger.info("[%d/%d] downloading %s from %s", i, len(to_rehost), name, url)
             t0 = time.perf_counter()
             ext = await asyncio.to_thread(
                 _place_emote, url, bare, static_dir, cfg.download_max_retries
