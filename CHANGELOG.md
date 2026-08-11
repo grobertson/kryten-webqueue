@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.11] - 2026-08-11
+
+### Added
+
+- `rehost_emotes` job: permanent HTTP failures (404, 403, 410, etc.) now trigger `remove_emote` on the channel instead of silently failing. Removed emotes are tracked separately, excluded from the after-backup, and listed in a summary log line at the end of the run.
+- `ApiGateClient.remove_emote(name)` added.
+
 ## [0.33.10] - 2026-08-11
 
 ### Fixed

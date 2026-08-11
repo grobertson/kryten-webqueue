@@ -27,6 +27,8 @@ from .manager import JobError
 
 # Status codes that will never succeed on retry — skip immediately.
 _NON_RETRYABLE = frozenset({400, 401, 403, 404, 410, 451})
+# Sentinel returned by _place_emote for a permanent HTTP error (caller removes the emote).
+_DEAD = "DEAD"
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +109,8 @@ def _place_emote(
                 resp = session.get(url, headers=headers, timeout=(10, 30), stream=True)
 
                 if resp.status_code in _NON_RETRYABLE:
-                    logger.info(
-                        "Permanent %d for %s — skipping", resp.status_code, url
-                    )
-                    return None
+                    logger.info("Permanent %d for %s — skipping", resp.status_code, url)
+                    return _DEAD
 
                 if resp.status_code == 429:
                     wait = float(resp.headers.get("Retry-After", 60)) + random.uniform(
@@ -252,6 +252,7 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
 
         succeeded: list[str] = []
         failed: list[str] = []
+        removed: list[str] = []
         updated = {e["name"]: dict(e) for e in emotes}
 
         for i, emote in enumerate(to_rehost, 1):
@@ -331,11 +332,14 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
         )
 
         logger.info(
-            "Done: %d/%d succeeded, %d failed",
+            "Done: %d/%d succeeded, %d removed (dead), %d failed",
             len(succeeded),
             len(to_rehost),
+            len(removed),
             len(failed),
         )
+        if removed:
+            logger.info("Removed dead emotes (%d): %s", len(removed), removed)
         if failed:
             logger.warning("Failed emotes: %s", failed)
 
@@ -344,9 +348,11 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "already_rehosted": already,
             "attempted": len(to_rehost),
             "succeeded": len(succeeded),
+            "removed": len(removed),
             "failed": len(failed),
             "pushed": len(succeeded),
             "failed_emotes": failed,
+            "removed_emotes": removed,
             "log": str(log_path),
         }
         await ctx.progress({"step": "complete", **result})

@@ -200,6 +200,10 @@ class ApiGateClient:
         """Update a single emote URL. name may include the '#' prefix."""
         return await self.put(f"/emotes/{quote(name, safe='')}", json={"image": image})
 
+    async def remove_emote(self, name: str) -> dict:
+        """Delete an emote by name. name may include the '#' prefix."""
+        return await self.delete(f"/emotes/{quote(name, safe='')}")
+
     async def moderator_health(self) -> dict:
         return await self.get("/moderator/health")
 
