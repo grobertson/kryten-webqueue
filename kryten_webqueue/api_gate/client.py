@@ -198,9 +198,7 @@ class ApiGateClient:
 
     async def update_emote(self, name: str, image: str) -> dict:
         """Update a single emote URL. name may include the '#' prefix."""
-        return await self.put(
-            f"/emotes/{quote(name, safe='')}", json={"image": image}
-        )
+        return await self.put(f"/emotes/{quote(name, safe='')}", json={"image": image})
 
     async def moderator_health(self) -> dict:
         return await self.get("/moderator/health")

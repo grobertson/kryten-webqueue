@@ -1,7 +1,8 @@
 """Emote rehost job — download externally-hosted emotes and serve from dropsugar.co.
 
 Processes emotes whose image URLs are not already on the configured rehost
-domain.  For each, aggressively downloads the image, places it at
+domain.  For each, downloads the image politely (ample backoff, Retry-After
+respected, permanent 4xx skipped immediately), places it at
 ``{static_dir}/{bare_name}{ext}`` with www-data group ownership, and pushes
 the new URL back to CyTube via api-gate.
 
@@ -21,10 +22,11 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 from .manager import JobError
+
+# Status codes that will never succeed on retry — skip immediately.
+_NON_RETRYABLE = frozenset({400, 401, 403, 404, 410, 451})
 
 logger = logging.getLogger(__name__)
 
@@ -59,17 +61,8 @@ def _detect_ext(url: str, content_type: str | None) -> str:
 
 
 def _make_session() -> requests.Session:
-    session = requests.Session()
-    retry = Retry(
-        total=5,
-        backoff_factor=2,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET"],
-    )
-    adapter = HTTPAdapter(max_retries=retry)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
+    # No automatic urllib3 retries; _place_emote owns all backoff logic.
+    return requests.Session()
 
 
 def _set_permissions(path: Path) -> None:
@@ -97,7 +90,6 @@ def _place_emote(
     session = _make_session()
 
     try:
-        # Primary strategy: resumable, rotating User-Agent, progressive timeout
         for attempt in range(max_retries):
             try:
                 headers: dict[str, str] = {
@@ -108,8 +100,22 @@ def _place_emote(
                 if tmp.exists():
                     headers["Range"] = f"bytes={tmp.stat().st_size}-"
 
-                timeout = min(60 + attempt * 30, 180)
-                resp = session.get(url, headers=headers, timeout=timeout, stream=True)
+                resp = session.get(url, headers=headers, timeout=60, stream=True)
+
+                if resp.status_code in _NON_RETRYABLE:
+                    logger.debug(
+                        "Permanent %d for %s — skipping", resp.status_code, url
+                    )
+                    return None
+
+                if resp.status_code == 429:
+                    wait = float(resp.headers.get("Retry-After", 60)) + random.uniform(
+                        0, 10
+                    )
+                    logger.debug("Rate-limited on %s; waiting %.0fs", url, wait)
+                    time.sleep(wait)
+                    continue
+
                 resp.raise_for_status()
 
                 ext = _detect_ext(url, resp.headers.get("content-type"))
@@ -128,7 +134,7 @@ def _place_emote(
                 logger.debug(
                     "Attempt %d/%d for %s: %s", attempt + 1, max_retries, url, exc
                 )
-                time.sleep(2**attempt + random.uniform(0, 1))
+                tmp.unlink(missing_ok=True)
             except Exception as exc:
                 logger.debug(
                     "Unexpected error attempt %d/%d for %s: %s",
@@ -138,25 +144,9 @@ def _place_emote(
                     exc,
                 )
                 tmp.unlink(missing_ok=True)
-                time.sleep(2**attempt + random.uniform(0, 1))
 
-        # Fallback: minimal headers, non-streaming
-        for attempt in range(2):
-            try:
-                resp = requests.get(
-                    url,
-                    headers={"User-Agent": "curl/7.68.0", "Accept": "*/*"},
-                    timeout=120,
-                )
-                resp.raise_for_status()
-                ext = _detect_ext(url, resp.headers.get("content-type"))
-                final = base.with_suffix(ext)
-                final.write_bytes(resp.content)
-                _set_permissions(final)
-                return ext
-            except Exception as exc:
-                logger.debug("Fallback attempt %d for %s: %s", attempt + 1, url, exc)
-                time.sleep(2)
+            # Ample backoff: 15s, 30s, 60s, 120s, 120s … with jitter
+            time.sleep(min(120, 15 * (2**attempt)) + random.uniform(0, 10))
 
         return None
 

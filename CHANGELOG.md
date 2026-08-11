@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.33.7] - 2026-08-11
+
+### Fixed
+
+- `rehost_emotes` job: polite download backoff (15 → 30 → 60 → 120 s + jitter); permanent 4xx skipped immediately; 429 honours `Retry-After`; removed double-retry via urllib3.
+- Removed phantom `source` field from `ApiGateClient.update_emote`; emote objects are `{name, image}` only.
+
 ## [0.33.6] - 2026-08-07
 
 ### Fixed
