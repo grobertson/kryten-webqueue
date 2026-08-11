@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.33.10] - 2026-08-11
+
+### Fixed
+
+- `rehost_emotes` download: replaced `timeout=60` with `timeout=(10, 30)` so a stalled response body (headers received but no chunks sent — common CDN bot-detection) times out after 30 s per chunk instead of hanging indefinitely. Added `Referer` and `Accept-Language` headers. Promoted retry/error log calls to INFO.
+
 ## [0.33.9] - 2026-08-11
 
 ### Fixed

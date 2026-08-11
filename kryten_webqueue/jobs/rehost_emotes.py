@@ -95,15 +95,19 @@ def _place_emote(
                 headers: dict[str, str] = {
                     "User-Agent": random.choice(_USER_AGENTS),
                     "Accept": "image/webp,image/apng,image/*,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.9",
+                    "Referer": "https://giphy.com/",
                     "DNT": "1",
                 }
                 if tmp.exists():
                     headers["Range"] = f"bytes={tmp.stat().st_size}-"
 
-                resp = session.get(url, headers=headers, timeout=60, stream=True)
+                # (connect_timeout, read_timeout): read timeout applies between
+                # each chunk so a stalled body is caught, not just slow headers.
+                resp = session.get(url, headers=headers, timeout=(10, 30), stream=True)
 
                 if resp.status_code in _NON_RETRYABLE:
-                    logger.debug(
+                    logger.info(
                         "Permanent %d for %s — skipping", resp.status_code, url
                     )
                     return None
@@ -112,7 +116,7 @@ def _place_emote(
                     wait = float(resp.headers.get("Retry-After", 60)) + random.uniform(
                         0, 10
                     )
-                    logger.debug("Rate-limited on %s; waiting %.0fs", url, wait)
+                    logger.info("Rate-limited on %s; waiting %.0fs", url, wait)
                     time.sleep(wait)
                     continue
 
@@ -131,12 +135,12 @@ def _place_emote(
                 return ext
 
             except requests.exceptions.RequestException as exc:
-                logger.debug(
+                logger.info(
                     "Attempt %d/%d for %s: %s", attempt + 1, max_retries, url, exc
                 )
                 tmp.unlink(missing_ok=True)
             except Exception as exc:
-                logger.debug(
+                logger.info(
                     "Unexpected error attempt %d/%d for %s: %s",
                     attempt + 1,
                     max_retries,
