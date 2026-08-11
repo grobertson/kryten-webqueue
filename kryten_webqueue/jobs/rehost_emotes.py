@@ -155,6 +155,19 @@ def _place_emote(
         tmp.unlink(missing_ok=True)
 
 
+def _attach_file_handler(log_path: Path) -> logging.FileHandler:
+    """Add a per-run file handler to this module's logger."""
+    handler = logging.FileHandler(log_path, encoding="utf-8")
+    handler.setLevel(logging.DEBUG)
+    handler.setFormatter(
+        logging.Formatter(
+            "%(asctime)s %(levelname)-8s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+    )
+    logger.addHandler(handler)
+    return handler
+
+
 def _write_json(path: Path, data: list[dict]) -> None:
     """Atomically write data to path as indented JSON."""
     tmp = path.with_suffix(".tmp")
@@ -183,97 +196,157 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "failed_emotes": [],
         }
 
-    # Back up current state before making any changes
     backup_dir = Path(cfg.backup_dir)
     await asyncio.to_thread(backup_dir.mkdir, parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    await asyncio.to_thread(
-        _write_json, backup_dir / f"emotes-{stamp}-before.json", emotes
-    )
+    log_path = backup_dir / f"rehost-emotes-{stamp}.log"
+    file_handler = _attach_file_handler(log_path)
+    try:
+        await asyncio.to_thread(
+            _write_json, backup_dir / f"emotes-{stamp}-before.json", emotes
+        )
 
-    to_rehost = [e for e in emotes if cfg.rehost_domain not in e.get("image", "")]
-    already = len(emotes) - len(to_rehost)
-    await ctx.progress(
-        {"step": "fetched", "total": len(emotes), "to_rehost": len(to_rehost)}
-    )
+        to_rehost = [e for e in emotes if cfg.rehost_domain not in e.get("image", "")]
+        already = len(emotes) - len(to_rehost)
+        await ctx.progress(
+            {
+                "step": "fetched",
+                "total": len(emotes),
+                "to_rehost": len(to_rehost),
+                "log": str(log_path),
+            }
+        )
 
-    if not to_rehost:
-        result: dict = {
+        if not to_rehost:
+            logger.info(
+                "Nothing to do: all %d emotes already on %s",
+                len(emotes),
+                cfg.rehost_domain,
+            )
+            result: dict = {
+                "total_emotes": len(emotes),
+                "already_rehosted": already,
+                "attempted": 0,
+                "succeeded": 0,
+                "failed": 0,
+                "pushed": 0,
+                "failed_emotes": [],
+                "log": str(log_path),
+            }
+            await ctx.progress({"step": "complete", **result})
+            return result
+
+        logger.info(
+            "Starting rehost: %d to download, %d already on %s",
+            len(to_rehost),
+            already,
+            cfg.rehost_domain,
+        )
+
+        static_dir = Path(cfg.static_dir)
+        await asyncio.to_thread(static_dir.mkdir, parents=True, exist_ok=True)
+
+        succeeded: list[str] = []
+        failed: list[str] = []
+        updated = {e["name"]: dict(e) for e in emotes}
+
+        for i, emote in enumerate(to_rehost, 1):
+            name = emote["name"]
+            url = emote["image"]
+            bare = name.lstrip("#")
+
+            logger.debug("[%d/%d] downloading %s", i, len(to_rehost), name)
+            t0 = time.perf_counter()
+            ext = await asyncio.to_thread(
+                _place_emote, url, bare, static_dir, cfg.download_max_retries
+            )
+            elapsed = time.perf_counter() - t0
+
+            if ext is None:
+                logger.warning(
+                    "[%d/%d] FAILED %s (%.1fs) — %s",
+                    i,
+                    len(to_rehost),
+                    name,
+                    elapsed,
+                    url,
+                )
+                failed.append(name)
+                await ctx.progress(
+                    {
+                        "step": "failed",
+                        "emote": name,
+                        "done": i,
+                        "total": len(to_rehost),
+                    }
+                )
+                await asyncio.sleep(cfg.inter_emote_delay_sec)
+                continue
+
+            new_url = f"{cfg.base_url.rstrip('/')}/{bare}{ext}"
+            updated[name]["image"] = new_url
+
+            try:
+                await api.update_emote(name, new_url)
+                succeeded.append(name)
+                logger.info(
+                    "[%d/%d] OK  %s → %s (%.1fs)",
+                    i,
+                    len(to_rehost),
+                    name,
+                    new_url,
+                    elapsed,
+                )
+                await ctx.progress(
+                    {
+                        "step": "pushed",
+                        "emote": name,
+                        "done": i,
+                        "total": len(to_rehost),
+                    }
+                )
+            except Exception as exc:
+                logger.error("[%d/%d] push_failed %s: %s", i, len(to_rehost), name, exc)
+                failed.append(name)
+                await ctx.progress(
+                    {
+                        "step": "push_failed",
+                        "emote": name,
+                        "done": i,
+                        "total": len(to_rehost),
+                        "error": str(exc),
+                    }
+                )
+
+            await asyncio.sleep(cfg.inter_emote_delay_sec)
+
+        await asyncio.to_thread(
+            _write_json,
+            backup_dir / f"emotes-{stamp}-after.json",
+            list(updated.values()),
+        )
+
+        logger.info(
+            "Done: %d/%d succeeded, %d failed",
+            len(succeeded),
+            len(to_rehost),
+            len(failed),
+        )
+        if failed:
+            logger.warning("Failed emotes: %s", failed)
+
+        result = {
             "total_emotes": len(emotes),
             "already_rehosted": already,
-            "attempted": 0,
-            "succeeded": 0,
-            "failed": 0,
-            "pushed": 0,
-            "failed_emotes": [],
+            "attempted": len(to_rehost),
+            "succeeded": len(succeeded),
+            "failed": len(failed),
+            "pushed": len(succeeded),
+            "failed_emotes": failed,
+            "log": str(log_path),
         }
         await ctx.progress({"step": "complete", **result})
         return result
-
-    static_dir = Path(cfg.static_dir)
-    await asyncio.to_thread(static_dir.mkdir, parents=True, exist_ok=True)
-
-    succeeded: list[str] = []
-    failed: list[str] = []
-    # mutable working copy keyed by name for building the after-backup
-    updated = {e["name"]: dict(e) for e in emotes}
-
-    for i, emote in enumerate(to_rehost, 1):
-        name = emote["name"]  # e.g. "#behold" (includes #)
-        url = emote["image"]
-        bare = name.lstrip("#")  # "behold" → used as filename root
-
-        ext = await asyncio.to_thread(
-            _place_emote, url, bare, static_dir, cfg.download_max_retries
-        )
-
-        if ext is None:
-            logger.warning(
-                "All download strategies failed for emote %s (%s)", name, url
-            )
-            failed.append(name)
-            await ctx.progress(
-                {"step": "failed", "emote": name, "done": i, "total": len(to_rehost)}
-            )
-            await asyncio.sleep(cfg.inter_emote_delay_sec)
-            continue
-
-        new_url = f"{cfg.base_url.rstrip('/')}/{bare}{ext}"
-        updated[name]["image"] = new_url
-
-        try:
-            await api.update_emote(name, new_url)
-            succeeded.append(name)
-            await ctx.progress(
-                {"step": "pushed", "emote": name, "done": i, "total": len(to_rehost)}
-            )
-        except Exception as exc:
-            logger.error("Failed to push emote %s to api-gate: %s", name, exc)
-            failed.append(name)
-            await ctx.progress(
-                {
-                    "step": "push_failed",
-                    "emote": name,
-                    "done": i,
-                    "total": len(to_rehost),
-                    "error": str(exc),
-                }
-            )
-
-        await asyncio.sleep(cfg.inter_emote_delay_sec)
-
-    await asyncio.to_thread(
-        _write_json, backup_dir / f"emotes-{stamp}-after.json", list(updated.values())
-    )
-
-    result = {
-        "total_emotes": len(emotes),
-        "already_rehosted": already,
-        "attempted": len(to_rehost),
-        "succeeded": len(succeeded),
-        "failed": len(failed),
-        "pushed": len(succeeded),
-        "failed_emotes": failed,
-    }
-    await ctx.progress({"step": "complete", **result})
-    return result
+    finally:
+        logger.removeHandler(file_handler)
+        file_handler.close()

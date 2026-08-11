@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.33.8] - 2026-08-11
+
+### Added
+
+- `rehost_emotes` job: per-run log file written to `backup_dir/rehost-emotes-{stamp}.log`; INFO-level logging per emote with download timing; failed-emotes summary at completion.
+
 ## [0.33.7] - 2026-08-11
 
 ### Fixed
