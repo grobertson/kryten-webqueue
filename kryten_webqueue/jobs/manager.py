@@ -139,6 +139,14 @@ class JobManager:
         self._config = config
         self._jobs: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
+        self._post_run_hook: Callable | None = None
+
+    def set_post_run_hook(self, hook: "Callable[[str, str, str | None], Any]") -> None:
+        """Register a coroutine called after each job finishes.
+
+        Signature: async hook(job_name, status, triggered_by) -> None
+        """
+        self._post_run_hook = hook
 
     def register(
         self,
@@ -224,11 +232,14 @@ class JobManager:
             run_id=run_id,
             triggered_by=triggered_by,
         )
+        _final_status = "failed"
         try:
             result = await func(params, ctx)
             detail = json.dumps(result) if result is not None else None
             await self._db.finish_job_run(run_id, "completed", detail)
+            _final_status = "completed"
         except asyncio.CancelledError:
+            _final_status = "cancelled"
             try:
                 await self._db.finish_job_run(run_id, "cancelled", None)
             except Exception:  # noqa: BLE001
@@ -265,3 +276,9 @@ class JobManager:
                 )
         finally:
             self._running.pop(name, None)
+            hook = self._post_run_hook
+            if hook:
+                try:
+                    await hook(name, _final_status, triggered_by)
+                except Exception:  # noqa: BLE001
+                    logger.debug("post_run_hook failed for '%s'", name, exc_info=True)

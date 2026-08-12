@@ -21,6 +21,17 @@ class EmoteRehostConfig(BaseModel):
     inter_emote_delay_sec: float = 2.0
 
 
+class MOTDConfig(BaseModel):
+    """Settings for the MOTD poster generator job."""
+
+    # Filesystem path where poster images are written.
+    poster_dir: str = "/home/mediacms.io/mediacms/static/motd_boxes"
+    # Public base URL corresponding to poster_dir.
+    poster_base_url: str = "https://www.dropsugar.co/static/motd_boxes"
+    # Directory where the generated HTML snippet is written.
+    output_dir: str = "~/kryten"
+
+
 class FetchUrlsConfig(BaseModel):
     """Settings for the fetchurls job.
 
@@ -149,6 +160,7 @@ class Config(BaseModel):
     fetch_cookies_path: str = ""  # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()
     emote_rehost: EmoteRehostConfig = EmoteRehostConfig()
+    motd: MOTDConfig = MOTDConfig()
 
     # Presence-based cancel/refund of pending paid items
     presence_refund: PresenceRefundConfig = PresenceRefundConfig()

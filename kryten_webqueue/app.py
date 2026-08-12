@@ -12,6 +12,7 @@ from .catalog.db import Database
 from .api_gate.client import ApiGateClient
 from .catalog.sync import CatalogSync
 from .jobs import JobManager
+from .jobs.job_scheduler import JobScheduler
 from .catalog.images import CoverArtResolver
 from .queue.shadow import QueueShadow
 from .queue.poller import StatePoller
@@ -31,6 +32,7 @@ from .routes.admin_playlists import router as admin_playlists_router
 from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
+from .routes.admin_job_schedules import router as admin_job_schedules_router
 from .routes.admin_catalog import router as admin_catalog_router
 from .routes.admin_promos import router as admin_promos_router
 from .routes.admin_moderation import router as admin_moderation_router
@@ -113,11 +115,13 @@ async def lifespan(app: FastAPI):
         enrichtv_job,
         fetch_job,
         fetchurls_job,
+        motd_posters_job,
         ENRICHTITLES_SCHEMA,
         ENRICHMETA_SCHEMA,
         ENRICHTV_SCHEMA,
         FETCH_SCHEMA,
         FETCHURLS_SCHEMA,
+        MOTD_POSTERS_SCHEMA,
     )
 
     job_manager.register(
@@ -144,6 +148,12 @@ async def lifespan(app: FastAPI):
         label="Fetch URLs (weekend workbook)",
         schema=FETCHURLS_SCHEMA,
     )
+    job_manager.register(
+        "motd_posters",
+        motd_posters_job,
+        label="MOTD Posters (weekend poster grid)",
+        schema=MOTD_POSTERS_SCHEMA,
+    )
     from .jobs.rehost_emotes import rehost_emotes_job, REHOST_EMOTES_SCHEMA
 
     job_manager.register(
@@ -153,6 +163,11 @@ async def lifespan(app: FastAPI):
         schema=REHOST_EMOTES_SCHEMA,
     )
     app.state.job_manager = job_manager
+
+    # Cron-based job scheduler (persists schedules to job_schedules table)
+    job_scheduler = JobScheduler(db, job_manager)
+    await job_scheduler.start()
+    app.state.job_scheduler = job_scheduler
 
     # WebSocket manager
     ws_manager = WebSocketManager()
@@ -310,6 +325,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
     await asyncio.gather(*bg_tasks, return_exceptions=True)
     await job_manager.stop()  # cancel running jobs while DB/client still open
+    await job_scheduler.stop()
     await poller.stop()
     await race_poller.stop()
     await scheduler.stop()
@@ -339,6 +355,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_schedules_router)
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
+    app.include_router(admin_job_schedules_router)
     app.include_router(admin_catalog_router)
     app.include_router(admin_promos_router)
     app.include_router(admin_moderation_router)

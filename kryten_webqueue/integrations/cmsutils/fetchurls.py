@@ -104,8 +104,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+import logging
 import requests
 import yaml
+
+logger = logging.getLogger(__name__)
 
 # ── Optional dependencies (checked at runtime) ────────────────────────────────
 try:
@@ -1606,6 +1609,27 @@ def run(params: dict, *, config, progress=None) -> dict:
     if wb_ctx is not None:
         writeback_stats = {"ok": wb_ctx.writes_ok, "failed": wb_ctx.writes_fail}
 
+    # Sync played movies to the Played Movies worksheet (same workbook, idempotent).
+    # Skipped when using a local workbook (no Graph credentials to write back with).
+    played_movies_result: dict | None = None
+    if use_sharepoint:
+        from .playedmovies import sync_played_movies as _sync_played
+
+        try:
+            played_movies_result = _sync_played(
+                wb_bytes,
+                sheet_name,
+                friday,
+                saturday,
+                graph_token=graph_token,
+                drive_id=drive_id,
+                item_id=item_id,
+                dry_run=dry_run,
+                progress=_emit,
+            )
+        except Exception as _pm_exc:  # noqa: BLE001 - non-fatal; keep fetchurls result intact
+            logger.warning("played_movies sync failed: %s", _pm_exc, exc_info=True)
+
     _emit(
         {
             "phase": "done",
@@ -1626,6 +1650,7 @@ def run(params: dict, *, config, progress=None) -> dict:
         "section_summary": section_summary,
         "failure_details": failure_details,
         "imported_playlists": [],  # filled in by the async job wrapper
+        "played_movies": played_movies_result,
         "dry_run": dry_run,
     }
 

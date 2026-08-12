@@ -908,6 +908,46 @@ class _CatalogMixin:
         await self._db.commit()
         return cursor.rowcount or 0
 
+    # --- Job schedules (cron-based, persisted) ---
+
+    async def get_job_schedules(self) -> list[dict]:
+        return await self._fetch_all("SELECT * FROM job_schedules ORDER BY job_name")
+
+    async def get_job_schedule(self, job_name: str) -> dict | None:
+        return await self._fetch_one(
+            "SELECT * FROM job_schedules WHERE job_name=?", [job_name]
+        )
+
+    async def upsert_job_schedule(
+        self,
+        job_name: str,
+        cron_expression: str,
+        *,
+        label: str | None = None,
+        params_json: str | None = None,
+        is_active: bool = True,
+        run_next_job: str | None = None,
+        created_by: str | None = None,
+    ) -> None:
+        await self._db.execute(
+            """
+            INSERT INTO job_schedules
+                (job_name, label, cron_expression, params_json, is_active, run_next_job, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(job_name) DO UPDATE SET
+                label            = excluded.label,
+                cron_expression  = excluded.cron_expression,
+                params_json      = excluded.params_json,
+                is_active        = excluded.is_active,
+                run_next_job     = excluded.run_next_job,
+                updated_at       = datetime('now')
+            """,
+            [job_name, label, cron_expression, params_json, int(is_active), run_next_job, created_by],
+        )
+
+    async def delete_job_schedule(self, job_name: str) -> None:
+        await self._execute("DELETE FROM job_schedules WHERE job_name=?", [job_name])
+
     # --- OTP ---
 
     async def store_otp(self, username: str, code: str, expires_at: str):

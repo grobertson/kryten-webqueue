@@ -257,6 +257,18 @@ async def fetchurls_job(params: dict, ctx):
     result.pop("section_lines", None)
     result.pop("section_labels", None)
     result.pop("failure_details", None)
+
+    pm = result.get("played_movies") or {}
+    if pm.get("found") or pm.get("added") or pm.get("failed"):
+        logger.info(
+            "fetchurls[%s] played movies: found %d, added %d, skipped %d, failed %d",
+            result.get("sheet", "?"),
+            pm.get("found", 0),
+            pm.get("added", 0),
+            pm.get("skipped", 0),
+            pm.get("failed", 0),
+        )
+
     return result
 
 
@@ -386,3 +398,27 @@ FETCHURLS_SCHEMA = [
         "label": "Local workbook path (override SharePoint)",
     },
 ]
+
+MOTD_POSTERS_SCHEMA = [
+    {
+        "name": "dry_run",
+        "type": "bool",
+        "default": False,
+        "label": "Dry run (resolve titles only, no downloads)",
+    },
+    {
+        "name": "workbook_path",
+        "type": "string",
+        "default": None,
+        "label": "Local workbook path (override SharePoint)",
+    },
+]
+
+
+async def motd_posters_job(params: dict, ctx):
+    return await _run_vendored(
+        "kryten_webqueue.integrations.cmsutils.motdposters",
+        params,
+        ctx,
+        deps=["openpyxl", "requests"],
+    )

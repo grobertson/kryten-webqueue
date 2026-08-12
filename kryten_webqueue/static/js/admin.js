@@ -12,6 +12,8 @@ async function triggerSync() {
 // Cache of the most recent /admin/jobs payload so the Run buttons know each
 // job's parameter schema without an extra round-trip.
 let JOBS_CACHE = [];
+// Map of job_name → schedule row from /admin/job-schedules.
+let SCHEDULES_CACHE = {};
 
 async function runJob(name, params) {
     const resp = await fetch(`/admin/jobs/${name}/run`, {
@@ -43,8 +45,8 @@ function startJob(name) {
     }
 }
 
-function _jobFieldHtml(f) {
-    const id = `jobparam-${f.name}`;
+function _jobFieldHtml(f, prefix = 'jobparam-') {
+    const id = `${prefix}${f.name}`;
     const label = escapeHtml(f.label || f.name);
     const def = f.default;
     if (f.type === 'bool') {
@@ -82,7 +84,7 @@ async function openJobRunnerModal(job) {
     overlay.innerHTML = `
         <div class="modal-box" role="dialog" aria-modal="true">
             <h3>Run: ${escapeHtml(job.label)}</h3>
-            <div class="job-params">${job.schema.map(_jobFieldHtml).join('')}</div>
+            <div class="job-params">${job.schema.map(f => _jobFieldHtml(f)).join('')}</div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-action="cancel">Cancel</button>
                 <button class="btn btn-primary" data-action="run">Run</button>
@@ -130,12 +132,128 @@ function closeJobRunnerModal() {
     if (existing) existing.remove();
 }
 
+// ── Job Schedule UI ────────────────────────────────────────────────────────────
+
+async function openScheduleModal(jobName) {
+    const job = JOBS_CACHE.find(j => j.name === jobName);
+    if (!job) return;
+    const existing = SCHEDULES_CACHE[jobName] || null;
+    let existingParams = {};
+    if (existing && existing.params_json) {
+        try { existingParams = JSON.parse(existing.params_json); } catch (e) {}
+    }
+
+    const cronVal = existing ? escapeHtml(existing.cron_expression || '') : '';
+    const isActive = existing ? !!existing.is_active : true;
+    const runNextVal = existing ? (existing.run_next_job || '') : '';
+
+    const paramFields = job.schema.map(f => {
+        const savedVal = existingParams[f.name] !== undefined ? existingParams[f.name] : f.default;
+        return _jobFieldHtml({...f, default: savedVal}, 'schedparam-');
+    }).join('');
+
+    const otherJobs = JOBS_CACHE.filter(j => j.name !== jobName);
+    const nextOpts = '<option value="">\u2014 none (no chain) \u2014</option>' +
+        otherJobs.map(j =>
+            `<option value="${escapeHtml(j.name)}" ${j.name === runNextVal ? 'selected' : ''}>${escapeHtml(j.label)}</option>`
+        ).join('');
+
+    const overlay = document.createElement('div');
+    overlay.id = 'schedule-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>${existing ? 'Edit' : 'Create'} Schedule: ${escapeHtml(job.label)}</h3>
+            <label class="field">
+                <span>Cron expression <small style="font-weight:normal;opacity:.7">(min hour dom mon dow, UTC)</small></span>
+                <input type="text" id="sched-cron" placeholder="0 21 * * 4" value="${cronVal}" autocomplete="off">
+            </label>
+            <label class="field field-inline">
+                <input type="checkbox" id="sched-active" ${isActive ? 'checked' : ''}>
+                <span>Active</span>
+            </label>
+            ${paramFields ? `<details ${existing ? 'open' : ''}><summary style="cursor:pointer;margin:.5rem 0">Job parameters</summary><div class="job-params">${paramFields}</div></details>` : ''}
+            <label class="field">
+                <span>Run next (chain)</span>
+                <select id="sched-run-next">${nextOpts}</select>
+            </label>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+                <button class="btn btn-primary" data-action="save">Save</button>
+            </div>
+        </div>`;
+
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay) overlay.remove();
+        const action = e.target.getAttribute('data-action');
+        if (action === 'cancel') overlay.remove();
+        if (action === 'save') _submitScheduleModal(jobName, job, overlay);
+    });
+    document.body.appendChild(overlay);
+}
+
+async function _submitScheduleModal(jobName, job, overlay) {
+    const cron = (document.getElementById('sched-cron').value || '').trim();
+    if (!cron) { showToast('Cron expression is required', 'error'); return; }
+    const isActive = document.getElementById('sched-active').checked;
+    const runNext = document.getElementById('sched-run-next').value || null;
+
+    const params = {};
+    for (const f of job.schema) {
+        const el = document.getElementById(`schedparam-${f.name}`);
+        if (!el) continue;
+        if (f.type === 'bool') {
+            params[f.name] = el.checked;
+        } else if (el.value !== '') {
+            params[f.name] = el.value;
+        }
+    }
+
+    const resp = await fetch('/admin/job-schedules', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            job_name: jobName,
+            cron_expression: cron,
+            is_active: isActive,
+            run_next_job: runNext,
+            params: Object.keys(params).length ? params : null,
+            label: job.label,
+        }),
+    });
+    overlay.remove();
+    if (resp.ok) {
+        showToast('Schedule saved', 'success');
+    } else {
+        const d = await resp.json().catch(() => ({}));
+        showToast(d.detail || 'Failed to save schedule', 'error');
+    }
+    loadJobs();
+}
+
+async function removeJobSchedule(jobName) {
+    const job = JOBS_CACHE.find(j => j.name === jobName);
+    const label = job ? job.label : jobName;
+    if (!confirm(`Remove schedule for "${label}"?`)) return;
+    const resp = await fetch(`/admin/job-schedules/${encodeURIComponent(jobName)}`, {method: 'DELETE'});
+    showToast(resp.ok ? 'Schedule removed' : 'Failed to remove schedule', resp.ok ? 'success' : 'error');
+    loadJobs();
+}
+
 async function clearActiveSchedule() {
     const resp = await fetch('/admin/schedules/clear-active', {method: 'POST'});
     showToast(resp.ok ? 'Active schedule cleared' : 'Failed', resp.ok ? 'success' : 'error');
 }
 
 async function loadJobs() {
+    // Load job schedules first so the job row renderer can reference them.
+    const schResp = await fetch('/admin/job-schedules');
+    if (schResp.ok) {
+        SCHEDULES_CACHE = {};
+        const schedules = await schResp.json();
+        for (const s of schedules) SCHEDULES_CACHE[s.job_name] = s;
+    }
+
     // Registered jobs with run buttons
     const jResp = await fetch('/admin/jobs');
     if (jResp.ok) {
@@ -149,13 +267,24 @@ async function loadJobs() {
                 const summary = lr
                     ? `<span class="job-last-run">last: <span class="job-status job-status-${escapeHtml(lr.status || '')}">${escapeHtml(lr.status || '')}</span> ${formatLocalDateTime(lr.started_at)}</span>`
                     : '<span class="job-last-run muted">never run</span>';
+                const sched = SCHEDULES_CACHE[j.name];
+                const schedBadge = sched
+                    ? ` <span class="job-badge" title="${escapeHtml(sched.cron_expression || '')}">${sched.is_active ? 'scheduled' : 'paused'}</span>`
+                    : '';
+                const schedEditBtn = `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="${sched ? 'Edit schedule' : 'Create schedule'}">${sched ? (sched.is_active ? '\u23f0' : '\u23f8') : '\u2295'}</button>`;
+                const schedDelBtn = sched
+                    ? `<button class="btn btn-sm" onclick="removeJobSchedule('${j.name}')" title="Remove schedule" style="color:var(--color-danger)">\u00d7</button>`
+                    : '';
                 return `
                 <div class="job-row">
-                    <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}</span>
+                    <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}${schedBadge}</span>
                     ${summary}
-                    <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>
-                        ${j.running ? 'Running…' : (hasParams ? 'Begin…' : 'Run')}
-                    </button>
+                    <div class="job-actions">
+                        <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>
+                            ${j.running ? 'Running\u2026' : (hasParams ? 'Begin\u2026' : 'Run')}
+                        </button>
+                        ${schedEditBtn}${schedDelBtn}
+                    </div>
                 </div>`;
             }).join('')
             : '<p>No jobs registered</p>';
@@ -274,7 +403,16 @@ function summarizeRunDetail(detail) {
             const f = d.failures_detail[0];
             parts.push(`e.g. [${f.section || '?'} row ${f.row || '?'}] ${f.note || ''}`.trim());
         }
+        if (d.played_movies && typeof d.played_movies.added === 'number' && d.played_movies.added > 0) {
+            parts.push(`+${d.played_movies.added} played`);
+        }
         if (typeof d.committed === 'number') parts.push(`committed ${d.committed}`);
+        if (typeof d.total === 'number' && d.resolved !== undefined) {
+            parts.push(`posters: ${d.resolved}/${d.total} resolved`);
+            if (d.placeholder_used) parts.push(`${d.placeholder_used} placeholder`);
+            if (d.failed) parts.push(`${d.failed} failed`);
+            if (d.output_path) parts.push(`→ ${d.output_path}`);
+        }
         if (typeof d.added_to_playlist !== 'undefined' && d.added_to_playlist) parts.push(`→ playlist ${d.added_to_playlist}`);
         if (parts.length) return parts.join(' · ');
     }

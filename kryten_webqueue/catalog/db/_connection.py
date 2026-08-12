@@ -308,6 +308,23 @@ MIGRATIONS = [
         WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'
     );
     """,
+    # v15: Cron-based job schedule persistence (separate from playlist_schedules,
+    # which fires playlists onto the queue). One row per job; UNIQUE on job_name.
+    # run_next_job chains another job to run immediately after this one completes.
+    """
+    CREATE TABLE IF NOT EXISTS job_schedules (
+        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+        job_name         TEXT NOT NULL UNIQUE,
+        label            TEXT,
+        cron_expression  TEXT NOT NULL,
+        params_json      TEXT,
+        is_active        INTEGER NOT NULL DEFAULT 1,
+        run_next_job     TEXT,
+        created_by       TEXT,
+        created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    """,
 ]
 
 

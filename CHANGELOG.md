@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.34.0] - 2026-08-11
+
+### Added
+
+- **Played Movies sync** (`fetchurls` job): after resolving weekend URLs, the job
+  now idempotently records each movie found (col B = "Movie"/"Movie Event",
+  col C = title) to the "Played Movies" worksheet in the same workbook via the
+  Graph Excel API. Air dates are written as Excel date serials. Skipped on
+  dry-run and local-workbook runs. Result surfaced as `played_movies` in job
+  detail.
+- **Job schedule persistence** (`job_schedules` table, DB migration v15): new
+  `JobScheduler` class persists full-cron (5-field) schedules for any registered
+  job. Schedules survive restarts; each job may have one schedule. Chaining:
+  when a scheduled run completes, `run_next_job` (from the schedule row) is
+  triggered immediately using its own saved params.
+- **`/admin/job-schedules` REST API**: CRUD endpoints for job schedules
+  (GET list, GET one, POST upsert, PUT update, DELETE).
+- **Admin Jobs UI**: schedule buttons (⊕ create / ⏰ edit / × remove) added to
+  the right of each job's Run button. Edit modal exposes cron expression, active
+  toggle, per-job saved params, and a "Run next" chain dropdown.
+- **`motd_posters` job**: standalone job that resolves every movie in the
+  upcoming weekend sheet via the OMDB API, downloads poster images to
+  `config.motd.poster_dir`, and writes a `<div class="poster-grid">` HTML
+  snippet to `config.motd.output_dir`. Poster filenames follow
+  `art-YYYY-MM-DD-movieN-nightM.jpg` (night 1=Fri, 2=Sat, 3=Sun). Supports
+  all five section types including Sunday. Falls back to a random placeholder
+  image when OMDB has no result. Always overwrites (idempotent re-run with
+  corrected year in title).
+- `MOTDConfig` added to `Config` (`motd.poster_dir`, `motd.poster_base_url`,
+  `motd.output_dir`).
+- `JobManager.set_post_run_hook()`: registers an async callback invoked after
+  every job run (used internally by `JobScheduler` for chain triggering).
+
 ## [0.33.11] - 2026-08-11
 
 ### Added
