@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.34.3] - 2026-08-12
+
+### Fixed
+
+- Dark mode: replaced low-contrast purple accent (`#6c5ce7`) with pale orange
+  (`#f5a742`, hover `#ffbc5e`) in both the default `:root` and the explicit
+  `[data-theme="dark"]` blocks. Light mode accent is unchanged.
+
 ## [0.34.2] - 2026-08-12
 
 ### Removed
