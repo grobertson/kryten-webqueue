@@ -3,10 +3,6 @@
 Persists schedules to the ``job_schedules`` table and fires them via
 APScheduler's ``CronTrigger``. Completely separate from ``PlaylistScheduler``,
 which fires playlists onto the live queue.
-
-Chain support: when a job finishes with status ``completed`` and was triggered
-by the scheduler, the scheduler checks ``run_next_job`` on that schedule and
-immediately launches the next job using its own saved params.
 """
 
 from __future__ import annotations
@@ -30,7 +26,6 @@ class JobScheduler:
 
     async def start(self) -> None:
         self._aps.start()
-        self._jm.set_post_run_hook(self._on_job_complete)
         await self._reload()
         logger.info("JobScheduler started")
 
@@ -104,32 +99,6 @@ class JobScheduler:
         except ValueError as exc:
             logger.warning("JobScheduler: %r invalid params: %s", job_name, exc)
 
-    async def _on_job_complete(
-        self, job_name: str, status: str, triggered_by: str | None
-    ) -> None:
-        """Post-run hook: chain to run_next_job if the scheduler triggered this run."""
-        if triggered_by != "scheduler" or status != "completed":
-            return
-        sched = await self._db.get_job_schedule(job_name)
-        if not sched or not sched.get("run_next_job"):
-            return
-        next_job: str = sched["run_next_job"]
-        next_sched = await self._db.get_job_schedule(next_job)
-        params = (
-            json.loads(next_sched["params_json"])
-            if next_sched and next_sched.get("params_json")
-            else None
-        )
-        try:
-            await self._jm.run(next_job, triggered_by="scheduler", params=params)
-            logger.info("JobScheduler: chained %r → %r", job_name, next_job)
-        except KeyError:
-            logger.warning("JobScheduler: chain target %r is not registered", next_job)
-        except ValueError as exc:
-            logger.warning(
-                "JobScheduler: chain %r → %r invalid params: %s", job_name, next_job, exc
-            )
-
     # ── Public API ─────────────────────────────────────────────────────────────
 
     async def upsert(
@@ -139,7 +108,6 @@ class JobScheduler:
         *,
         params: dict | None = None,
         label: str | None = None,
-        run_next_job: str | None = None,
         is_active: bool = True,
         created_by: str | None = None,
     ) -> None:
@@ -170,7 +138,6 @@ class JobScheduler:
             label=label,
             params_json=params_json,
             is_active=is_active,
-            run_next_job=run_next_job,
             created_by=created_by,
         )
         self._unregister(job_name)

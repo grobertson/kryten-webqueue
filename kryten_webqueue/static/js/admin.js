@@ -145,18 +145,11 @@ async function openScheduleModal(jobName) {
 
     const cronVal = existing ? escapeHtml(existing.cron_expression || '') : '';
     const isActive = existing ? !!existing.is_active : true;
-    const runNextVal = existing ? (existing.run_next_job || '') : '';
 
     const paramFields = job.schema.map(f => {
         const savedVal = existingParams[f.name] !== undefined ? existingParams[f.name] : f.default;
         return _jobFieldHtml({...f, default: savedVal}, 'schedparam-');
     }).join('');
-
-    const otherJobs = JOBS_CACHE.filter(j => j.name !== jobName);
-    const nextOpts = '<option value="">\u2014 none (no chain) \u2014</option>' +
-        otherJobs.map(j =>
-            `<option value="${escapeHtml(j.name)}" ${j.name === runNextVal ? 'selected' : ''}>${escapeHtml(j.label)}</option>`
-        ).join('');
 
     const overlay = document.createElement('div');
     overlay.id = 'schedule-modal';
@@ -173,10 +166,6 @@ async function openScheduleModal(jobName) {
                 <span>Active</span>
             </label>
             ${paramFields ? `<details ${existing ? 'open' : ''}><summary style="cursor:pointer;margin:.5rem 0">Job parameters</summary><div class="job-params">${paramFields}</div></details>` : ''}
-            <label class="field">
-                <span>Run next (chain)</span>
-                <select id="sched-run-next">${nextOpts}</select>
-            </label>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-action="cancel">Cancel</button>
                 <button class="btn btn-primary" data-action="save">Save</button>
@@ -196,7 +185,6 @@ async function _submitScheduleModal(jobName, job, overlay) {
     const cron = (document.getElementById('sched-cron').value || '').trim();
     if (!cron) { showToast('Cron expression is required', 'error'); return; }
     const isActive = document.getElementById('sched-active').checked;
-    const runNext = document.getElementById('sched-run-next').value || null;
 
     const params = {};
     for (const f of job.schema) {
@@ -216,7 +204,6 @@ async function _submitScheduleModal(jobName, job, overlay) {
             job_name: jobName,
             cron_expression: cron,
             is_active: isActive,
-            run_next_job: runNext,
             params: Object.keys(params).length ? params : null,
             label: job.label,
         }),

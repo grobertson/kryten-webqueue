@@ -926,23 +926,21 @@ class _CatalogMixin:
         label: str | None = None,
         params_json: str | None = None,
         is_active: bool = True,
-        run_next_job: str | None = None,
         created_by: str | None = None,
     ) -> None:
         await self._db.execute(
             """
             INSERT INTO job_schedules
-                (job_name, label, cron_expression, params_json, is_active, run_next_job, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (job_name, label, cron_expression, params_json, is_active, created_by)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(job_name) DO UPDATE SET
                 label            = excluded.label,
                 cron_expression  = excluded.cron_expression,
                 params_json      = excluded.params_json,
                 is_active        = excluded.is_active,
-                run_next_job     = excluded.run_next_job,
                 updated_at       = datetime('now')
             """,
-            [job_name, label, cron_expression, params_json, int(is_active), run_next_job, created_by],
+            [job_name, label, cron_expression, params_json, int(is_active), created_by],
         )
 
     async def delete_job_schedule(self, job_name: str) -> None:

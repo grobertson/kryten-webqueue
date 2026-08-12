@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.34.2] - 2026-08-12
+
+### Removed
+
+- Job chaining: removed the "Run next" chain feature entirely.
+  Removed `_on_job_complete()` from `JobScheduler`, `set_post_run_hook()` and
+  `_post_run_hook` from `JobManager`, `run_next_job` from `upsert_job_schedule()`,
+  the `run_next_job` field from POST/PUT API bodies, and the "Run next"
+  dropdown from the schedule edit modal. The `run_next_job` DB column is
+  preserved (unused) for schema compatibility.
+
 ## [0.34.1] - 2026-08-12
 
 ### Fixed

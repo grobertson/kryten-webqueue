@@ -26,7 +26,7 @@ async def get_job_schedule(
 async def upsert_job_schedule(request: Request, user: dict = Depends(require_admin)):
     """Create or update a job schedule.
 
-    Body: {job_name, cron_expression, params?, label?, run_next_job?, is_active?}
+    Body: {job_name, cron_expression, params?, label?, is_active?}
     cron_expression must be a standard 5-field cron string (min hour dom mon dow).
     """
     body = await request.json()
@@ -46,7 +46,6 @@ async def upsert_job_schedule(request: Request, user: dict = Depends(require_adm
             cron_expression,
             params=body.get("params") or None,
             label=body.get("label") or None,
-            run_next_job=body.get("run_next_job") or None,
             is_active=bool(body.get("is_active", True)),
             created_by=user["username"],
         )
@@ -74,7 +73,6 @@ async def update_job_schedule(
             cron_expression,
             params=body.get("params") or None,
             label=body.get("label") or None,
-            run_next_job=body.get("run_next_job") or None,
             is_active=bool(body.get("is_active", True)),
             created_by=user["username"],
         )
