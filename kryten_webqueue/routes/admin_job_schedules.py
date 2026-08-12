@@ -40,15 +40,18 @@ async def upsert_job_schedule(request: Request, user: dict = Depends(require_adm
         raise HTTPException(400, "cron_expression must have exactly 5 fields (min hour dom mon dow)")
 
     job_scheduler = request.app.state.job_scheduler
-    await job_scheduler.upsert(
-        job_name,
-        cron_expression,
-        params=body.get("params") or None,
-        label=body.get("label") or None,
-        run_next_job=body.get("run_next_job") or None,
-        is_active=bool(body.get("is_active", True)),
-        created_by=user["username"],
-    )
+    try:
+        await job_scheduler.upsert(
+            job_name,
+            cron_expression,
+            params=body.get("params") or None,
+            label=body.get("label") or None,
+            run_next_job=body.get("run_next_job") or None,
+            is_active=bool(body.get("is_active", True)),
+            created_by=user["username"],
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return {"success": True}
 
 
@@ -65,15 +68,18 @@ async def update_job_schedule(
         raise HTTPException(400, "cron_expression must have exactly 5 fields (min hour dom mon dow)")
 
     job_scheduler = request.app.state.job_scheduler
-    await job_scheduler.upsert(
-        job_name,
-        cron_expression,
-        params=body.get("params") or None,
-        label=body.get("label") or None,
-        run_next_job=body.get("run_next_job") or None,
-        is_active=bool(body.get("is_active", True)),
-        created_by=user["username"],
-    )
+    try:
+        await job_scheduler.upsert(
+            job_name,
+            cron_expression,
+            params=body.get("params") or None,
+            label=body.get("label") or None,
+            run_next_job=body.get("run_next_job") or None,
+            is_active=bool(body.get("is_active", True)),
+            created_by=user["username"],
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
     return {"success": True}
 
 

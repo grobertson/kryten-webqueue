@@ -57,21 +57,30 @@ class JobScheduler:
             )
             return False
         minute, hour, day, month, day_of_week = parts
-        trigger = CronTrigger(
-            minute=minute,
-            hour=hour,
-            day=day,
-            month=month,
-            day_of_week=day_of_week,
-            timezone="UTC",
-        )
-        self._aps.add_job(
-            self._fire,
-            trigger=trigger,
-            args=[job_name],
-            id=f"jsch_{job_name}",
-            replace_existing=True,
-        )
+        try:
+            trigger = CronTrigger(
+                minute=minute,
+                hour=hour,
+                day=day,
+                month=month,
+                day_of_week=day_of_week,
+                timezone="UTC",
+            )
+            self._aps.add_job(
+                self._fire,
+                trigger=trigger,
+                args=[job_name],
+                id=f"jsch_{job_name}",
+                replace_existing=True,
+            )
+        except (ValueError, Exception) as exc:  # noqa: BLE001 - bad stored cron must not crash startup
+            logger.warning(
+                "JobScheduler: skipping invalid cron %r for %r: %s",
+                cron_expression,
+                job_name,
+                exc,
+            )
+            return False
         logger.info("JobScheduler: registered %r cron=%r", job_name, cron_expression)
         return True
 
@@ -134,7 +143,26 @@ class JobScheduler:
         is_active: bool = True,
         created_by: str | None = None,
     ) -> None:
-        """Persist a schedule and (re)register it with APScheduler."""
+        """Persist a schedule and (re)register it with APScheduler.
+
+        Raises ValueError if cron_expression is rejected by APScheduler.
+        """
+        # Validate before persisting so a bad expression is rejected at save time.
+        if is_active:
+            parts = (cron_expression or "").strip().split()
+            if len(parts) != 5:
+                raise ValueError(
+                    f"cron_expression must have exactly 5 fields (min hour dom mon dow), got: {cron_expression!r}"
+                )
+            minute, hour, day, month, day_of_week = parts
+            try:
+                CronTrigger(
+                    minute=minute, hour=hour, day=day,
+                    month=month, day_of_week=day_of_week, timezone="UTC",
+                )
+            except Exception as exc:
+                raise ValueError(f"Invalid cron expression {cron_expression!r}: {exc}") from exc
+
         params_json = json.dumps(params) if params is not None else None
         await self._db.upsert_job_schedule(
             job_name,

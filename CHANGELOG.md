@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.34.1] - 2026-08-12
+
+### Fixed
+
+- `JobScheduler._register()`: bad cron expressions in the DB (e.g. hour=27)
+  are now logged at WARNING and skipped rather than raising `ValueError` during
+  startup and preventing the service from starting.
+- `JobScheduler.upsert()`: validates the cron expression via APScheduler before
+  persisting; raises `ValueError` with a clear message so the API route can
+  return HTTP 400 instead of saving an unrunnable schedule.
+- `/admin/job-schedules` POST and PUT: APScheduler validation errors now surface
+  as HTTP 400 with the rejection reason.
+
 ## [0.34.0] - 2026-08-11
 
 ### Added
