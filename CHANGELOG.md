@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.34.4] - 2026-08-12
+
+### Changed
+
+- Full re-theme: both dark and light modes now use a late-1970s palette.
+  - **Dark mode**: deep walnut-brown backgrounds (`#1a1208`–`#2f2010`), warm
+    cream text (`#f2e8d0`), harvest-gold accent (`#e89610`, 7.4:1 on bg),
+    avocado-green success, burnt-orange warning, rust danger.
+  - **Light mode**: warm cream surfaces (`#f5edd6`–`#fdf8ec`), dark-chocolate
+    text (`#2c1e08`), dark-amber accent (`#8a4e00`, 6:1 on cream), deep
+    avocado success, dark-amber warning, dark-rust danger.
+- Added `--accent-text` CSS variable (dark in dark mode, cream in light mode)
+  so text on accent-colored buttons, badges, and pagination is always
+  legible. All hardcoded `color: white` / `color: #333` on tinted backgrounds
+  replaced with the appropriate token.
+
 ## [0.34.3] - 2026-08-12
 
 ### Fixed
