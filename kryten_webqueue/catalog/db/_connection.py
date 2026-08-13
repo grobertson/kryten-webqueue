@@ -227,7 +227,14 @@ MIGRATIONS = [
     ALTER TABLE queue_shadow ADD COLUMN promo_type TEXT;
     ALTER TABLE queue_shadow ADD COLUMN lead_in_for_uid INTEGER;
     """,
-    # v12: Viewer feedback + movie-title suggestions, each with a simple
+    # v12: Media-id fallback for the event-lock auto-lift. Stores the media_id
+    # of the last scheduled item so _maybe_lift_event_lock can detect when it
+    # begins playing even when last_item_uid was never captured (e.g. a CyTube
+    # queue-event timeout during bulk add left the uid null).
+    """
+    ALTER TABLE active_schedule ADD COLUMN last_item_media_id TEXT;
+    """,
+    # v13: Viewer feedback + movie-title suggestions, each with a simple
     # admin-triage queue (status new|read). Title suggestions record the
     # resolved match against TMDB/OMDB (NULL when unresolved) and whether we
     # already have the title in the catalog (resolution + catalog_token).
@@ -257,7 +264,7 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_title_suggestions_status ON title_suggestions(status, created_at);
     """,
-    # v13: Play-completion tracking that drives hiding recently-played catalog
+    # v14: Play-completion tracking that drives hiding recently-played catalog
     # items from regular users.
     #
     # play_completions records a *genuine* completion (an item that reached the
@@ -290,7 +297,7 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_playlist_item_played_media ON playlist_item_played(media_id);
     """,
-    # v14: One-time cleanup of recently-played hide state wrongly recorded for
+    # v15: One-time cleanup of recently-played hide state wrongly recorded for
     # promo-pool clips. Promos are excluded from the public catalog and must
     # never be treated like normal playlist items, so any hide state recorded for
     # a promo clip (before the exemption in record_play_completion) is purged.
@@ -308,7 +315,7 @@ MIGRATIONS = [
         WHERE sp.promo_type IS NOT NULL AND spi.media_type = 'cm'
     );
     """,
-    # v15: Cron-based job schedule persistence (separate from playlist_schedules,
+    # v16: Cron-based job schedule persistence (separate from playlist_schedules,
     # which fires playlists onto the queue). One row per job; UNIQUE on job_name.
     # run_next_job chains another job to run immediately after this one completes.
     """

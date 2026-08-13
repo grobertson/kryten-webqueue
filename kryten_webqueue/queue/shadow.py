@@ -147,25 +147,44 @@ class QueueShadow:
         scheduled fire, the curated event is effectively over (only the final
         item remains), so pay-to-play should reopen for content that plays after
         it. Idempotent: a no-op once the lock is already lifted.
+
+        Matching uses two anchors in priority order:
+        1. ``last_item_uid`` — the CyTube playlist uid assigned at add time.
+           Most reliable when the bot hasn't reconnected between fire and now.
+        2. ``last_item_media_id`` — the media id (manifest URL) of the last
+           scheduled item, tracked even when the uid was never captured (e.g.
+           the CyTube ``queue`` event timed out in the robot during bulk add).
         """
         active = await self._db.get_active_schedule()
         if not active or active.get("lock_disabled"):
             return
         last_uid = active.get("last_item_uid")
-        if last_uid is None:
+        last_media_id = active.get("last_item_media_id")
+        if last_uid is None and last_media_id is None:
             return
         idx = self._now_playing_index()
         if idx is None:
             return
-        cur_uid = self._items[idx].get("uid")
+        cur_item = self._items[idx]
+        cur_uid = cur_item.get("uid")
+        cur_media_id = cur_item.get("media_id")
         try:
-            if cur_uid is not None and int(cur_uid) == int(last_uid):
-                await self._db.disable_active_lock()
-                logger.info(
-                    "Scheduled-event lock lifted: last scheduled item now playing"
-                )
+            uid_match = (
+                last_uid is not None
+                and cur_uid is not None
+                and int(cur_uid) == int(last_uid)
+            )
         except (TypeError, ValueError):
-            return
+            uid_match = False
+        media_match = last_media_id is not None and cur_media_id == last_media_id
+        if uid_match or media_match:
+            await self._db.disable_active_lock()
+            logger.info(
+                "Scheduled-event lock lifted: last scheduled item now playing"
+                " (uid_match=%s media_match=%s)",
+                uid_match,
+                media_match,
+            )
 
     async def _maybe_expire_active_schedule(self):
         """Clear the active-schedule row once the event is genuinely over.

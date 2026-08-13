@@ -242,11 +242,13 @@ class _PlaylistsMixin:
         started_at: str,
         estimated_end_at: str,
         last_item_uid: int | None = None,
+        last_item_media_id: str | None = None,
     ):
         await self._execute(
             "INSERT OR REPLACE INTO active_schedule "
-            "(id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at, last_item_uid, lock_disabled) "
-            "VALUES (1, ?, ?, ?, ?, ?, ?, 0)",
+            "(id, schedule_id, playlist_id, is_immutable, started_at, estimated_end_at, "
+            "last_item_uid, last_item_media_id, lock_disabled) "
+            "VALUES (1, ?, ?, ?, ?, ?, ?, ?, 0)",
             [
                 schedule_id,
                 playlist_id,
@@ -254,6 +256,7 @@ class _PlaylistsMixin:
                 started_at,
                 estimated_end_at,
                 last_item_uid,
+                last_item_media_id,
             ],
         )
 

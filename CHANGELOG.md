@@ -2,7 +2,30 @@
 
 ## [Unreleased]
 
+## [0.34.7] - 2026-08-13
+
 ### Fixed
+
+- **Event lock lifts at the correct time (Bug #1).** The scheduled-event
+  pay-to-play lock was lifting ~30 minutes late when `last_item_uid` was never
+  captured (e.g. a CyTube `queue`-event timeout during bulk add left the field
+  `NULL`). With no uid anchor `_maybe_lift_event_lock` returned early and the
+  only fallback was the `estimated_end_at + 5 min` time safety net, which fires
+  roughly when the *last* item finishes rather than when it *starts*.
+  Fix: `fire_schedule` now always records `last_item_media_id` (the manifest
+  URL of the last scheduled item) even when the uid is unavailable. The lock
+  lift logic now matches on `media_id` first and falls back to `last_item_uid`,
+  so pay-to-play reopens as soon as the last scheduled item begins playing
+  regardless of whether the uid was captured. DB migration v12 adds the new
+  `last_item_media_id TEXT` column to `active_schedule`.
+
+- **Schedule modifications apply immediately (Bug #2).** When a schedule was
+  updated via the admin UI, the APScheduler job was re-registered only if
+  `fire_at` was present in the request body. The `update_schedule` route now
+  always re-registers the job after any modification, and it reads the
+  authoritative `fire_at` from the database (not from the request body) to
+  avoid stale or mismatched values. If the updated `fire_at` is already in the
+  past, the job is not re-armed (preventing an accidental immediate re-fire).
 
 - Cover art downloads for movies: corrected TMDB API parameter from `year` to
   `primary_release_year` in movie search. TV searches already used the correct

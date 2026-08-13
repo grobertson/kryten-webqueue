@@ -78,6 +78,7 @@ async def fire_schedule(
                     )
             total_duration = 0
             last_item_uid = None
+            last_item_media_id = None
             for index, item in enumerate(items):
                 # Throttle consecutive adds so CyTube can validate each item before
                 # the next arrives (avoids transient queueFail/422 under load).
@@ -97,6 +98,9 @@ async def fire_schedule(
                         and add_result.get("uid") is not None
                     ):
                         last_item_uid = add_result["uid"]
+                    # Always track the last scheduled item's media_id so the
+                    # event-lock can lift even when the uid was not captured.
+                    last_item_media_id = item.get("media_id")
                     total_duration += item.get("duration_sec", 0) or 0
                 except Exception as e:
                     logger.warning(
@@ -150,6 +154,7 @@ async def fire_schedule(
                 started_at=now.isoformat(),
                 estimated_end_at=(now + timedelta(seconds=total_duration)).isoformat(),
                 last_item_uid=last_item_uid,
+                last_item_media_id=last_item_media_id,
             )
 
             # Mark schedule as fired

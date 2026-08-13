@@ -338,3 +338,135 @@ async def test_fire_without_fallback_only_adds_event(db):
         schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs()
     )
     assert [a["media_id"] for a in api.added] == ["e1"]
+
+
+# --- Bug #1 regression: media_id fallback for event-lock lift ---
+
+
+async def test_event_lock_lifts_via_media_id_when_uid_absent(db):
+    """Lock lifts when now-playing matches last_item_media_id, even if
+    last_item_uid is None (uid not captured during bulk add)."""
+    pid = await db.create_saved_playlist(
+        name="E", description=None, is_immutable=True, created_by="admin"
+    )
+    sid = await db.create_schedule(
+        playlist_id=pid,
+        label="E",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1,
+        created_by="admin",
+    )
+    now = datetime.now(UTC)
+    await db.set_active_schedule(
+        schedule_id=sid,
+        playlist_id=pid,
+        is_immutable=True,
+        started_at=now.isoformat(),
+        estimated_end_at=(now + timedelta(hours=1)).isoformat(),
+        last_item_uid=None,  # uid never captured
+        last_item_media_id="https://cms.example/media/last.json",
+    )
+    assert await db.is_event_lock_active() is True
+
+    shadow = QueueShadow(db)
+    # now_playing has no uid — CyTube's changeMedia payload — only id/type.
+    items = [_polled(1), _polled(2)]
+    # Override the second item's media_id to match last_item_media_id.
+    items[1] = {
+        "uid": 2,
+        "queueby": None,
+        "media": {
+            "id": "https://cms.example/media/last.json",
+            "type": "cm",
+            "title": "Last Item",
+            "seconds": 100,
+        },
+    }
+    np_no_uid = {
+        "id": "https://cms.example/media/last.json",
+        "type": "cm",
+        "seconds": 100,
+        "currentTime": 0,
+    }
+    await shadow.apply_poll_result(items, np_no_uid)
+    assert await db.is_event_lock_active() is False
+
+
+async def test_event_lock_stays_when_earlier_item_plays_by_media_id(db):
+    """Lock must NOT lift when an earlier item (not the last) is playing."""
+    pid = await db.create_saved_playlist(
+        name="E", description=None, is_immutable=True, created_by="admin"
+    )
+    sid = await db.create_schedule(
+        playlist_id=pid,
+        label="E",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1,
+        created_by="admin",
+    )
+    now = datetime.now(UTC)
+    await db.set_active_schedule(
+        schedule_id=sid,
+        playlist_id=pid,
+        is_immutable=True,
+        started_at=now.isoformat(),
+        estimated_end_at=(now + timedelta(hours=1)).isoformat(),
+        last_item_uid=None,
+        last_item_media_id="https://cms.example/media/last.json",
+    )
+    shadow = QueueShadow(db)
+    items = [_polled(1), _polled(2)]
+    items[1] = {
+        "uid": 2,
+        "queueby": None,
+        "media": {
+            "id": "https://cms.example/media/last.json",
+            "type": "cm",
+            "title": "Last",
+            "seconds": 100,
+        },
+    }
+    # Earlier item (uid=1 / id=m1) is playing — lock must stay on.
+    np_earlier = {"id": "m1", "type": "cm", "seconds": 100, "currentTime": 0}
+    await shadow.apply_poll_result(items, np_earlier)
+    assert await db.is_event_lock_active() is True
+
+
+async def test_fire_stores_last_item_media_id(db):
+    """fire_schedule must store last_item_media_id on the active_schedule row."""
+    from kryten_webqueue.playlists.fire import fire_schedule
+
+    pid = await db.create_saved_playlist(
+        name="Event", description=None, is_immutable=True, created_by="admin"
+    )
+    await db.replace_playlist_items(
+        pid,
+        [
+            {
+                "media_type": "cm",
+                "media_id": "https://cms/a.json",
+                "title": "A",
+                "duration_sec": 60,
+            },
+            {
+                "media_type": "cm",
+                "media_id": "https://cms/b.json",
+                "title": "B",
+                "duration_sec": 60,
+            },
+        ],
+    )
+    sid = await db.create_schedule(
+        playlist_id=pid,
+        label="Test",
+        fire_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%S"),
+        is_active=1,
+        created_by="admin",
+    )
+    api = _FakeApiGate()
+    shadow = QueueShadow(db)
+    await fire_schedule(
+        schedule_id=sid, api_gate=api, db=db, shadow=shadow, ws_manager=_FakeWs()
+    )
+    active = await db.get_active_schedule()
+    assert active["last_item_media_id"] == "https://cms/b.json"

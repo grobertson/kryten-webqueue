@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
-from datetime import datetime
+from datetime import datetime, UTC
 
 from ..auth.session import require_admin
 
@@ -71,7 +71,13 @@ async def create_schedule(request: Request, user: dict = Depends(require_admin))
 async def update_schedule(
     request: Request, schedule_id: int, user: dict = Depends(require_admin)
 ):
-    """Update a schedule."""
+    """Update a schedule.
+
+    Always re-registers the APScheduler job from the authoritative DB value
+    after the update, regardless of which fields changed. This ensures that
+    modifications made close to the fire time (including playlist-only changes)
+    take effect for the immediate scheduled item.
+    """
     body = await request.json()
     db = request.app.state.db
     scheduler = request.app.state.scheduler
@@ -82,11 +88,15 @@ async def update_schedule(
 
     await db.update_schedule(schedule_id, **body)
 
-    # Re-register if fire_at changed
-    if "fire_at" in body:
-        await scheduler.remove_schedule(schedule_id)
-        fire_at = datetime.fromisoformat(body["fire_at"])
-        await scheduler.add_schedule(schedule_id, fire_at)
+    # Re-read from DB so the scheduler always uses the authoritative fire_at
+    # (not the body value, which may differ due to serialization or race with
+    # a recurring re-arm). Only arm a future job; past schedules won't re-fire.
+    updated = await db.get_schedule(schedule_id)
+    await scheduler.remove_schedule(schedule_id)
+    if updated and updated.get("is_active"):
+        fire_at = scheduler._parse_fire_at(updated["fire_at"])
+        if fire_at > datetime.now(UTC):
+            await scheduler.add_schedule(schedule_id, fire_at)
 
     return {"success": True}
 
