@@ -102,32 +102,19 @@ def _promo_hidden_media_subquery() -> tuple[str, list]:
 def _recently_played_exclusion(alias: str, days: int) -> tuple[str, list]:
     """SQL fragment (+ params) hiding recently-played items from regular users.
 
-    Two independent signals hide an item; either one is enough:
-
-    1. **Time window** — the item has a genuine ``play_completions`` row within
-       the last ``days`` days. A completion is only recorded when an item
-       actually played past a threshold (see ``CompletionRecorder``), so an item
-       that was queued and then refunded/removed before playing never counts.
-
-    2. **Mutable-playlist pass** — the item is a short (<1h) episode of a mutable
-       (TV-show) playlist that has played in the current pass and not yet reset
-       (``playlist_item_played``). These are governed by playlist position, not
-       the day window, so a whole show collection releases together when its last
-       item plays.
+    Items with a ``play_completions`` row within the last ``days`` days are
+    hidden. A completion is only recorded when an item played past a threshold
+    (see ``CompletionRecorder``), so refunded/skipped items never hide.
 
     The fragment is prefixed with ``AND`` so it can be appended to an existing
     WHERE clause referencing the catalog row under ``alias``. Caller must ensure
-    ``days > 0`` before applying (a non-positive window disables both signals).
+    ``days > 0`` before applying (a non-positive window disables this).
     """
     sql = f"""
             AND {alias}.friendly_token NOT IN (
                 SELECT pc.media_id FROM play_completions pc
                 WHERE pc.media_type = 'cm'
                   AND pc.completed_at >= datetime('now', ?)
-            )
-            AND {alias}.friendly_token NOT IN (
-                SELECT pip.media_id FROM playlist_item_played pip
-                WHERE pip.media_type = 'cm'
             )
     """
     return sql, [f"-{int(days)} days"]
@@ -419,23 +406,17 @@ class _CatalogMixin:
         )
 
     async def record_play_completion(
-        self, *, friendly_token: str, duration_sec: int | None, media_type: str = "cm"
+        self,
+        *,
+        friendly_token: str,
+        duration_sec: int | None = None,
+        media_type: str = "cm",
     ) -> None:
-        """Record a genuine play-completion, routing it to the correct hide rule.
+        """Record a genuine play-completion for catalog-hide purposes.
 
-        Short (<1h) episodes that belong to a mutable (TV-show) playlist are
-        governed by playlist position instead of the day window: each such
-        completion marks the episode played for the current pass, and reaching
-        the playlist's last item (MAX position) clears the whole pass so the
-        collection releases together. Everything else (movies, standalone clips,
-        long items even inside a mutable playlist) gets a time-boxed
-        ``play_completions`` row instead.
-
-        Promo-pool clips are exempt entirely: they are already excluded from the
-        public catalog and must never be treated like normal (mutable/immutable)
-        playlist items, so playing one records nothing. The same exemption covers
-        any promo/bumper hidden by category or tag (e.g. ``Z Channel Promos`` /
-        ``channelz``), which is how most station promos are actually classified.
+        Promo-pool clips and hidden-category/tag items are exempt. Everything
+        else gets a time-boxed ``play_completions`` row that hides the item from
+        regular users until the configured window expires.
         """
         sub, sub_params = _promo_hidden_media_subquery()
         promo = await self._fetch_one(
@@ -444,84 +425,28 @@ class _CatalogMixin:
         )
         if promo:
             return
-        rows = await self._fetch_all(
-            """
-            SELECT spi.playlist_id AS playlist_id, spi.position AS position,
-                   (SELECT MAX(position) FROM saved_playlist_items
-                     WHERE playlist_id = spi.playlist_id) AS max_pos
-            FROM saved_playlist_items spi
-            JOIN saved_playlists sp ON sp.id = spi.playlist_id
-            WHERE spi.media_id = ? AND spi.media_type = ?
-              AND sp.is_immutable = 0 AND sp.promo_type IS NULL
-            """,
-            [friendly_token, media_type],
+        await self._execute(
+            "INSERT INTO play_completions (media_type, media_id) VALUES (?, ?)",
+            [media_type, friendly_token],
         )
-        governed = False
-        if duration_sec is not None and duration_sec < 3600:
-            for r in rows:
-                governed = True
-                if r["position"] == r["max_pos"]:
-                    # Last item of the pass reached — release the whole collection.
-                    await self._execute(
-                        "DELETE FROM playlist_item_played WHERE playlist_id = ?",
-                        [r["playlist_id"]],
-                    )
-                else:
-                    await self._execute(
-                        "INSERT OR REPLACE INTO playlist_item_played "
-                        "(playlist_id, position, media_type, media_id) VALUES (?, ?, ?, ?)",
-                        [r["playlist_id"], r["position"], media_type, friendly_token],
-                    )
-        if not governed:
-            await self._execute(
-                "INSERT INTO play_completions (media_type, media_id) VALUES (?, ?)",
-                [media_type, friendly_token],
-            )
-
-    async def get_playlist_played_media_ids(self, playlist_id: int) -> set[str]:
-        """media_ids already played in the current pass of a mutable playlist.
-
-        Backed by ``playlist_item_played`` (populated only for short episodes of
-        mutable playlists and cleared when the playlist's last item plays), so
-        firing can skip already-played episodes and continue the pass instead of
-        replaying from the start.
-        """
-        rows = await self._fetch_all(
-            "SELECT media_id FROM playlist_item_played WHERE playlist_id = ?",
-            [playlist_id],
-        )
-        return {r["media_id"] for r in rows}
 
     async def clear_play_state(
         self, friendly_token: str, *, media_type: str = "cm"
     ) -> dict:
-        """Remove all recently-played hide state for an item (admin test helper).
+        """Remove recently-played hide state for an item (admin helper).
 
-        Deletes both time-boxed ``play_completions`` rows and any
-        ``playlist_item_played`` (mutable-playlist pass) rows for the item, so it
-        immediately reappears in the public catalog. Returns the row counts
-        removed.
+        Deletes ``play_completions`` rows so the item reappears in the public
+        catalog immediately. Returns the count removed.
         """
         pc = await self._fetch_one(
             "SELECT COUNT(*) AS c FROM play_completions WHERE media_id = ? AND media_type = ?",
-            [friendly_token, media_type],
-        )
-        pip = await self._fetch_one(
-            "SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
             [friendly_token, media_type],
         )
         await self._execute(
             "DELETE FROM play_completions WHERE media_id = ? AND media_type = ?",
             [friendly_token, media_type],
         )
-        await self._execute(
-            "DELETE FROM playlist_item_played WHERE media_id = ? AND media_type = ?",
-            [friendly_token, media_type],
-        )
-        return {
-            "completions": pc["c"] if pc else 0,
-            "playlist_pass": pip["c"] if pip else 0,
-        }
+        return {"completions": pc["c"] if pc else 0}
 
     async def purge_promo_hide_state(self) -> dict:
         """Remove any recently-played hide state recorded for promos/bumpers.
@@ -530,34 +455,20 @@ class _CatalogMixin:
         are already skipped in ``record_play_completion``; this purges rows
         written before that exemption existed (run once at startup). Covers promo
         pools plus hidden-category/tag promos (the usual station-promo case).
-        Returns the row counts removed.
+        Returns the row count removed.
         """
         sub, sub_params = _promo_hidden_media_subquery()
         pc = await self._fetch_one(
             f"SELECT COUNT(*) AS c FROM play_completions WHERE media_id IN ({sub})",
             sub_params,
         )
-        pip = await self._fetch_one(
-            f"SELECT COUNT(*) AS c FROM playlist_item_played WHERE media_id IN ({sub})",
-            sub_params,
-        )
         await self._execute(
             f"DELETE FROM play_completions WHERE media_id IN ({sub})", sub_params
         )
-        await self._execute(
-            f"DELETE FROM playlist_item_played WHERE media_id IN ({sub})", sub_params
-        )
-        return {
-            "completions": pc["c"] if pc else 0,
-            "playlist_pass": pip["c"] if pip else 0,
-        }
+        return {"completions": pc["c"] if pc else 0}
 
     async def get_recently_played_debug(self, days: int) -> dict:
-        """Snapshot of what the recently-played rules currently hide (admin test).
-
-        Mirrors the two exclusion signals used by browse/search so an admin can
-        see exactly which titles a regular user would NOT see, and why.
-        """
+        """Snapshot of what the recently-played rules currently hide (admin test)."""
         by_completion = await self._fetch_all(
             "SELECT pc.media_id, c.title, MAX(pc.completed_at) AS last_completed "
             "FROM play_completions pc "
@@ -566,17 +477,9 @@ class _CatalogMixin:
             "GROUP BY pc.media_id ORDER BY last_completed DESC",
             [f"-{int(days)} days"],
         )
-        by_playlist_pass = await self._fetch_all(
-            "SELECT pip.media_id, c.title, pip.playlist_id, sp.name AS playlist_name, pip.position "
-            "FROM playlist_item_played pip "
-            "JOIN saved_playlists sp ON sp.id = pip.playlist_id "
-            "LEFT JOIN catalog c ON c.friendly_token = pip.media_id "
-            "WHERE pip.media_type = 'cm' ORDER BY sp.name, pip.position",
-        )
         return {
             "window_days": days,
             "by_completion": by_completion,
-            "by_playlist_pass": by_playlist_pass,
         }
 
     async def get_catalog_brief(

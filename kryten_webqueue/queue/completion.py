@@ -99,3 +99,9 @@ class CompletionRecorder:
             logger.warning(
                 "Failed to record play completion for %s", token, exc_info=True
             )
+        try:
+            await self._db.rotate_playlist_item_to_bottom(token)
+        except Exception:
+            logger.warning(
+                "Failed to rotate playlist item for %s", token, exc_info=True
+            )

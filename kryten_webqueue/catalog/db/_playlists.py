@@ -1,3 +1,8 @@
+import logging
+
+logger = logging.getLogger(__name__)
+
+
 class _PlaylistsMixin:
     """Saved playlists, promo pools, schedules, and active schedule methods."""
 
@@ -158,6 +163,72 @@ class _PlaylistsMixin:
             )
         await self._db.commit()
         return added
+
+    async def rotate_playlist_item_to_bottom(
+        self, media_id: str, media_type: str = "cm"
+    ) -> int:
+        """Move a played item to the end of every mutable playlist containing it.
+
+        Played items sink to the bottom so the next fire always loads the
+        oldest-played item last. Idempotent when the item is already at
+        MAX(position). Returns the number of playlists rotated.
+        """
+        playlists = await self._fetch_all(
+            """
+            SELECT spi.playlist_id
+            FROM saved_playlist_items spi
+            JOIN saved_playlists sp ON sp.id = spi.playlist_id
+            WHERE spi.media_id = ? AND spi.media_type = ?
+              AND sp.is_immutable = 0 AND sp.promo_type IS NULL
+            """,
+            [media_id, media_type],
+        )
+        rotated = 0
+        for r in playlists:
+            playlist_id = r["playlist_id"]
+            items = await self._fetch_all(
+                "SELECT * FROM saved_playlist_items WHERE playlist_id = ? ORDER BY position",
+                [playlist_id],
+            )
+            target_idx = next(
+                (
+                    i
+                    for i, it in enumerate(items)
+                    if it["media_id"] == media_id and it["media_type"] == media_type
+                ),
+                None,
+            )
+            if target_idx is None or target_idx == len(items) - 1:
+                continue  # not found or already at bottom
+            # Move target to end; delete-then-reinsert avoids position UNIQUE conflicts.
+            reordered = (
+                items[:target_idx] + items[target_idx + 1 :] + [items[target_idx]]
+            )
+            await self._db.execute(
+                "DELETE FROM saved_playlist_items WHERE playlist_id=?", [playlist_id]
+            )
+            for new_pos, item in enumerate(reordered):
+                await self._db.execute(
+                    "INSERT INTO saved_playlist_items "
+                    "(playlist_id, position, media_type, media_id, title, duration_sec) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    [
+                        playlist_id,
+                        new_pos,
+                        item["media_type"],
+                        item["media_id"],
+                        item.get("title"),
+                        item.get("duration_sec"),
+                    ],
+                )
+            await self._db.execute(
+                "UPDATE saved_playlists SET updated_at=datetime('now') WHERE id=?",
+                [playlist_id],
+            )
+            await self._db.commit()
+            logger.info("Rotated %r to bottom of playlist %d", media_id, playlist_id)
+            rotated += 1
+        return rotated
 
     async def get_most_recent_playlist(self, created_by: str) -> dict | None:
         """The given admin's most recently *created* saved playlist, if any."""

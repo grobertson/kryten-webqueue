@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [0.34.9] - 2026-08-13
+
+### Changed
+
+- **Playlist continuation is now driven by rotation, not pass tracking.**
+  Replaced the broken `playlist_item_played` pass-continuation mechanism with
+  automatic playlist rotation: when an item plays past the 50% threshold,
+  `CompletionRecorder` calls `rotate_playlist_item_to_bottom`, which moves the
+  item to the end of every mutable playlist containing it. `fire_schedule` and
+  `PlaylistImporter` always load from position 0 — no filtering needed. Mutable
+  playlists now naturally advance across preemptions without ever getting stuck.
+
+- **Recently-played hiding simplified.** All played items (episodes, movies,
+  everything) now record a `play_completions` time-window row. The `playlist_item_played`
+  table is no longer written to; the "release whole collection on last item"
+  behaviour is removed. The per-item time-window applies uniformly to all catalog
+  items.
+
+- **Admin playlist UI.** "Load Entire List" button removed; "Import to Live"
+  always loads the full playlist in current order (which is the rotated order).
+
+### Removed
+
+- `get_playlist_played_media_ids` DB method
+- `skip_played` parameter from `PlaylistImporter.import_playlist`
+- `?full=1` query parameter from `POST /admin/playlists/{id}/import`
+- `by_playlist_pass` key from `GET /admin/catalog/recently-played/debug` response
+- `playlist_pass` key from `POST /admin/catalog/{token}/clear-played` response
+
 ## [0.34.7] - 2026-08-13
 
 ### Fixed

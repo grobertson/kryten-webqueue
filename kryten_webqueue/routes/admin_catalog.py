@@ -66,10 +66,8 @@ async def mark_played(
 ):
     """Simulate a genuine play-completion for an item (testing aid).
 
-    Routes through the same ``record_play_completion`` the poll loop uses, so it
-    exercises the real rules: short (<1h) episodes of a mutable playlist mark the
-    current pass (and reset it when the last item is marked), everything else
-    gets a time-boxed completion. The item then hides from regular users exactly
+    Routes through the same ``record_play_completion`` the poll loop uses.
+    The item then hides from regular users for the configured window, exactly
     as it would after real playback.
     """
     db = request.app.state.db

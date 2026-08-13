@@ -108,15 +108,9 @@ async def replace_items(
 async def import_to_live(
     request: Request,
     playlist_id: int,
-    full: int = 0,
     user: dict = Depends(require_admin),
 ):
-    """Import a saved playlist into the live CyTube queue.
-
-    By default this honors the current-pass played/skip rules (a mutable TV-show
-    playlist continues where it left off). Pass ``?full=1`` to force-load the
-    entire list regardless of what's already been played this pass.
-    """
+    """Import a saved playlist into the live CyTube queue."""
     from ..playlists.importer import PlaylistImporter
 
     db = request.app.state.db
@@ -133,7 +127,7 @@ async def import_to_live(
         add_max_retries=config.playlist_bulk_add_max_retries,
         promo_director=getattr(request.app.state, "promo_director", None),
     )
-    result = await importer.import_playlist(playlist_id, skip_played=not bool(full))
+    result = await importer.import_playlist(playlist_id)
     return result
 
 

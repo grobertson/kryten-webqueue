@@ -80,31 +80,11 @@ class PlaylistImporter:
         self._add_max_retries = add_max_retries
         self._promo_director = promo_director
 
-    async def import_playlist(
-        self, playlist_id: int, *, skip_played: bool = True
-    ) -> dict:
-        """Import items from a saved playlist into the live queue.
-
-        By default (``skip_played=True``) already-played episodes of the current
-        pass are skipped, so a mutable (TV-show) playlist continues where it left
-        off instead of replaying from the start — the same rule automated firing
-        uses. Pass ``skip_played=False`` to force-load the entire list regardless
-        of pass state.
-        """
+    async def import_playlist(self, playlist_id: int) -> dict:
+        """Import items from a saved playlist into the live queue."""
         items = await self._db.get_saved_playlist_items(playlist_id)
         if not items:
             return {"success": False, "error": "Playlist is empty"}
-
-        skipped = 0
-        if skip_played:
-            played = await self._db.get_playlist_played_media_ids(playlist_id)
-            if played:
-                before = len(items)
-                items = [it for it in items if it["media_id"] not in played]
-                skipped = before - len(items)
-        if not items:
-            # Everything's already been played this pass (nothing left to add).
-            return {"success": True, "added": 0, "errors": 0, "skipped": skipped}
 
         # Suppress promo insertion for the whole load so promos aren't slotted
         # between items while the playlist is still being built.
@@ -139,7 +119,7 @@ class PlaylistImporter:
                     logger.warning(f"Failed to add {item['media_id']}: {e}")
                     errors += 1
 
-        return {"success": True, "added": added, "errors": errors, "skipped": skipped}
+        return {"success": True, "added": added, "errors": errors}
 
 
 async def import_playlist_text(
