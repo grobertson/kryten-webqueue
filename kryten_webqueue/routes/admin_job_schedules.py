@@ -37,7 +37,9 @@ async def upsert_job_schedule(request: Request, user: dict = Depends(require_adm
     if not cron_expression:
         raise HTTPException(400, "cron_expression is required")
     if len(cron_expression.split()) != 5:
-        raise HTTPException(400, "cron_expression must have exactly 5 fields (min hour dom mon dow)")
+        raise HTTPException(
+            400, "cron_expression must have exactly 5 fields (min hour dom mon dow)"
+        )
 
     job_scheduler = request.app.state.job_scheduler
     try:
@@ -64,7 +66,9 @@ async def update_job_schedule(
     if not cron_expression:
         raise HTTPException(400, "cron_expression is required")
     if len(cron_expression.split()) != 5:
-        raise HTTPException(400, "cron_expression must have exactly 5 fields (min hour dom mon dow)")
+        raise HTTPException(
+            400, "cron_expression must have exactly 5 fields (min hour dom mon dow)"
+        )
 
     job_scheduler = request.app.state.job_scheduler
     try:

@@ -68,7 +68,10 @@ class JobScheduler:
                 id=f"jsch_{job_name}",
                 replace_existing=True,
             )
-        except (ValueError, Exception) as exc:  # noqa: BLE001 - bad stored cron must not crash startup
+        except (
+            ValueError,
+            Exception,
+        ) as exc:  # noqa: BLE001 - bad stored cron must not crash startup
             logger.warning(
                 "JobScheduler: skipping invalid cron %r for %r: %s",
                 cron_expression,
@@ -125,11 +128,17 @@ class JobScheduler:
             minute, hour, day, month, day_of_week = parts
             try:
                 CronTrigger(
-                    minute=minute, hour=hour, day=day,
-                    month=month, day_of_week=day_of_week, timezone="UTC",
+                    minute=minute,
+                    hour=hour,
+                    day=day,
+                    month=month,
+                    day_of_week=day_of_week,
+                    timezone="UTC",
                 )
             except Exception as exc:
-                raise ValueError(f"Invalid cron expression {cron_expression!r}: {exc}") from exc
+                raise ValueError(
+                    f"Invalid cron expression {cron_expression!r}: {exc}"
+                ) from exc
 
         params_json = json.dumps(params) if params is not None else None
         await self._db.upsert_job_schedule(

@@ -1627,7 +1627,9 @@ def run(params: dict, *, config, progress=None) -> dict:
                 dry_run=dry_run,
                 progress=_emit,
             )
-        except Exception as _pm_exc:  # noqa: BLE001 - non-fatal; keep fetchurls result intact
+        except (
+            Exception
+        ) as _pm_exc:  # noqa: BLE001 - non-fatal; keep fetchurls result intact
             logger.warning("played_movies sync failed: %s", _pm_exc, exc_info=True)
 
     _emit(

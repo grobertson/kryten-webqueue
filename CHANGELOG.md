@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Cover art downloads for movies: corrected TMDB API parameter from `year` to
+  `primary_release_year` in movie search. TV searches already used the correct
+  `first_air_date_year` parameter, which is why cover art worked for TV but
+  not movies.
+
 ## [0.34.4] - 2026-08-12
 
 ### Changed

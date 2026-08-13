@@ -161,7 +161,10 @@ def _write_rows(
 
         sess_resp = requests.post(
             f"{wb_base}/createSession",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            },
             data=json.dumps({"persistChanges": True}),
             timeout=WRITEBACK_TIMEOUT,
         )
@@ -169,7 +172,10 @@ def _write_rows(
         if sess_resp.status_code in (200, 201):
             sid = sess_resp.json().get("id", "")
 
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
         if sid:
             headers["workbook-session-id"] = sid
 
@@ -261,7 +267,13 @@ def sync_played_movies(
 
     if not new_rows:
         logger.info("played_movies: all %d movie(s) already recorded", len(movies))
-        return {"found": len(movies), "added": 0, "skipped": skipped, "failed": 0, "dry_run": dry_run}
+        return {
+            "found": len(movies),
+            "added": 0,
+            "skipped": skipped,
+            "failed": 0,
+            "dry_run": dry_run,
+        }
 
     start_row = last_played_row(wb_bytes) + 1
 
@@ -282,7 +294,9 @@ def sync_played_movies(
     if progress:
         progress({"phase": "played_movies_write", "count": len(new_rows)})
 
-    ok, fail = _write_rows(graph_token, drive_id, item_id, new_rows, start_row, progress=progress)
+    ok, fail = _write_rows(
+        graph_token, drive_id, item_id, new_rows, start_row, progress=progress
+    )
     logger.info(
         "played_movies: added %d/%d, skipped %d, failed %d",
         ok,

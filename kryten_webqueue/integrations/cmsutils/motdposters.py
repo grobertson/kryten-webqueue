@@ -210,7 +210,9 @@ def _pick_placeholder(placeholder_dir: str) -> bytes | None:
     p = Path(placeholder_dir).expanduser()
     if not p.is_dir():
         return None
-    candidates = [f for f in p.iterdir() if f.is_file() and f.suffix.lower() in _IMAGE_EXTS]
+    candidates = [
+        f for f in p.iterdir() if f.is_file() and f.suffix.lower() in _IMAGE_EXTS
+    ]
     if not candidates:
         return None
     return random.choice(candidates).read_bytes()
@@ -239,7 +241,11 @@ def _generate_html(night_entries: list[dict], poster_base_url: str) -> str:
 
         img_url = f"{base}/{entry['filename']}"
         imdb_id = entry.get("imdb_id") or ""
-        href = f"https://www.imdb.com/title/{imdb_id}/" if imdb_id else "https://www.imdb.com/"
+        href = (
+            f"https://www.imdb.com/title/{imdb_id}/"
+            if imdb_id
+            else "https://www.imdb.com/"
+        )
 
         lines.append(
             f'    <a href="{escape(href)}" target="_blank" rel="noopener noreferrer">'
@@ -393,7 +399,10 @@ def run(params: dict, *, config, progress=None) -> dict:
             entry["imdb_id"] = info["imdb_id"]
             if dry_run:
                 logger.info(
-                    "motd_posters [dry-run]: %s → %s (%s)", title, info["imdb_id"], filename
+                    "motd_posters [dry-run]: %s → %s (%s)",
+                    title,
+                    info["imdb_id"],
+                    filename,
                 )
                 resolved += 1
             else:
@@ -431,7 +440,9 @@ def run(params: dict, *, config, progress=None) -> dict:
     output_path = output_dir / f"motd-{sheet_name}.html"
 
     if dry_run:
-        logger.info("motd_posters [dry-run]: HTML snippet (not written):\n%s", html_snippet)
+        logger.info(
+            "motd_posters [dry-run]: HTML snippet (not written):\n%s", html_snippet
+        )
     else:
         output_path.write_text(html_snippet, encoding="utf-8")
         logger.info("motd_posters: wrote HTML snippet → %s", output_path)

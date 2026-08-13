@@ -180,7 +180,7 @@ class CoverArtResolver:
         """Search a specific TMDB media type. Returns (poster_url_or_None, popularity)."""
         params: dict = {"api_key": self._tmdb_key, "query": title}
         if year and media_type == "movie":
-            params["year"] = year
+            params["primary_release_year"] = year
         elif year and media_type == "tv":
             params["first_air_date_year"] = year
         try:
