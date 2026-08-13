@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.34.10] - 2026-08-13
+
+### Fixed
+
+- **Startup crash.** `app.py` referenced the now-removed `playlist_pass` key in
+  the return value of `purge_promo_hide_state()`.
+
 ## [0.34.9] - 2026-08-13
 
 ### Changed

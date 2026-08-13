@@ -57,11 +57,10 @@ async def lifespan(app: FastAPI):
     # recently-played rules). Cheap and idempotent; also cleans rows written by
     # older builds that classified promos only by pool membership.
     purged = await db.purge_promo_hide_state()
-    if purged["completions"] or purged["playlist_pass"]:
+    if purged["completions"]:
         logger.info(
-            "Purged promo recently-played state: %d completion(s), %d pass row(s)",
+            "Purged promo recently-played state: %d completion(s)",
             purged["completions"],
-            purged["playlist_pass"],
         )
     # Any job run still marked 'running' is an orphan from a prior crash/restart
     # (the running flag is in-memory only). Reconcile before registering jobs.
