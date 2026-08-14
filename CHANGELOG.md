@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.35.6] - 2026-08-14
+
+### Fixed
+
+- **Better error messages for deleted media items.** When attempting to queue
+  an item that no longer exists in MediaCMS (has been deleted), users now see
+  "Item no longer available (media may have been deleted)" instead of the
+  generic httpx error message "Expected HTTP 200 OK, not 500 Internal Server
+  Error". Also added specific handling for 404 responses and attempts to
+  extract short error messages from CyTube responses.
+
 ## [0.35.5] - 2026-08-14
 
 ### Fixed

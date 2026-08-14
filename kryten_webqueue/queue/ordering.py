@@ -21,7 +21,20 @@ def _add_failure_reason(
                 return str(detail)
         except Exception:
             pass
-        return f"playlist add failed ({exc.response.status_code})"
+        # Check for common error scenarios
+        if exc.response.status_code == 500:
+            # CyTube 500 often means the media doesn't exist in MediaCMS
+            return "Item no longer available (media may have been deleted)"
+        if exc.response.status_code == 404:
+            return "Media not found"
+        # Try to extract text from response body
+        try:
+            text = exc.response.text
+            if text and len(text) < 200:  # Only use short error messages
+                return f"Playlist add failed: {text}"
+        except Exception:
+            pass
+        return f"Playlist add failed (HTTP {exc.response.status_code})"
     if add_result is not None:
         return str(add_result.get("error", "Failed to add to playlist"))
     return "Failed to add to playlist"
