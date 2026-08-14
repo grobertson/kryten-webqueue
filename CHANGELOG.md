@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.34.15] - 2026-08-13
+
+### Fixed
+
+- **Title normalisation at sync time.** The catalog sync now applies two
+  cleanups to every title before storing it:
+
+  - **File extensions stripped** (`_strip_extension`): titles like
+    `(1973) Godzilla vs. Megalon.mp4` no longer display or search with the
+    `.mp4` suffix.  Applies to mp4, mkv, avi, mov, wmv, m4v, webm, flv, ts,
+    mpg/mpeg, m2ts, vob, divx, xvid.
+
+  - **Leading year moved to trailing position** (`_normalize_leading_year`):
+    titles stored as `(1989) Godzilla vs. Biollante` are rewritten to
+    `Godzilla vs. Biollante (1989)` in the database so they display correctly
+    and TMDB/OMDB can match them.
+
+  Extension stripping is now also applied *before* `_normalize_leading_year`
+  in the TMDB and OMDB search callers, and *after* year-removal inside
+  `_clean_title` (so extensions exposed once a trailing year is stripped are
+  also removed).  All existing titles will be corrected on the next catalog
+  sync.
+
 ## [0.34.14] - 2026-08-13
 
 ### Added

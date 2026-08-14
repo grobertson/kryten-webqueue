@@ -4,6 +4,8 @@ import logging
 from datetime import datetime, UTC
 from urllib.parse import urlparse
 
+from .images import _normalize_leading_year, _strip_extension
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,9 +134,13 @@ class CatalogSync:
             return
 
         now = datetime.now(UTC).isoformat()
+        # Normalise before storing: strip file extensions and move any leading
+        # year to trailing position so titles display and search correctly.
+        raw_title = media.get("title", "Untitled")
+        title = _normalize_leading_year(_strip_extension(raw_title))
         row = {
             "friendly_token": token,
-            "title": media.get("title", "Untitled"),
+            "title": title,
             "description": media.get("description", ""),
             "duration_sec": media.get("duration") or 0,
             "manifest_url": self._build_manifest_url(media),

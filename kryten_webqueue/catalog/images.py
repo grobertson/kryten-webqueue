@@ -23,8 +23,19 @@ def _normalize_leading_year(title: str) -> str:
     return title
 
 
+def _strip_extension(title: str) -> str:
+    """Strip common video file extensions from a media title."""
+    return re.sub(
+        r"\s*\.(mp4|mkv|avi|mov|wmv|m4v|webm|flv|ts|mpg|mpeg|m2ts|vob|divx|xvid)$",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    )
+
+
 def _clean_title(title: str) -> tuple[str, str | None]:
     """Return (cleaned_title, year_or_None) stripping common noise."""
+    title = _strip_extension(title)  # remove extension before year extraction
     # Prefer a year in parentheses/brackets — it's almost always the movie year.
     # A bare leading year like "1917 (2019)" has the year as its TITLE, not its
     # release year, so the parenthesised form wins when both are present.
@@ -70,6 +81,9 @@ def _clean_title(title: str) -> tuple[str, str | None]:
         flags=re.IGNORECASE,
     )
     cleaned = cleaned.strip(" .-")
+    cleaned = _strip_extension(
+        cleaned
+    )  # re-apply after year removal may expose extension
     return cleaned or title, year
 
 
@@ -191,9 +205,8 @@ class CoverArtResolver:
 
     async def _search_tmdb(self, title: str) -> str | None:
         """Search TMDB for a poster: tries movie+TV in parallel, retries with cleaned title."""
-        # Normalise leading-year format before the first attempt so TMDB sees
-        # 'Title (Year)' rather than '(Year) Title'.
-        normalized = _normalize_leading_year(title)
+        # Strip extension then normalise year so TMDB sees 'Title (Year)'.
+        normalized = _normalize_leading_year(_strip_extension(title))
         result = await self._tmdb_search_both(normalized)
         if result:
             return result
@@ -250,7 +263,7 @@ class CoverArtResolver:
         return None, 0.0
 
     async def _search_omdb(self, title: str) -> str | None:
-        normalized = _normalize_leading_year(title)
+        normalized = _normalize_leading_year(_strip_extension(title))
         cleaned, year = _clean_title(normalized)
         for t in dict.fromkeys(
             [normalized, cleaned]
