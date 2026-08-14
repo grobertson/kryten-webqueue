@@ -66,6 +66,61 @@
                 </div>
             </div>
             {% endif %}
+
+            {% if people.director %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Director</span>
+                <div class="item-detail-chips">
+                    {% for name in people.director %}
+                        <a class="np-chip np-chip-person np-chip-director" href="/catalog/browse?person={{ name | urlencode }}">{{ name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if people.cast %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Cast</span>
+                <div class="item-detail-chips">
+                    {% for name in people.cast %}
+                        <a class="np-chip np-chip-person np-chip-cast" href="/catalog/browse?person={{ name | urlencode }}">{{ name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if people.producer %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Producers</span>
+                <div class="item-detail-chips">
+                    {% for name in people.producer %}
+                        <a class="np-chip np-chip-person np-chip-producer" href="/catalog/browse?person={{ name | urlencode }}">{{ name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if people.writer %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Writer</span>
+                <div class="item-detail-chips">
+                    {% for name in people.writer %}
+                        <a class="np-chip np-chip-person np-chip-writer" href="/catalog/browse?person={{ name | urlencode }}">{{ name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if studios %}
+            <div class="item-detail-facet">
+                <span class="item-detail-facet-label">Studio</span>
+                <div class="item-detail-chips">
+                    {% for name in studios %}
+                        <a class="np-chip np-chip-studio" href="/catalog/browse?studio={{ name | urlencode }}">{{ name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

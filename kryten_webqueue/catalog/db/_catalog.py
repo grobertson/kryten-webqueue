@@ -139,9 +139,13 @@ def _recently_played_exclusion(alias: str, days: int) -> tuple[str, list]:
 
 
 def _facet_filter(
-    alias: str, category: str | None, tag: str | None
+    alias: str,
+    category: str | None,
+    tag: str | None,
+    person: str | None = None,
+    studio: str | None = None,
 ) -> tuple[str, list]:
-    """SQL fragment (+ params) AND-filtering by a category slug and/or tag name.
+    """SQL fragment (+ params) AND-filtering by category, tag, person, and/or studio.
 
     Each filter is an ``AND friendly_token IN (...)`` subquery on the catalog row
     under ``alias``; an absent filter contributes nothing. Shared by browse() and
@@ -167,6 +171,24 @@ def _facet_filter(
             )
         """
         params.append(tag)
+    if person:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT cp.friendly_token FROM catalog_people cp
+                JOIN people p ON cp.person_id = p.id
+                WHERE p.name = ?
+            )
+        """
+        params.append(person)
+    if studio:
+        sql += f"""
+            AND {alias}.friendly_token IN (
+                SELECT cs.friendly_token FROM catalog_studios cs
+                JOIN studios s ON cs.studio_id = s.id
+                WHERE s.name = ?
+            )
+        """
+        params.append(studio)
     return sql, params
 
 
@@ -203,6 +225,8 @@ class _CatalogMixin:
         *,
         category: str | None = None,
         tag: str | None = None,
+        person: str | None = None,
+        studio: str | None = None,
         page: int = 1,
         per_page: int = 24,
         show_hidden: bool = False,
@@ -250,6 +274,24 @@ class _CatalogMixin:
                 )
             """
             params.append(tag)
+        if person:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cp.friendly_token FROM catalog_people cp
+                    JOIN people p ON cp.person_id = p.id
+                    WHERE p.name = ?
+                )
+            """
+            params.append(person)
+        if studio:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cs.friendly_token FROM catalog_studios cs
+                    JOIN studios s ON cs.studio_id = s.id
+                    WHERE s.name = ?
+                )
+            """
+            params.append(studio)
         # Quality-weighted ordering so the landing page leads with presentable
         # items instead of alphabetical junk. No curation required — every signal
         # is derived from existing data:
@@ -272,6 +314,8 @@ class _CatalogMixin:
         *,
         category: str | None = None,
         tag: str | None = None,
+        person: str | None = None,
+        studio: str | None = None,
         show_hidden: bool = False,
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
@@ -315,6 +359,24 @@ class _CatalogMixin:
                 )
             """
             params.append(tag)
+        if person:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cp.friendly_token FROM catalog_people cp
+                    JOIN people p ON cp.person_id = p.id
+                    WHERE p.name = ?
+                )
+            """
+            params.append(person)
+        if studio:
+            query += """
+                AND c.friendly_token IN (
+                    SELECT cs.friendly_token FROM catalog_studios cs
+                    JOIN studios s ON cs.studio_id = s.id
+                    WHERE s.name = ?
+                )
+            """
+            params.append(studio)
         row = await self._fetch_one(query, params)
         return row["cnt"] if row else 0
 
@@ -324,6 +386,8 @@ class _CatalogMixin:
         *,
         category: str | None = None,
         tag: str | None = None,
+        person: str | None = None,
+        studio: str | None = None,
         page: int = 1,
         per_page: int = 24,
         show_hidden: bool = False,
@@ -359,9 +423,8 @@ class _CatalogMixin:
             dur_sql, dur_params = _duration_filter("c", min_duration_sec)
             sql += dur_sql
             params.extend(dur_params)
-        # Category/tag facets AND with the text match (same subqueries browse()
-        # uses), so a search can be narrowed by the selected facets.
-        facet_sql, facet_params = _facet_filter("c", category, tag)
+        # Category/tag/person/studio facets AND with the text match.
+        facet_sql, facet_params = _facet_filter("c", category, tag, person, studio)
         sql += facet_sql
         params.extend(facet_params)
         # Relevance is the natural default for a text query; other sort keys let
@@ -381,6 +444,8 @@ class _CatalogMixin:
         *,
         category: str | None = None,
         tag: str | None = None,
+        person: str | None = None,
+        studio: str | None = None,
         show_hidden: bool = False,
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
@@ -412,7 +477,7 @@ class _CatalogMixin:
             dur_sql, dur_params = _duration_filter("c", min_duration_sec)
             sql += dur_sql
             params.extend(dur_params)
-        facet_sql, facet_params = _facet_filter("c", category, tag)
+        facet_sql, facet_params = _facet_filter("c", category, tag, person, studio)
         sql += facet_sql
         params.extend(facet_params)
         row = await self._fetch_one(sql, params)
@@ -552,13 +617,15 @@ class _CatalogMixin:
         return lookup
 
     async def get_item_facets(self, friendly_token: str) -> dict:
-        """Return description + category/tag names for a single catalog item.
-
-        Used to enrich the now-playing card. Returns empty values when the
-        token is unknown.
-        """
+        """Return description + category/tag/people/studio names for a catalog item."""
         if not friendly_token:
-            return {"description": None, "categories": [], "tags": []}
+            return {
+                "description": None,
+                "categories": [],
+                "tags": [],
+                "people": {"cast": [], "director": [], "producer": [], "writer": []},
+                "studios": [],
+            }
         row = await self._fetch_one(
             "SELECT description FROM catalog WHERE friendly_token = ?", [friendly_token]
         )
@@ -574,10 +641,14 @@ class _CatalogMixin:
             "WHERE ct.friendly_token = ? ORDER BY t.name",
             [friendly_token],
         )
+        people = await self.get_item_people(friendly_token)
+        studios = await self.get_item_studios(friendly_token)
         return {
             "description": (row or {}).get("description"),
             "categories": [{"name": c["name"], "slug": c["slug"]} for c in cats],
             "tags": [t["name"] for t in tags],
+            "people": people,
+            "studios": studios,
         }
 
     async def is_restricted(self, friendly_token: str) -> bool:

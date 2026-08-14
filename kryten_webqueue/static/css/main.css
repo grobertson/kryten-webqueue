@@ -744,6 +744,29 @@ a.np-chip {
     color: var(--text-secondary);
     border: 1px solid var(--border);
 }
+.np-chip-person {
+    background: rgba(0, 168, 120, 0.15);
+    color: var(--text-primary);
+    border: 1px solid rgba(0, 168, 120, 0.4);
+}
+.np-chip-studio {
+    background: rgba(200, 140, 0, 0.15);
+    color: var(--text-primary);
+    border: 1px solid rgba(200, 140, 0, 0.4);
+}
+/* Active person/studio filter notice (browse page) */
+.active-facet-notice {
+    margin-top: 0.85rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.active-facet-notice a {
+    font-weight: 600;
+}
 
 /* WebSocket status */
 .ws-connected {

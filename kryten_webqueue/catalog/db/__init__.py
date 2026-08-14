@@ -9,6 +9,7 @@ from ._playlists import _PlaylistsMixin
 from ._queue import _QueueMixin
 from ._feedback import _FeedbackMixin
 from ._watchlist import _WatchlistMixin
+from ._people import _PeopleMixin
 
 
 class Database(
@@ -17,6 +18,7 @@ class Database(
     _QueueMixin,
     _FeedbackMixin,
     _WatchlistMixin,
+    _PeopleMixin,
     _DBBase,
 ):
     """Async SQLite database wrapper."""

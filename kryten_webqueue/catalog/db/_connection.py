@@ -343,6 +343,36 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_user_watchlist_username ON user_watchlist(username);
     """,
+    # v18: Per-item cast / crew / studio facets (M-to-many, same model as tags).
+    """
+    CREATE TABLE IF NOT EXISTS people (
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+    );
+    CREATE INDEX IF NOT EXISTS idx_people_name ON people(name);
+
+    CREATE TABLE IF NOT EXISTS catalog_people (
+        friendly_token TEXT NOT NULL,
+        person_id      INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+        role           TEXT NOT NULL,
+        position       INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (friendly_token, person_id, role)
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_people_token  ON catalog_people(friendly_token);
+    CREATE INDEX IF NOT EXISTS idx_catalog_people_person ON catalog_people(person_id);
+
+    CREATE TABLE IF NOT EXISTS studios (
+        id   INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS catalog_studios (
+        friendly_token TEXT NOT NULL,
+        studio_id      INTEGER NOT NULL REFERENCES studios(id) ON DELETE CASCADE,
+        PRIMARY KEY (friendly_token, studio_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_studios_token ON catalog_studios(friendly_token);
+    """,
 ]
 
 

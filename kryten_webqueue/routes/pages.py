@@ -85,6 +85,8 @@ async def catalog_browse_page(
     request: Request,
     category: str | None = None,
     tag: str | None = None,
+    person: str | None = None,
+    studio: str | None = None,
     page: int = 1,
     show_hidden: int = 0,
     sort: str = "default",
@@ -97,8 +99,6 @@ async def catalog_browse_page(
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
     sort = sort if sort in _VALID_SORTS else "default"
-    # Admins always see every title; regular users have recently-played items
-    # hidden for the configured window.
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
@@ -106,6 +106,8 @@ async def catalog_browse_page(
     items = await db.browse(
         category=category,
         tag=tag,
+        person=person,
+        studio=studio,
         page=page,
         show_hidden=show_hidden,
         sort=sort,
@@ -115,6 +117,8 @@ async def catalog_browse_page(
     total = await db.browse_count(
         category=category,
         tag=tag,
+        person=person,
+        studio=studio,
         show_hidden=show_hidden,
         recently_played_days=recently_played_days,
         min_duration_sec=min_duration_sec,
@@ -135,6 +139,8 @@ async def catalog_browse_page(
             "total_pages": total_pages,
             "active_category": category,
             "active_tag": tag,
+            "active_person": person,
+            "active_studio": studio,
             "query": None,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
@@ -152,6 +158,8 @@ async def catalog_search_page(
     page: int = 1,
     category: str | None = None,
     tag: str | None = None,
+    person: str | None = None,
+    studio: str | None = None,
     show_hidden: int = 0,
     sort: str = "default",
     hide_short: int = 1,
@@ -173,6 +181,8 @@ async def catalog_search_page(
         q,
         category=category,
         tag=tag,
+        person=person,
+        studio=studio,
         page=page,
         show_hidden=show_hidden,
         sort=sort,
@@ -183,6 +193,8 @@ async def catalog_search_page(
         q,
         category=category,
         tag=tag,
+        person=person,
+        studio=studio,
         show_hidden=show_hidden,
         recently_played_days=recently_played_days,
         min_duration_sec=min_duration_sec,
@@ -203,6 +215,8 @@ async def catalog_search_page(
             "total_pages": total_pages,
             "active_category": category,
             "active_tag": tag,
+            "active_person": person,
+            "active_studio": studio,
             "query": q,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
@@ -241,6 +255,8 @@ async def catalog_item_page(request: Request, friendly_token: str):
             "item": item,
             "categories": facets.get("categories") or [],
             "tags": facets.get("tags") or [],
+            "people": facets.get("people") or {},
+            "studios": facets.get("studios") or [],
         },
     )
 

@@ -49,6 +49,18 @@
         <button class="btn btn-sm btn-admin" onclick="saveResultsToPlaylist()">Save results to playlist</button>
     </div>
     {% endif %}
+    {% if active_person %}
+    <div class="active-facet-notice">
+        <span>Filtered by person: <strong>{{ active_person }}</strong></span>
+        <a href="{{ request.url.remove_query_params('person') }}">Clear</a>
+    </div>
+    {% endif %}
+    {% if active_studio %}
+    <div class="active-facet-notice">
+        <span>Filtered by studio: <strong>{{ active_studio }}</strong></span>
+        <a href="{{ request.url.remove_query_params('studio') }}">Clear</a>
+    </div>
+    {% endif %}
 </div>
 
 <div class="catalog-grid">
@@ -114,6 +126,8 @@
 
 {% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
 {% set hide_short_q = '' if hide_short else '&hide_short=0' %}
+{% set person_q = ('&person=' ~ active_person | urlencode) if active_person else '' %}
+{% set studio_q = ('&studio=' ~ active_studio | urlencode) if active_studio else '' %}
 {% if not items %}
 <div class="empty-state">
     {% if query and (active_category or active_tag) %}
@@ -150,7 +164,7 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm">&larr; Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -159,14 +173,14 @@
         {% if p == page %}
             <span class="page-num page-current">{{ p }}</span>
         {% else %}
-            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm btn-page">{{ p }}</a>
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm btn-page">{{ p }}</a>
         {% endif %}
     {% endfor %}
 
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm">Next &rarr;</a>
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}

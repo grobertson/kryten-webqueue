@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.34.16] - 2026-08-13
+
+### Added
+
+- **Cast, crew, and studio facets.** New M-to-many tables (`people`,
+  `catalog_people`, `studios`, `catalog_studios` — migration v18) mirror the
+  tag model.  Supported roles: `cast`, `director`, `producer`, `writer`.
+
+  - **Item detail page** shows Director, Cast, Producers, Writer, and Studio
+    chip groups.  Each chip is a link to `Browse` filtered by that person or
+    studio — e.g. clicking James Cameron shows every item he's involved in,
+    regardless of role.
+
+  - **Browse and search** accept `person=` and `studio=` query params and
+    filter results via `AND friendly_token IN (...)` subqueries (same pattern
+    as category/tag).  The active filter is shown as a dismissible banner with
+    a **Clear** link.  Filter persists across pagination.
+
+  - **Spec committed** — `docs/SPEC_CATALOG_ENRICHMENT_PIPELINE.md` defines the
+    full consolidated enrichment pipeline (Sorties 1–7) that will populate
+    these tables automatically.
+
 ## [0.34.15] - 2026-08-13
 
 ### Fixed
