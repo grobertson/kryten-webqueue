@@ -11,18 +11,60 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 
+def _normalize_leading_year(title: str) -> str:
+    """Move a leading parenthesised year to standard trailing position.
+
+    ``(1989) Godzilla vs. Biollante`` → ``Godzilla vs. Biollante (1989)``
+    Has no effect when the year is already trailing or absent.
+    """
+    m = re.match(r"^\s*[\(\[]((?:19|20)\d{2})[\)\]]\s*(.+)", title)
+    if m:
+        return f"{m.group(2).strip()} ({m.group(1)})"
+    return title
+
+
 def _clean_title(title: str) -> tuple[str, str | None]:
     """Return (cleaned_title, year_or_None) stripping common noise."""
-    # Extract 4-digit year in parens or at end: "Title (2019)" or "Title 2019"
-    year = None
-    m = re.search(r"\b((?:19|20)\d{2})\b", title)
+    # Prefer a year in parentheses/brackets — it's almost always the movie year.
+    # A bare leading year like "1917 (2019)" has the year as its TITLE, not its
+    # release year, so the parenthesised form wins when both are present.
+    m = re.search(r"[\(\[]((?:19|20)\d{2})[\)\]]", title)
     if m:
-        year = m.group(1)
-    # Remove year, episode tags, resolution tags, etc.
-    cleaned = re.sub(r"\s*[\(\[]?(?:19|20)\d{2}[\)\]]?", "", title)
+        year: str | None = m.group(1)
+    else:
+        m = re.search(r"\b((?:19|20)\d{2})\b", title)
+        year = m.group(1) if m else None
+
+    # Remove ONLY the identified year (with its surrounding brackets if any).
+    if year:
+        cleaned = re.sub(r"\s*[\(\[]\s*" + year + r"\s*[\)\]]", "", title)
+        # Also remove a bare occurrence of the same year if it has word boundaries
+        # on both sides (handles "Title 1978" format) but NOT when the year IS
+        # the title ("1917").
+        cleaned = re.sub(r"(?<=\s)" + year + r"(?=\s|$)", "", cleaned).strip()
+    else:
+        cleaned = title
+
+    # Episode tags, resolution/encoding, dub/language noise.
     cleaned = re.sub(r"\s*[Ss]\d{1,2}[Ee]\d{1,2}.*", "", cleaned)
     cleaned = re.sub(
         r"\s*\b(?:720p|1080p|2160p|4K|HDR|BluRay|BDRip|WEB[-.]?DL|HDTV)\b.*",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(
+        r"\s*[\(\[]\s*(?:Dubbed|English Dubbed|English Dub|Dub|Sub(?:bed)?|"
+        r"English|Uncut|Extended(?: Cut)?|Director'?s? Cut|Remastered|HD|SD)\s*[\)\]]",
+        "",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    # Strip trailing Svengoolie attribution (e.g. "Tarantula Svengoolie").
+    cleaned = re.sub(r"\s+Svengoolie\b.*", "", cleaned, flags=re.IGNORECASE)
+    # Strip trailing bare quality/edition markers (e.g. "Title HD" or "Title Uncut").
+    cleaned = re.sub(
+        r"\s+\b(?:HD|SD|4K|Uncut|Remastered|Extended)\b\s*$",
         "",
         cleaned,
         flags=re.IGNORECASE,
@@ -149,12 +191,15 @@ class CoverArtResolver:
 
     async def _search_tmdb(self, title: str) -> str | None:
         """Search TMDB for a poster: tries movie+TV in parallel, retries with cleaned title."""
-        result = await self._tmdb_search_both(title)
+        # Normalise leading-year format before the first attempt so TMDB sees
+        # 'Title (Year)' rather than '(Year) Title'.
+        normalized = _normalize_leading_year(title)
+        result = await self._tmdb_search_both(normalized)
         if result:
             return result
-        # Retry with cleaned title if it differs
-        cleaned, year = _clean_title(title)
-        if cleaned != title:
+        # Retry with fully-cleaned title + year filter.
+        cleaned, year = _clean_title(normalized)
+        if cleaned != normalized:
             result = await self._tmdb_search_both(cleaned, year=year)
         return result
 
@@ -205,8 +250,11 @@ class CoverArtResolver:
         return None, 0.0
 
     async def _search_omdb(self, title: str) -> str | None:
-        cleaned, year = _clean_title(title)
-        for t in dict.fromkeys([title, cleaned]):  # try original then cleaned, deduped
+        normalized = _normalize_leading_year(title)
+        cleaned, year = _clean_title(normalized)
+        for t in dict.fromkeys(
+            [normalized, cleaned]
+        ):  # try normalized then cleaned, deduped
             params: dict = {"apikey": self._omdb_key, "t": t}
             if year:
                 params["y"] = year

@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [0.34.11] - 2026-08-13
+
+### Fixed
+
+- **Cover art now found for many more films.** Three improvements to the search
+  strategy in `CoverArtResolver`:
+
+  - **Retry thumbnail-source movies on every sync.** Previously any item with a
+    saved `cover_art_path` (including the thumbnail fallback) was never
+    re-checked against TMDB/OMDB. Now items with `cover_art_source='thumbnail'`
+    and `duration_sec > 1800` (movie-length) are retried on each catalog sync,
+    so a title that failed the first time around gets another chance.
+
+  - **Leading-year normalization.** Titles stored as `(1989) Godzilla vs.
+    Biollante` are now converted to `Godzilla vs. Biollante (1989)` before
+    the first TMDB/OMDB search attempt so the API sees a properly-formatted
+    query. (`_normalize_leading_year` helper; applied in `_search_tmdb` and
+    `_search_omdb`.)
+
+  - **Smarter `_clean_title`.** Year extraction now prefers a
+    parenthesised year over a bare leading year (fixes `1917 (2019)` extracting
+    year 2019, not 1917). Added noise-stripping for `(Dubbed)`, `(English)`,
+    `(Uncut)` and similar language/edition tags; trailing `Svengoolie`
+    attribution; and bare trailing quality markers like `HD`.
+
 ## [0.34.10] - 2026-08-13
 
 ### Fixed

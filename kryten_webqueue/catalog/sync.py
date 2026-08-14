@@ -160,8 +160,17 @@ class CatalogSync:
         except Exception as e:
             logger.debug(f"Facet sync failed for {token}: {e}")
 
-        # Fetch TMDB/OMDB cover art if not already cached
-        if self._cover_art and not (existing and existing.get("cover_art_path")):
+        # Fetch TMDB/OMDB cover art.
+        # Skip only if we already have a real poster (tmdb/omdb source).
+        # Retry thumbnail-source items that are long enough to be movies — the
+        # thumbnail fallback fires when TMDB/OMDB return nothing, but a better
+        # title match on a subsequent sync may now succeed.
+        has_real_art = existing and existing.get("cover_art_source") in ("tmdb", "omdb")
+        is_movie_length = (row.get("duration_sec") or 0) > 1800
+        needs_cover = not has_real_art and (
+            not existing or is_movie_length or not existing.get("cover_art_path")
+        )
+        if self._cover_art and needs_cover:
             try:
                 await self._cover_art.resolve(token, row["title"], self._db)
             except Exception as e:
