@@ -281,28 +281,113 @@ async function loadJobs() {
             : '<p>No jobs registered</p>';
     }
 
-    // Recent job-run history
-    const rResp = await fetch('/admin/jobs/runs?limit=10');
+    // Recent job-run history — table includes an expand button for full output
+    const rResp = await fetch('/admin/jobs/runs?limit=15');
     if (rResp.ok) {
         const runs = await rResp.json();
         const el = document.getElementById('job-runs');
         if (runs.length > 0) {
             el.innerHTML = `<table class="admin-table">
-                <tr><th>Job</th><th>Started</th><th>Ended</th><th>Status</th><th>Detail</th></tr>
-                ${runs.map(r => `
+                <tr><th>Job</th><th>Started</th><th>Ended</th><th>Status</th><th>Detail</th><th></th></tr>
+                ${runs.map(r => {
+                    const summary = escapeHtml(summarizeRunDetail(r.detail));
+                    const hasDetail = r.detail && r.detail.length > 2;
+                    const expandBtn = hasDetail
+                        ? `<button class="btn btn-sm" onclick="showRunDetail(${r.id})" title="View full output">\u2139</button>`
+                        : '';
+                    const endedCell = r.ended_at
+                        ? formatLocalDateTime(r.ended_at)
+                        : `<span style="color:var(--warning)">running\u2026</span>`;
+                    return `
                     <tr>
                         <td>${escapeHtml(r.job_name || '')}</td>
                         <td>${formatLocalDateTime(r.started_at)}</td>
-                        <td>${r.ended_at ? formatLocalDateTime(r.ended_at) : '—'}</td>
+                        <td>${endedCell}</td>
                         <td><span class="job-status job-status-${escapeHtml(r.status || '')}">${escapeHtml(r.status || '')}</span></td>
-                        <td class="job-detail">${escapeHtml(summarizeRunDetail(r.detail))}</td>
-                    </tr>
-                `).join('')}
+                        <td class="job-detail">${summary}</td>
+                        <td>${expandBtn}</td>
+                    </tr>`;
+                }).join('')}
             </table>`;
         } else {
             el.innerHTML = '<p>No job runs yet</p>';
         }
     }
+}
+
+// Run-detail cache so we don't re-fetch on re-open.
+const RUN_DETAIL_CACHE = {};
+
+async function showRunDetail(runId) {
+    if (!RUN_DETAIL_CACHE[runId]) {
+        const resp = await fetch('/admin/jobs/runs?limit=50');
+        if (resp.ok) { (await resp.json()).forEach(r => { RUN_DETAIL_CACHE[r.id] = r; }); }
+    }
+    const run = RUN_DETAIL_CACHE[runId];
+    if (!run) { showToast('Run not found', 'error'); return; }
+
+    const existingModal = document.getElementById('run-detail-modal');
+    if (existingModal) existingModal.remove();
+
+    let d = null;
+    try { d = run.detail ? JSON.parse(run.detail) : null; } catch (e) {}
+
+    let bodyHtml;
+    if (d && d.steps_run && d.steps) {
+        // Pipeline enrichment final report — render as a table
+        const dryBadge = d.dry_run
+            ? ' <span style="color:var(--warning);font-size:.8rem">(dry run \u2014 no writes)</span>' : '';
+        const elapsed = d.elapsed_sec ? ` \u00b7 ${d.elapsed_sec}s elapsed` : '';
+        const rowsHtml = d.steps_run.map(s => {
+            const r = d.steps[s];
+            if (!r) return '';
+            const errs = (r.errors || []).map(e =>
+                `<div style="font-size:.78rem;color:var(--danger);padding:.15rem 0">${escapeHtml(e)}</div>`
+            ).join('');
+            return `<tr>
+                <td><strong>${escapeHtml(s)}</strong></td>
+                <td>${r.processed}</td>
+                <td>${r.changed}</td>
+                <td>${r.skipped}</td>
+                <td style="${r.failed ? 'color:var(--danger)' : ''}">${r.failed || 0}</td>
+            </tr>${errs ? `<tr><td colspan="5" style="padding:0 0 .5rem 1.5rem">${errs}</td></tr>` : ''}`;
+        }).join('');
+        bodyHtml = `
+            <p style="margin-bottom:.75rem">
+                Steps: <strong>${escapeHtml(d.steps_run.join(' \u2192 '))}</strong>${dryBadge}<br>
+                Total items: <strong>${(d.total_items || 0).toLocaleString()}</strong>${elapsed}
+            </p>
+            <table class="admin-table">
+                <tr><th>Step</th><th>Processed</th><th>Changed</th><th>Skipped</th><th>Failed</th></tr>
+                ${rowsHtml}
+            </table>`;
+    } else if (d && d.step && typeof d.processed === 'number') {
+        // In-progress heartbeat snapshot
+        bodyHtml = `<p style="color:var(--warning)">\u23f3 Job still running — last progress snapshot:</p>
+            <pre style="white-space:pre-wrap;font-size:.82rem">${escapeHtml(JSON.stringify(d, null, 2))}</pre>`;
+    } else {
+        // Generic / legacy format
+        const raw = typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail, null, 2);
+        bodyHtml = `<pre style="white-space:pre-wrap;font-size:.82rem">${escapeHtml(raw)}</pre>`;
+    }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'run-detail-modal';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+        <div class="modal-box" role="dialog" aria-modal="true">
+            <h3>${escapeHtml(run.job_name || 'Run')} \u2014 ${escapeHtml(run.status || '')}
+                <span style="font-size:.75rem;font-weight:400;opacity:.7">#${run.id}</span></h3>
+            <div class="modal-body">${bodyHtml}</div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" data-action="close">Close</button>
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => {
+        if (e.target === overlay || e.target.getAttribute('data-action') === 'close')
+            overlay.remove();
+    });
+    document.body.appendChild(overlay);
 }
 
 async function loadAdminData() {
@@ -376,8 +461,7 @@ function connectAdminWebSocket() {
     }, 30000);
 }
 
-// Summarize a job_runs.detail JSON blob for the history table. Prefers a
-// failure message, otherwise a compact success summary.
+// Summarize a job_runs.detail JSON blob for the history table.
 function summarizeRunDetail(detail) {
     if (!detail) return '';
     let d;
@@ -385,6 +469,26 @@ function summarizeRunDetail(detail) {
     catch { return String(detail).slice(0, 160); }
     if (d && d.error) return d.error;
     if (d && typeof d === 'object') {
+        // Pipeline in-progress heartbeat
+        if (d.step && typeof d.processed === 'number') {
+            const bits = [`${d.step}: ${d.processed} processed`];
+            if (d.changed) bits.push(`${d.changed} changed`);
+            if (d.failed) bits.push(`${d.failed} failed`);
+            return '\u23f3 ' + bits.join(', ');
+        }
+        // Pipeline final report
+        if (d.steps_run && d.steps) {
+            const tag = d.dry_run ? ' [dry run]' : '';
+            const elapsed = d.elapsed_sec ? ` (${d.elapsed_sec}s)` : '';
+            const parts = d.steps_run.filter(s => d.steps[s] && d.steps[s].processed).map(s => {
+                const r = d.steps[s];
+                const bits = [];
+                if (r.changed) bits.push(`${r.changed}\u2713`);
+                if (r.failed) bits.push(`${r.failed}\u2717`);
+                return `${s}: ${bits.join(' ') || r.processed}`;
+            });
+            return parts.join(' \u00b7 ') + elapsed + tag;
+        }
         const parts = [];
         if (d.sheet) parts.push(d.sheet);
         if (d.imported_playlists && d.imported_playlists.length) parts.push(`imported: ${d.imported_playlists.join(', ')}`);

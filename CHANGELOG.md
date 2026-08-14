@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+## [0.35.3] - 2026-08-13
+
+### Added
+
+- **Job run detail view.** Every row in the "Recent Job Runs" table now has an
+  ℹ button that opens a modal with the full output for that run.
+  - **Pipeline enrichment reports** are rendered as a per-step table
+    (Processed / Changed / Skipped / Failed) with any per-step error messages
+    shown inline beneath their row.
+  - **In-progress snapshots** are clearly labelled as such with a ⏳ indicator
+    and show the last heartbeat values while the job is still running.
+  - **Legacy / other job results** fall back to pretty-printed JSON.
+- **Summary column** now understands the `catalog_enrich` report format and
+  shows a compact per-step summary (e.g. `classify: 5200✓ · meta: 1500✓ (42s)`).
+  An ⏳ prefix marks an in-progress heartbeat.
+- Runs table shows 15 rows (up from 10) and marks still-running rows with an
+  amber "running…" indicator instead of a blank ended-at cell.
+
 ## [0.35.2] - 2026-08-13
 
 ### Fixed
