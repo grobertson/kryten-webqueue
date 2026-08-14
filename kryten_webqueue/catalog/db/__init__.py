@@ -10,6 +10,7 @@ from ._queue import _QueueMixin
 from ._feedback import _FeedbackMixin
 from ._watchlist import _WatchlistMixin
 from ._people import _PeopleMixin
+from ._enrichment import _EnrichmentMixin
 
 
 class Database(
@@ -19,9 +20,18 @@ class Database(
     _FeedbackMixin,
     _WatchlistMixin,
     _PeopleMixin,
+    _EnrichmentMixin,
     _DBBase,
 ):
     """Async SQLite database wrapper."""
+
+
+__all__ = [
+    "Database",
+    "HIDDEN_ITEM_TAG",
+    "HIDDEN_CATEGORY_NAMES",
+    "HIDDEN_TAG_NAMES",
+]
 
 
 __all__ = [

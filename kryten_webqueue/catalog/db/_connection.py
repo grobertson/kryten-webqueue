@@ -373,6 +373,28 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_catalog_studios_token ON catalog_studios(friendly_token);
     """,
+    # v19: Per-item enrichment pipeline state cache.
+    """
+    CREATE TABLE IF NOT EXISTS item_enrichment_state (
+        friendly_token    TEXT PRIMARY KEY,
+        content_type      TEXT,
+        hosted_show       TEXT,
+        lookup_title      TEXT,
+        lookup_year       TEXT,
+        tv_show           TEXT,
+        tv_season         INTEGER,
+        tv_episode_num    INTEGER,
+        description_score INTEGER,
+        tmdb_id           TEXT,
+        imdb_id           TEXT,
+        meta_json         TEXT,
+        last_classify_at  TEXT,
+        last_title_at     TEXT,
+        last_meta_at      TEXT,
+        last_art_at       TEXT,
+        last_tags_at      TEXT
+    );
+    """,
 ]
 
 

@@ -115,11 +115,19 @@ class JobContext:
     """
 
     def __init__(
-        self, *, db, api_gate, config, run_id: int, triggered_by: str | None = None
+        self,
+        *,
+        db,
+        api_gate,
+        config,
+        run_id: int,
+        triggered_by: str | None = None,
+        cover_art=None,
     ):
         self.db = db
         self.api_gate = api_gate
         self.config = config
+        self.cover_art = cover_art
         self.run_id = run_id
         self.triggered_by = triggered_by
 
@@ -133,10 +141,11 @@ class JobContext:
 
 
 class JobManager:
-    def __init__(self, db, *, api_gate=None, config=None):
+    def __init__(self, db, *, api_gate=None, config=None, cover_art=None):
         self._db = db
         self._api_gate = api_gate
         self._config = config
+        self._cover_art = cover_art
         self._jobs: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
 
@@ -223,6 +232,7 @@ class JobManager:
             config=self._config,
             run_id=run_id,
             triggered_by=triggered_by,
+            cover_art=getattr(self, "_cover_art", None),
         )
         try:
             result = await func(params, ctx)

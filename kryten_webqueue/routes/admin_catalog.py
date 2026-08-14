@@ -94,6 +94,31 @@ async def clear_played(
     return {"success": True, "removed": removed}
 
 
+@router.post("/{friendly_token}/enrich")
+async def enrich_item(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
+    """Force-run the full enrichment pipeline for a single item.
+
+    Starts as a background job and returns the run_id for progress polling.
+    """
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    job_manager = request.app.state.job_manager
+    result = await job_manager.run_job(
+        "catalog_enrich",
+        params={
+            "tokens": friendly_token,
+            "force": "true",
+            "steps": "classify,title,meta,art,tags",
+        },
+        triggered_by=user.get("username"),
+    )
+    return result
+
+
 @router.get("/recently-played/debug")
 async def recently_played_debug(request: Request, user: dict = Depends(require_admin)):
     """List what the recently-played rules currently hide from regular users."""

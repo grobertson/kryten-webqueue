@@ -70,30 +70,104 @@ async def _run_vendored(module_path: str, params: dict, ctx, *, deps: list[str])
 
 
 async def enrichtitles_job(params: dict, ctx):
-    return await _run_vendored(
-        "kryten_webqueue.integrations.cmsutils.enrichtitles",
-        params,
-        ctx,
-        deps=["requests"],
-    )
+    params.setdefault("steps", "classify,title")
+    return await catalog_enrich_job(params, ctx)
 
 
 async def enrichmeta_job(params: dict, ctx):
-    return await _run_vendored(
-        "kryten_webqueue.integrations.cmsutils.enrichmeta",
-        params,
-        ctx,
-        deps=["requests"],
-    )
+    params.setdefault("steps", "classify,meta")
+    return await catalog_enrich_job(params, ctx)
 
 
 async def enrichtv_job(params: dict, ctx):
-    return await _run_vendored(
-        "kryten_webqueue.integrations.cmsutils.enrichtv",
-        params,
-        ctx,
-        deps=["requests"],
+    params.setdefault("steps", "classify,meta")
+    return await catalog_enrich_job(params, ctx)
+
+
+async def catalog_enrich_job(params: dict, ctx) -> dict:
+    """Unified catalog enrichment pipeline.
+
+    params:
+      steps     comma-separated list or "all" (default)
+      tokens    comma-separated friendly_tokens or "all" (default)
+      force     "1"|"true" — bypass cached state
+      dry_run   "1"|"true" — preview without writing
+      limit     integer — max items per step
+      min_score integer — description quality threshold (default 50)
+    """
+    from ..catalog.enrichment import CatalogEnrichmentPipeline
+
+    pipeline = CatalogEnrichmentPipeline(
+        db=ctx.db,
+        config=ctx.config,
+        cover_art=getattr(ctx, "cover_art", None),
     )
+    step_param = params.get("steps", "all")
+    steps = None if step_param == "all" else [s.strip() for s in step_param.split(",")]
+    token_param = params.get("tokens", "all")
+    tokens = (
+        None if token_param == "all" else [t.strip() for t in token_param.split(",")]
+    )
+
+    report = await pipeline.run(
+        steps=steps,
+        tokens=tokens,
+        force=str(params.get("force", "")).lower() in ("1", "true"),
+        dry_run=str(params.get("dry_run", "")).lower() in ("1", "true"),
+        limit=int(params["limit"]) if params.get("limit") else None,
+        min_score=int(params.get("min_score", 50)),
+        ctx=ctx,
+    )
+    return report.to_dict()
+
+
+CATALOG_ENRICH_SCHEMA = [
+    {
+        "name": "steps",
+        "label": "Steps",
+        "type": "string",
+        "default": "all",
+        "required": False,
+        "help": "Comma-separated: sync,classify,title,meta,art,tags,categories — or 'all'",
+    },
+    {
+        "name": "tokens",
+        "label": "Tokens",
+        "type": "string",
+        "default": "all",
+        "required": False,
+        "help": "Comma-separated friendly_tokens to process, or 'all'",
+    },
+    {
+        "name": "force",
+        "label": "Force re-run",
+        "type": "bool",
+        "default": False,
+        "required": False,
+    },
+    {
+        "name": "dry_run",
+        "label": "Dry run",
+        "type": "bool",
+        "default": False,
+        "required": False,
+    },
+    {
+        "name": "limit",
+        "label": "Limit",
+        "type": "int",
+        "default": None,
+        "required": False,
+        "help": "Max items per step (leave blank for all)",
+    },
+    {
+        "name": "min_score",
+        "label": "Min description score",
+        "type": "int",
+        "default": 50,
+        "required": False,
+    },
+]
 
 
 # ── Fetch job (yt-pipe downloader) ─────────────────────────────────────────────

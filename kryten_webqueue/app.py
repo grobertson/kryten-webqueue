@@ -92,7 +92,7 @@ async def lifespan(app: FastAPI):
     app.state.catalog_sync = catalog_sync
 
     # Generic background job runner (records run history to job_runs)
-    job_manager = JobManager(db, api_gate=api_gate, config=config)
+    job_manager = JobManager(db, api_gate=api_gate, config=config, cover_art=cover_art)
 
     async def _catalog_sync_job(params, ctx):
         # catalog_sync registers with no schema; params/ctx are ignored. The
@@ -112,9 +112,11 @@ async def lifespan(app: FastAPI):
         enrichtitles_job,
         enrichmeta_job,
         enrichtv_job,
+        catalog_enrich_job,
         fetch_job,
         fetchurls_job,
         motd_posters_job,
+        CATALOG_ENRICH_SCHEMA,
         ENRICHTITLES_SCHEMA,
         ENRICHMETA_SCHEMA,
         ENRICHTV_SCHEMA,
@@ -123,6 +125,12 @@ async def lifespan(app: FastAPI):
         MOTD_POSTERS_SCHEMA,
     )
 
+    job_manager.register(
+        "catalog_enrich",
+        catalog_enrich_job,
+        label="Catalog Enrichment Pipeline",
+        schema=CATALOG_ENRICH_SCHEMA,
+    )
     job_manager.register(
         "enrichtitles",
         enrichtitles_job,

@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-08-13
+
+### Added
+
+- **Unified Catalog Enrichment Pipeline** (`kryten_webqueue/catalog/enrichment/`).
+  Consolidates `enrichtitles`, `enrichmeta`, `enrichtv`, and the sync-time art
+  resolver into a single `CatalogEnrichmentPipeline` with composable, named steps.
+
+  **Steps:** `sync` → `classify` → `title` → `meta` → `art` → `tags` →
+  `categories` (stub, deferred).
+
+  **Key fixes:**
+  - Art step uses `classification.lookup_title` (the extracted film title, e.g.
+    `"Phantom of the Mall (1989)"`) instead of the raw CMS title (`"Phantom of
+    the Mall Svengoolie"`). Svengoolie, MonsterVision, Last Drive-In, Rifftrax,
+    and MST3K items can now resolve TMDB posters correctly.
+  - Single `HOSTED_SHOW_REGISTRY` replaces three scattered `_HOSTED_PATTERNS`
+    lists; hosted-show detection is now authoritative in `classify.py`.
+  - Single `normalise.py` replaces five separate title-cleaning implementations.
+  - `meta_json` cached in `item_enrichment_state` carries `poster_url` so art
+    and meta share one TMDB call (no double lookup).
+  - Meta step populates `catalog_people` / `catalog_studios` tables from TMDB
+    credits automatically.
+
+  **New job:** `catalog_enrich` — full or partial pipeline; params: `steps`,
+  `tokens`, `force`, `dry_run`, `limit`, `min_score`.
+
+  **Backward-compat wrappers:** `enrichtitles`, `enrichmeta`, `enrichtv` now
+  delegate to the new pipeline (`steps=classify,title` / `classify,meta`).
+
+  **Re-enrich button** on the item detail admin panel — force-runs all
+  enrichment steps for a single item without touching the cron schedule.
+
+  **DB migration v19:** `item_enrichment_state` table — per-item cache of
+  classification, TMDB/OMDB result, and per-step timestamps.
+
 ## [0.34.16] - 2026-08-13
 
 ### Added

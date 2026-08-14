@@ -27,6 +27,7 @@
                         onclick="toggleWatchlist(this, '{{ item.friendly_token }}')">+ My List</button>
                 {% if user.rank >= 3 %}
                 <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
+                <button class="btn" onclick="reEnrichItem('{{ item.friendly_token }}')" title="Force re-run classify, title, meta, art, and tags for this item">Re-enrich</button>
                 {% endif %}
             </div>
         </div>
@@ -129,5 +130,22 @@
 {% block scripts %}
 <script>
 initWatchlistButtons();
+
+async function reEnrichItem(token) {
+    if (!confirm('Force re-run enrichment (classify, title, meta, art, tags) for this item?')) return;
+    try {
+        const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}/enrich`, {
+            method: 'POST', credentials: 'same-origin'
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (resp.ok) {
+            showToast('Enrichment started (job run #' + (data.run_id || '?') + ')');
+        } else {
+            showToast(data.detail || `Failed (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
 </script>
 {% endblock %}
