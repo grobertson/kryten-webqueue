@@ -792,25 +792,54 @@ class _CatalogMixin:
         await self._db.commit()
 
     async def update_catalog(self, friendly_token: str, row: dict):
-        sql = """
-            UPDATE catalog SET title=:title, description=:description,
-                   duration_sec=:duration_sec, manifest_url=:manifest_url,
-                   thumbnail_url=:thumbnail_url,
-                   added_at=COALESCE(:added_at, added_at),
-                   synced_at=:synced_at, updated_at=:synced_at
-            WHERE friendly_token=:friendly_token
+        """Update catalog item with partial or full field set.
+        
+        Only fields present in *row* are updated. Always adds friendly_token
+        and updates updated_at to current time when any field changes.
         """
-        row = {"added_at": None, **row}
-        await self._db.execute(sql, row)
-        # Rebuild FTS for this row
-        await self._db.execute(
-            "DELETE FROM catalog_fts WHERE friendly_token = ?", [friendly_token]
-        )
-        await self._db.execute(
-            "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
-            "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
-            [friendly_token],
-        )
+        if not row:
+            return
+        
+        # Build SET clause from provided fields
+        allowed = {
+            "title", "description", "duration_sec", "manifest_url",
+            "thumbnail_url", "added_at", "synced_at"
+        }
+        updates = []
+        params = {"friendly_token": friendly_token}
+        
+        for key in row:
+            if key in allowed:
+                # added_at uses COALESCE to preserve existing if None
+                if key == "added_at":
+                    updates.append("added_at=COALESCE(:added_at, added_at)")
+                else:
+                    updates.append(f"{key}=:{key}")
+                params[key] = row[key]
+        
+        # Always update updated_at when modifying
+        updates.append("updated_at=:updated_at")
+        params["updated_at"] = row.get("synced_at") or params.get("synced_at")
+        if not params["updated_at"]:
+            from datetime import datetime, UTC
+            params["updated_at"] = datetime.now(UTC).isoformat()
+        
+        if not updates:
+            return
+        
+        sql = f"UPDATE catalog SET {', '.join(updates)} WHERE friendly_token=:friendly_token"
+        await self._db.execute(sql, params)
+        
+        # Rebuild FTS for this row if title or description changed
+        if "title" in row or "description" in row:
+            await self._db.execute(
+                "DELETE FROM catalog_fts WHERE friendly_token = ?", [friendly_token]
+            )
+            await self._db.execute(
+                "INSERT INTO catalog_fts(rowid, friendly_token, title, description) "
+                "SELECT rowid, friendly_token, title, description FROM catalog WHERE friendly_token = ?",
+                [friendly_token],
+            )
         await self._db.commit()
 
     async def update_cover_art(self, friendly_token: str, path: str, source: str):

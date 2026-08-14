@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.35.5] - 2026-08-14
+
+### Fixed
+
+- **SQL binding parameter error in enrichment pipeline.** Fixed `update_catalog`
+  method to support partial updates (updating only specific fields like title
+  or description without requiring all fields). Previously, the method required
+  all catalog fields to be present, causing "You did not supply a value for
+  binding parameter" errors when the meta and title enrichment steps attempted
+  partial updates. Now builds SQL dynamically based on provided fields.
+
 ## [0.35.4] - 2026-08-13
 
 ### Fixed
