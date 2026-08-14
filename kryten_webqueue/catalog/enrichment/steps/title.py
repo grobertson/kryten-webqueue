@@ -89,6 +89,16 @@ class TitleStep:
             else:
                 candidate = clean
             return candidate if candidate != cls.raw_title else None
+        if ct == "hosted_movie" and cls.hosted:
+            # Format as "Movie Title (YYYY) - Show Name"
+            t = cls.hosted.movie_title
+            y = cls.hosted.movie_year
+            show = cls.hosted.show_name
+            if y:
+                candidate = f"{t} ({y}) - {show}"
+            else:
+                candidate = f"{t} - {show}"
+            return candidate if candidate != cls.raw_title else None
         if ct == "riffed_movie" and cls.hosted:
             entry_template = cls.hosted  # HostedInfo has show_name
             if "{title}" in (cls.hosted.show_name or ""):
@@ -100,7 +110,7 @@ class TitleStep:
                 return (
                     f"RiffTrax Presents: {t} ({y})" if y else f"RiffTrax Presents: {t}"
                 )
-        # hosted_movie / archive / unknown / tv_episode: no change
+        # archive / unknown / tv_episode: no change
         return None
 
     async def _push_title(

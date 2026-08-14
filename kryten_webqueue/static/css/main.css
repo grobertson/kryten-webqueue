@@ -740,9 +740,9 @@ a.np-chip {
     border: 1px solid var(--accent);
 }
 .np-chip-tag {
-    background: var(--bg-elevated, #2a2a38);
-    color: var(--text-secondary);
-    border: 1px solid var(--border);
+    background: rgba(232, 150, 16, 0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent);
 }
 .np-chip-person {
     background: rgba(0, 168, 120, 0.15);
@@ -766,6 +766,40 @@ a.np-chip {
 }
 .active-facet-notice a {
     font-weight: 600;
+}
+
+/* Cast & Crew collapsible section in item detail */
+.item-detail-cast-crew-collapse {
+    margin-top: 1rem;
+    padding: 0.5rem 0;
+}
+.item-detail-cast-crew-collapse summary {
+    cursor: pointer;
+    padding: 0.5rem;
+    background: var(--bg-secondary);
+    border-radius: var(--radius);
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+}
+.item-detail-cast-crew-collapse summary::-webkit-details-marker {
+    display: none;
+}
+.item-detail-cast-crew-collapse summary::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 0.5rem;
+    transition: transform 0.2s;
+}
+.item-detail-cast-crew-collapse[open] summary::before {
+    transform: rotate(90deg);
+}
+.item-detail-cast-crew-collapse summary:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
 }
 
 /* WebSocket status */

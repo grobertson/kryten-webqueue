@@ -35,8 +35,26 @@ HOSTED_SHOW_REGISTRY: list[HostedShowEntry] = [
         None,
         "joebobbriggs",
     ),
+    # "JBB" shorthand for Joe Bob Briggs
+    HostedShowEntry(
+        re.compile(r"\bJBB\b", re.I),
+        "Joe Bob Briggs",
+        "hosted_movie",
+        "keep",
+        None,
+        "joebobbriggs",
+    ),
     HostedShowEntry(
         re.compile(r"JBBTLDI|Joe\s*Bob\s+TLDI", re.I),
+        "The Last Drive-In with Joe Bob Briggs",
+        "hosted_movie",
+        "keep",
+        None,
+        "lastdrivein",
+    ),
+    # "TLDI" shorthand for The Last Drive-In
+    HostedShowEntry(
+        re.compile(r"\bTLDI\b", re.I),
         "The Last Drive-In with Joe Bob Briggs",
         "hosted_movie",
         "keep",
@@ -66,6 +84,14 @@ HOSTED_SHOW_REGISTRY: list[HostedShowEntry] = [
         "keep",
         None,
         "svengoolie",
+    ),
+    HostedShowEntry(
+        re.compile(r"13\s+Nights?\s+of\s+Elvira", re.I),
+        "13 Nights of Elvira",
+        "hosted_movie",
+        "keep",
+        None,
+        "elvira",
     ),
     HostedShowEntry(
         re.compile(r"Riff\s*Trax(?:\s+Live)?", re.I),
@@ -225,8 +251,9 @@ class ItemClassification:
 
 
 # YouTube "Title | English Full Movie | Genre1 Genre2" pattern
+# Also handles variants like "Title | Full Movie HD | Description"
 _YT_FULL_MOVIE_RE = re.compile(
-    r"^(?P<title>.+?)\s*\|\s*(?:\w+\s+)?Full\s+Movie\s*(?:\|\s*(?P<genres>.+))?$", re.I
+    r"^(?P<title>.+?)\s*\|.*(Full\s+(?:Movie|Film|Length|Feature)).*$", re.I
 )
 
 
@@ -299,18 +326,20 @@ def classify_item(
 
     # 4. Movie (>= 30 min)
     if duration_sec >= 1800:
+        # YouTube title cleanup: extract title before first pipe if "full movie" appears
         yt = _YT_FULL_MOVIE_RE.match(raw_title.strip())
         if yt:
             clean_title = yt.group("title").strip()
-            genres = (yt.group("genres") or "").split() if yt.group("genres") else []
+            # Extract year from the clean title part
+            clean_title, year = normalize_and_clean(clean_title)
             return ItemClassification(
                 friendly_token=friendly_token,
                 raw_title=raw_title,
                 content_type="movie",
                 hosted=None,
                 lookup_title=clean_title,
-                lookup_year=None,
-                genre_hints=genres,
+                lookup_year=year,
+                genre_hints=[],
                 duration_sec=duration_sec,
                 description_score=description_score,
                 has_real_art=has_real_art,

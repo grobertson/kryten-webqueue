@@ -41,7 +41,22 @@
             </div>
 
             {% if item.description %}
-                <p class="item-detail-description">{{ item.description }}</p>
+                {% set has_people_data = people.cast or people.director or people.producer or people.writer or studios %}
+                {% if has_people_data %}
+                    {# Split description at "Cast & Crew" and make that section collapsible #}
+                    {% set description_parts = item.description.split('Cast & Crew') %}
+                    {% if description_parts|length > 1 %}
+                        <div class="item-detail-description">{{ description_parts[0] }}</div>
+                        <details class="item-detail-cast-crew-collapse">
+                            <summary>Cast & Crew (from description)</summary>
+                            <div class="item-detail-description">{{ description_parts[1] }}</div>
+                        </details>
+                    {% else %}
+                        <p class="item-detail-description">{{ item.description }}</p>
+                    {% endif %}
+                {% else %}
+                    <p class="item-detail-description">{{ item.description }}</p>
+                {% endif %}
             {% else %}
                 <p class="item-detail-description empty-state">No description available.</p>
             {% endif %}

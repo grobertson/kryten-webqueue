@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-08-14
+
+### Added
+
+- **New hosted movie shows.** Added support for "13 Nights of Elvira", "JBB" (shorthand
+  for Joe Bob Briggs), and "TLDI" (shorthand for The Last Drive-In).
+- **Hosted movie title formatting.** Hosted movies now display as "Movie Title (YYYY) - Show Name"
+  (e.g., "Friday the 13th (1980) - Svengoolie"), ensuring year is always in parentheses
+  and show name is appended as a suffix.
+- **Collapsible cast & crew in descriptions.** When person/role/studio data exists, the
+  "Cast & Crew" section in item descriptions is now collapsed by default to avoid
+  duplication. Users can expand it with a single click.
+- **Improved YouTube title cleanup.** Enhanced detection of YouTube imports with pipe
+  characters and "full movie" patterns (e.g., "Title | Full Movie HD | Description"),
+  extracting the clean title before the first pipe.
+- **Distinct tag styling.** Tags now display with orange/accent color borders to
+  differentiate them from categories (purple) and persons/studios (green/gold).
+
+### Fixed
+
+- **Better Monstervision title extraction.** Monstervision titles like "Monstervision 01
+  Friday the 13th Part 1" now extract to clean movie titles with proper database lookups.
+
 ## [0.35.9] - 2026-08-14
 
 ### Fixed
