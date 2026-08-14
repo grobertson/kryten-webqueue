@@ -86,7 +86,7 @@ async function openJobRunnerModal(job) {
     overlay.innerHTML = `
         <div class="modal-box" role="dialog" aria-modal="true">
             <h3>Run: ${escapeHtml(job.label)}</h3>
-            <div class="job-params">${job.schema.map(f => _jobFieldHtml(f)).join('')}</div>
+            <div class="modal-body"><div class="job-params">${job.schema.map(f => _jobFieldHtml(f)).join('')}</div></div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-action="cancel">Cancel</button>
                 <button class="btn btn-primary" data-action="run">Run</button>
@@ -159,6 +159,7 @@ async function openScheduleModal(jobName) {
     overlay.innerHTML = `
         <div class="modal-box" role="dialog" aria-modal="true">
             <h3>${existing ? 'Edit' : 'Create'} Schedule: ${escapeHtml(job.label)}</h3>
+            <div class="modal-body">
             <label class="field">
                 <span>Cron expression <small style="font-weight:normal;opacity:.7">(min hour dom mon dow, UTC)</small></span>
                 <input type="text" id="sched-cron" placeholder="0 21 * * 4" value="${cronVal}" autocomplete="off">
@@ -168,6 +169,7 @@ async function openScheduleModal(jobName) {
                 <span>Active</span>
             </label>
             ${paramFields ? `<details ${existing ? 'open' : ''}><summary style="cursor:pointer;margin:.5rem 0">Job parameters</summary><div class="job-params">${paramFields}</div></details>` : ''}
+            </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-action="cancel">Cancel</button>
                 <button class="btn btn-primary" data-action="save">Save</button>

@@ -1357,10 +1357,20 @@ a.np-chip {
     box-shadow: var(--shadow);
     padding: 1.5rem;
     width: 100%;
-    max-width: 420px;
+    max-width: 540px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+.modal-body {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-right: 0.25rem; /* breathing room beside scrollbar */
 }
 .modal-box h3 {
     margin-bottom: 1rem;
+    flex-shrink: 0;
 }
 .modal-actions {
     display: flex;
@@ -1368,6 +1378,9 @@ a.np-chip {
     justify-content: flex-end;
     flex-wrap: wrap;
     margin-top: 1.25rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
 }
 .btn-secondary {
     background: var(--bg-card);

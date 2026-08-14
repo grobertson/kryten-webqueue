@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.35.2] - 2026-08-13
+
+### Fixed
+
+- **Job / schedule modals no longer clip off-screen.** The job-runner and
+  schedule parameter dialogs could grow taller than the viewport, pushing
+  the Cancel/Save/Run buttons below the fold where they were unreachable.
+
+  - `.modal-box` is now a flex column capped at `90vh` with `max-width`
+    widened from 420 px to 540 px.
+  - All scrollable content is wrapped in a `.modal-body` div that absorbs
+    the overflow; the action buttons are pinned at the bottom with a
+    separator line and `flex-shrink: 0`, so they are always reachable
+    regardless of how many parameters a job defines.
+
 ## [0.35.1] - 2026-08-13
 
 ### Fixed
