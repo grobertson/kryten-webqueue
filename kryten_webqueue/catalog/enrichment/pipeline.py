@@ -45,6 +45,11 @@ class CatalogEnrichmentPipeline:
         if unknown:
             raise ValueError(f"Unknown steps: {unknown}")
 
+        logger.info(
+            "[enrichment] Starting pipeline: steps=%s tokens=%s force=%s dry_run=%s limit=%s",
+            steps_to_run, "specific" if tokens else "all", force, dry_run, limit
+        )
+
         start = time.monotonic()
         by_step: dict[str, StepResult] = {}
         total_items = 0
@@ -65,6 +70,10 @@ class CatalogEnrichmentPipeline:
             # For all non-sync steps: load catalog rows + classify
             rows = await self._db.get_catalog_for_enrichment(
                 step=step_name, tokens=tokens, force=force, limit=limit
+            )
+            logger.info(
+                "[enrichment] step=%s found %d item(s) (force=%s)",
+                step_name, len(rows), force
             )
             if not rows:
                 by_step[step_name] = StepResult(skipped=0)
@@ -129,13 +138,23 @@ class CatalogEnrichmentPipeline:
                 r = StepResult()
 
             by_step[step_name] = r
+            logger.info(
+                "[enrichment] step=%s complete: processed=%d changed=%d skipped=%d errors=%d",
+                step_name, r.processed, r.changed, r.skipped, len(r.errors)
+            )
             await self._report_progress(ctx, step_name, r)
+
+        elapsed = time.monotonic() - start
+        logger.info(
+            "[enrichment] Pipeline complete in %.1fs: %d item(s), %d step(s)",
+            elapsed, total_items, len(steps_to_run)
+        )
 
         return EnrichmentReport(
             steps_run=steps_to_run,
             total_items=total_items,
             by_step=by_step,
-            elapsed_sec=time.monotonic() - start,
+            elapsed_sec=elapsed,
             dry_run=dry_run,
         )
 

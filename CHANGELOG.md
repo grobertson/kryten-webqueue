@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.35.7] - 2026-08-14
+
+### Added
+
+- **INFO-level logging for enrichment pipeline.** The catalog enrichment pipeline
+  now logs INFO-level messages when starting, processing each step, and completing,
+  including counts of items found, processed, changed, skipped, and any errors.
+  Makes it much easier to monitor and debug enrichment job progress.
+
 ## [0.35.6] - 2026-08-14
 
 ### Fixed
