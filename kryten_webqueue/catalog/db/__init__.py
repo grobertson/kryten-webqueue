@@ -8,9 +8,17 @@ from ._catalog import (
 from ._playlists import _PlaylistsMixin
 from ._queue import _QueueMixin
 from ._feedback import _FeedbackMixin
+from ._watchlist import _WatchlistMixin
 
 
-class Database(_CatalogMixin, _PlaylistsMixin, _QueueMixin, _FeedbackMixin, _DBBase):
+class Database(
+    _CatalogMixin,
+    _PlaylistsMixin,
+    _QueueMixin,
+    _FeedbackMixin,
+    _WatchlistMixin,
+    _DBBase,
+):
     """Async SQLite database wrapper."""
 
 

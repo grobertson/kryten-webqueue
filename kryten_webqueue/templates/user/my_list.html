@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}My List{% endblock %}
+{% block body_class %}catalog-page{% endblock %}
+
+{% block content %}
+<div class="catalog-header">
+    <h1>My List</h1>
+</div>
+
+<div class="catalog-grid">
+    {% for item in items %}
+    <div class="catalog-card" data-token="{{ item.friendly_token }}">
+        <a class="card-poster" href="/catalog/item/{{ item.friendly_token }}">
+            {% if item.cover_art_source in ('tmdb', 'omdb') and item.cover_art_path %}
+                <img src="/images/{{ item.cover_art_path }}/400.webp"
+                     srcset="/images/{{ item.cover_art_path }}/200.webp 200w,
+                             /images/{{ item.cover_art_path }}/400.webp 400w,
+                             /images/{{ item.cover_art_path }}/800.webp 800w"
+                     sizes="(max-width: 600px) 200px, 400px"
+                     alt="{{ item.title }}" loading="lazy">
+            {% elif item.placeholder_art %}
+                <div class="card-poster-art">
+                    <img class="poster-branded" src="{{ item.placeholder_art }}"
+                         alt="{{ item.title }}" loading="lazy">
+                    {% if item.thumbnail_url %}
+                    <img class="poster-real" src="{{ item.thumbnail_url }}"
+                         alt="" loading="lazy" aria-hidden="true">
+                    {% elif item.cover_art_path %}
+                    <img class="poster-real" src="/images/{{ item.cover_art_path }}/400.webp"
+                         alt="" loading="lazy" aria-hidden="true">
+                    {% endif %}
+                </div>
+            {% elif item.cover_art_path %}
+                <img src="/images/{{ item.cover_art_path }}/400.webp"
+                     alt="{{ item.title }}" loading="lazy">
+            {% elif item.thumbnail_url %}
+                <img src="{{ item.thumbnail_url }}"
+                     alt="{{ item.title }}" loading="lazy">
+            {% else %}
+                <div class="card-poster-placeholder">
+                    <span>{{ item.title[:1] }}</span>
+                </div>
+            {% endif %}
+        </a>
+        <div class="card-info">
+            <h3 class="card-title" title="{{ item.title }}">
+                <a href="/catalog/item/{{ item.friendly_token }}">{{ item.title }}</a>
+            </h3>
+            <span class="card-duration">{{ (item.duration_sec // 60) }}m</span>
+        </div>
+        <div class="card-actions">
+            <button class="btn btn-sm btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
+            <button class="btn btn-sm btn-watchlist btn-watchlist-active"
+                    data-token="{{ item.friendly_token }}"
+                    onclick="removeFromMyList(this, '{{ item.friendly_token }}')">&#10003; My List</button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not items %}
+<div class="empty-state">
+    <p>Your list is empty.</p>
+    <p class="muted">Browse the catalog and click <strong>+ My List</strong> on any title to save it for later.</p>
+    <p><a class="btn btn-sm" href="/catalog/browse">Browse Catalog</a></p>
+</div>
+{% endif %}
+
+<div class="pagination">
+    {% if page > 1 %}
+        <a href="?page={{ page - 1 }}" class="btn btn-sm">&larr; Prev</a>
+    {% endif %}
+
+    {% set start_page = [1, page - 2] | max %}
+    {% set end_page = [total_pages, page + 2] | min %}
+    {% for p in range(start_page, end_page + 1) %}
+        {% if p == page %}
+            <span class="page-num page-current">{{ p }}</span>
+        {% else %}
+            <a href="?page={{ p }}" class="btn btn-sm btn-page">{{ p }}</a>
+        {% endif %}
+    {% endfor %}
+
+    <span class="page-info">of {{ total_pages }}</span>
+
+    {% if page < total_pages %}
+        <a href="?page={{ page + 1 }}" class="btn btn-sm">Next &rarr;</a>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function removeFromMyList(btn, token) {
+    try {
+        const resp = await fetch(`/user/watchlist/${encodeURIComponent(token)}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+        });
+        if (resp.ok) {
+            const card = document.querySelector(`.catalog-card[data-token="${CSS.escape(token)}"]`);
+            if (card) {
+                card.style.transition = 'opacity 0.3s';
+                card.style.opacity = '0';
+                setTimeout(() => card.remove(), 300);
+            }
+            showToast('Removed from My List');
+        } else {
+            const data = await resp.json().catch(() => ({}));
+            showToast(data.detail || 'Failed', 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+</script>
+{% endblock %}

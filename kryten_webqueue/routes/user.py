@@ -119,3 +119,41 @@ async def get_profile(request: Request, user: dict = Depends(get_current_user)):
         "rank": user["rank"],
         "online": user_data.get("online", False) if user_data else False,
     }
+
+
+# --- Watchlist ---
+
+
+@router.get("/watchlist")
+async def get_watchlist(request: Request, user: dict = Depends(get_current_user)):
+    """Return all friendly_tokens in the user's watchlist (for client-side state)."""
+    db = request.app.state.db
+    tokens = await db.watchlist_tokens(user["username"])
+    return {"tokens": tokens}
+
+
+@router.post("/watchlist/{token}")
+async def add_to_watchlist(
+    token: str, request: Request, user: dict = Depends(get_current_user)
+):
+    """Add a catalog item to the user's watchlist."""
+    db = request.app.state.db
+    item = await db.get_item(token)
+    if not item:
+        raise HTTPException(status_code=404, detail="Item not found")
+    added = await db.watchlist_add(user["username"], token)
+    if not added:
+        raise HTTPException(status_code=409, detail="Already in watchlist")
+    return {"added": True}
+
+
+@router.delete("/watchlist/{token}")
+async def remove_from_watchlist(
+    token: str, request: Request, user: dict = Depends(get_current_user)
+):
+    """Remove a catalog item from the user's watchlist."""
+    db = request.app.state.db
+    removed = await db.watchlist_remove(user["username"], token)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Not in watchlist")
+    return {"removed": True}

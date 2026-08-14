@@ -2,6 +2,53 @@
 
 ## [Unreleased]
 
+## [0.34.14] - 2026-08-13
+
+### Added
+
+- **My List (watchlist).** Each user can now save titles to a personal watchlist.
+  - **"+ My List" / "✓ My List" toggle button** on every catalog tile (browse,
+    search) and on the item detail page.  The button transforms in-place after
+    the first click and can be clicked again to remove the item — no page reload.
+    State is loaded once on page load via `GET /user/watchlist` and applied
+    client-side, so the grid renders at full speed with no per-tile server
+    overhead.
+  - **My List page** at `/user/my-list` — same catalog-grid layout as browse,
+    newest-added first, with Queue and "✓ My List" (remove) buttons per tile.
+    Empty-state prompt links back to Browse.  Paginated at 24 per page.
+  - **"My List" nav link** in the top navbar (visible only when logged in,
+    between Browse and Queue).
+  - DB: `user_watchlist` table (migration v17).  Lists are per-username, with a
+    `UNIQUE (username, friendly_token)` guard; duplicate adds are silently
+    ignored.
+  - API: `GET /user/watchlist` (token list), `POST /user/watchlist/{token}`
+    (add, 409 if duplicate), `DELETE /user/watchlist/{token}` (remove).
+
+## [0.34.12] - 2026-08-13
+
+### Fixed
+
+- **Search no longer 500s on special characters.** Titles like "C.H.U.D. (1984)"
+  were causing SQLite FTS5 parse errors because `(`, `)`, `:`, `"`, and other
+  metacharacters have syntactic meaning in FTS5 MATCH queries.  A
+  `_sanitize_fts_query()` helper now strips all non-word characters and
+  collapses whitespace before the MATCH call so any user-typed query is safe.
+  All-punctuation queries ("!!!") return an empty result gracefully rather than
+  raising.
+
+### Added
+
+- **Duration filter on browse/search.** Short items (under 10 minutes — music
+  videos, trailers, commercials, promos, sketches) are now hidden from the
+  catalog by default.  A **"Hide <10 min"** checkbox in the browse/search
+  controls lets users reveal them (or switch to showing only short items via
+  category/tag).  The preference persists in `localStorage` across sessions.
+  - `browse()`, `browse_count()`, `search()`, `search_count()` all accept a
+    `min_duration_sec` keyword argument (default `0` = no filter).
+  - The `/catalog/browse` and `/catalog/search` page routes expose a
+    `hide_short` query parameter (default `1`), which maps `600 s` as the
+    minimum duration.
+
 ## [0.34.11] - 2026-08-13
 
 ### Fixed

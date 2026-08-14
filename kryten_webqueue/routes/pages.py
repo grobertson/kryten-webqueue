@@ -88,6 +88,7 @@ async def catalog_browse_page(
     page: int = 1,
     show_hidden: int = 0,
     sort: str = "default",
+    hide_short: int = 1,
 ):
     user = _get_user_or_none(request)
     if not user:
@@ -101,6 +102,7 @@ async def catalog_browse_page(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
+    min_duration_sec = 600 if hide_short else 0
     items = await db.browse(
         category=category,
         tag=tag,
@@ -108,12 +110,14 @@ async def catalog_browse_page(
         show_hidden=show_hidden,
         sort=sort,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
     )
     total = await db.browse_count(
         category=category,
         tag=tag,
         show_hidden=show_hidden,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
     )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
@@ -134,6 +138,7 @@ async def catalog_browse_page(
             "query": None,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
+            "hide_short": bool(hide_short),
             "sort": sort,
             "sort_options": SORT_OPTIONS,
         },
@@ -149,6 +154,7 @@ async def catalog_search_page(
     tag: str | None = None,
     show_hidden: int = 0,
     sort: str = "default",
+    hide_short: int = 1,
 ):
     user = _get_user_or_none(request)
     if not user:
@@ -162,6 +168,7 @@ async def catalog_search_page(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
+    min_duration_sec = 600 if hide_short else 0
     items = await db.search(
         q,
         category=category,
@@ -170,6 +177,7 @@ async def catalog_search_page(
         show_hidden=show_hidden,
         sort=sort,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
     )
     total = await db.search_count(
         q,
@@ -177,6 +185,7 @@ async def catalog_search_page(
         tag=tag,
         show_hidden=show_hidden,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
     )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
@@ -197,6 +206,7 @@ async def catalog_search_page(
             "query": q,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
+            "hide_short": bool(hide_short),
             "sort": sort,
             "sort_options": SORT_OPTIONS,
         },
@@ -241,6 +251,28 @@ async def user_dashboard_page(request: Request):
     if not user:
         return RedirectResponse("/auth/login")
     return templates.TemplateResponse(request, "user/dashboard.html", {"user": user})
+
+
+@router.get("/user/my-list", response_class=HTMLResponse)
+async def my_list_page(request: Request, page: int = 1):
+    user = _get_user_or_none(request)
+    if not user:
+        return RedirectResponse("/auth/login")
+    db = request.app.state.db
+    items = await db.watchlist_get(user["username"], page=page)
+    total = await db.watchlist_count(user["username"])
+    total_pages = max(1, (total + 23) // 24)
+    _decorate_placeholder_art(request, items)
+    return templates.TemplateResponse(
+        request,
+        "user/my_list.html",
+        {
+            "user": user,
+            "items": items,
+            "page": page,
+            "total_pages": total_pages,
+        },
+    )
 
 
 @router.get("/feedback", response_class=HTMLResponse)

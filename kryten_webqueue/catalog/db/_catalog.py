@@ -27,6 +27,24 @@ HIDDEN_TAG_NAMES = [
 HIDDEN_ITEM_TAG = "kryten-hidden"
 
 
+def _sanitize_fts_query(q: str) -> str:
+    """Strip FTS5 metacharacters from a user-supplied search string.
+
+    FTS5 treats ``"``, ``*``, ``^``, ``(``, ``)``, ``:`` and bare AND/OR/NOT as
+    syntax; an unexpected one raises a SQLite parse error (500).  We discard all
+    non-word characters and collapse whitespace, so "C.H.U.D. (1984)" becomes
+    "C H U D 1984" which matches correctly since the FTS tokenizer also strips
+    punctuation when indexing.
+    """
+    tokens = re.sub(r"[^\w\s]", " ", q, flags=re.UNICODE).split()
+    return " ".join(tokens)
+
+
+def _duration_filter(alias: str, min_sec: int) -> tuple[str, list]:
+    """SQL AND-fragment filtering out items shorter than ``min_sec`` seconds."""
+    return f" AND {alias}.duration_sec >= ? ", [min_sec]
+
+
 def _slugify(text: str) -> str:
     """Derive a URL-safe slug from a category title."""
     s = (text or "").strip().lower()
@@ -190,6 +208,7 @@ class _CatalogMixin:
         show_hidden: bool = False,
         sort: str = "default",
         recently_played_days: int = 0,
+        min_duration_sec: int = 0,
     ) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
@@ -209,6 +228,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
             params.extend(rp_params)
+        if min_duration_sec > 0:
+            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+            query += dur_sql
+            params.extend(dur_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -251,6 +274,7 @@ class _CatalogMixin:
         tag: str | None = None,
         show_hidden: bool = False,
         recently_played_days: int = 0,
+        min_duration_sec: int = 0,
     ) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
@@ -269,6 +293,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
             params.extend(rp_params)
+        if min_duration_sec > 0:
+            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+            query += dur_sql
+            params.extend(dur_params)
         if category:
             query += """
                 AND c.friendly_token IN (
@@ -301,7 +329,11 @@ class _CatalogMixin:
         show_hidden: bool = False,
         sort: str = "default",
         recently_played_days: int = 0,
+        min_duration_sec: int = 0,
     ) -> list[dict]:
+        sanitized = _sanitize_fts_query(query_text)
+        if not sanitized:
+            return []
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    rank AS relevance
@@ -314,7 +346,7 @@ class _CatalogMixin:
                   WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
               )
         """
-        params: list = [query_text]
+        params: list = [sanitized]
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
@@ -323,6 +355,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
             params.extend(rp_params)
+        if min_duration_sec > 0:
+            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+            sql += dur_sql
+            params.extend(dur_params)
         # Category/tag facets AND with the text match (same subqueries browse()
         # uses), so a search can be narrowed by the selected facets.
         facet_sql, facet_params = _facet_filter("c", category, tag)
@@ -347,7 +383,11 @@ class _CatalogMixin:
         tag: str | None = None,
         show_hidden: bool = False,
         recently_played_days: int = 0,
+        min_duration_sec: int = 0,
     ) -> int:
+        sanitized = _sanitize_fts_query(query_text)
+        if not sanitized:
+            return 0
         sql = """
             SELECT COUNT(*) as cnt
             FROM catalog_fts fts
@@ -359,7 +399,7 @@ class _CatalogMixin:
                   WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
               )
         """
-        params: list = [query_text]
+        params: list = [sanitized]
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
@@ -368,6 +408,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
             params.extend(rp_params)
+        if min_duration_sec > 0:
+            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+            sql += dur_sql
+            params.extend(dur_params)
         facet_sql, facet_params = _facet_filter("c", category, tag)
         sql += facet_sql
         params.extend(facet_params)

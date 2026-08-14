@@ -33,6 +33,9 @@
         </div>
         <div class="nav-links">
             <a href="/catalog/browse">Browse</a>
+            {% if user %}
+                <a href="/user/my-list">My List</a>
+            {% endif %}
             <a href="/queue">Queue</a>
             <a href="/race">Race</a>
             {% if user %}

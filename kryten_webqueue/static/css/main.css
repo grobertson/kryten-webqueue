@@ -342,6 +342,34 @@ a:hover {
     color: var(--bg-primary);
     flex: 1;
 }
+.btn-watchlist {
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    color: var(--text-secondary);
+}
+.btn-watchlist:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+.btn-watchlist-active {
+    background: var(--success);
+    border-color: var(--success);
+    color: #fff;
+}
+.btn-watchlist-active:hover {
+    opacity: 0.85;
+}
+/* "Hide <10 min" checkbox label in the browse controls bar */
+.toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
 
 /* Queue Page */
 .queue-layout {

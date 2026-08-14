@@ -332,6 +332,17 @@ MIGRATIONS = [
         updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
     );
     """,
+    # v17: Per-user watchlist ("My List").
+    """
+    CREATE TABLE IF NOT EXISTS user_watchlist (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        username       TEXT NOT NULL,
+        friendly_token TEXT NOT NULL,
+        added_at       TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (username, friendly_token)
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_watchlist_username ON user_watchlist(username);
+    """,
 ]
 
 

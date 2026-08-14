@@ -211,6 +211,62 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// --- Watchlist (My List) ---
+
+let _watchlistTokens = null; // null = not yet fetched
+
+async function _loadWatchlistTokens() {
+    if (_watchlistTokens !== null) return _watchlistTokens;
+    try {
+        const resp = await fetch('/user/watchlist', { credentials: 'same-origin' });
+        const data = resp.ok ? await resp.json() : {};
+        _watchlistTokens = new Set(data.tokens || []);
+    } catch (e) {
+        _watchlistTokens = new Set();
+    }
+    return _watchlistTokens;
+}
+
+function _applyWatchlistBtn(btn, inList) {
+    if (inList) {
+        btn.textContent = '\u2713 My List';
+        btn.classList.add('btn-watchlist-active');
+        btn.title = 'Remove from My List';
+    } else {
+        btn.textContent = '+ My List';
+        btn.classList.remove('btn-watchlist-active');
+        btn.title = 'Add to My List';
+    }
+}
+
+async function initWatchlistButtons() {
+    const btns = document.querySelectorAll('.btn-watchlist');
+    if (!btns.length) return;
+    const tokens = await _loadWatchlistTokens();
+    btns.forEach(btn => _applyWatchlistBtn(btn, tokens.has(btn.dataset.token)));
+}
+
+async function toggleWatchlist(btn, token) {
+    const tokens = await _loadWatchlistTokens();
+    const inList = tokens.has(token);
+    try {
+        const resp = await fetch(`/user/watchlist/${encodeURIComponent(token)}`, {
+            method: inList ? 'DELETE' : 'POST',
+            credentials: 'same-origin',
+        });
+        if (resp.ok) {
+            inList ? tokens.delete(token) : tokens.add(token);
+            _applyWatchlistBtn(btn, !inList);
+            showToast(inList ? 'Removed from My List' : 'Added to My List');
+        } else {
+            const data = await resp.json().catch(() => ({}));
+            showToast(data.detail || 'Failed', 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+
 // Admin queue: prompt for how to resolve position, then submit the chosen mode.
 function queueAsAdmin(token) {
     showAdminQueueModal(token);

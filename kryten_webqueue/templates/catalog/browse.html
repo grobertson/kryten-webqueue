@@ -28,6 +28,12 @@
                     <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
+            <label class="toggle-label" title="Hide music videos, trailers, shorts, and other clips under 10 minutes">
+                <input type="checkbox" id="hide-short-toggle"
+                       {% if hide_short %}checked{% endif %}
+                       onchange="onHideShortChange()">
+                Hide &lt;10 min
+            </label>
         </div>
     </div>
     {% if is_admin %}
@@ -90,6 +96,9 @@
         </div>
         <div class="card-actions">
             <button class="btn btn-sm btn-queue" onclick="queueItem('{{ item.friendly_token }}')">Queue</button>
+            <button class="btn btn-sm btn-watchlist"
+                    data-token="{{ item.friendly_token }}"
+                    onclick="toggleWatchlist(this, '{{ item.friendly_token }}')">+ My List</button>
             {% if user.rank >= 3 %}
             <button class="btn btn-sm btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
             <button class="btn btn-sm" onclick="addToPlaylist('{{ item.friendly_token }}')">Add to playlist</button>
@@ -104,6 +113,7 @@
 </div>
 
 {% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
+{% set hide_short_q = '' if hide_short else '&hide_short=0' %}
 {% if not items %}
 <div class="empty-state">
     {% if query and (active_category or active_tag) %}
@@ -140,7 +150,7 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm">&larr; Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -149,14 +159,14 @@
         {% if p == page %}
             <span class="page-num page-current">{{ p }}</span>
         {% else %}
-            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm btn-page">{{ p }}</a>
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm btn-page">{{ p }}</a>
         {% endif %}
     {% endfor %}
 
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}" class="btn btn-sm">Next &rarr;</a>
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
@@ -169,6 +179,7 @@ function applyFacets() {
     const cat = document.getElementById('category-select').value;
     const tag = document.getElementById('tag-select').value;
     const sort = document.getElementById('sort-select').value;
+    const hideShort = document.getElementById('hide-short-toggle').checked;
     try { localStorage.setItem('browse_sort', sort); } catch (e) { /* ignore */ }
     const params = new URLSearchParams();
     // On a search results page keep the query AND apply the facets so search
@@ -179,9 +190,17 @@ function applyFacets() {
     if (cat) params.set('category', cat);
     if (tag) params.set('tag', tag);
     if (sort && sort !== 'default') params.set('sort', sort);
+    // Only include hide_short in URL when non-default (default = 1, hide).
+    if (!hideShort) params.set('hide_short', '0');
     const base = CURRENT_QUERY ? '/catalog/search' : '/catalog/browse';
     const qs = params.toString();
     window.location.href = base + (qs ? '?' + qs : '');
+}
+
+function onHideShortChange() {
+    const checked = document.getElementById('hide-short-toggle').checked;
+    try { localStorage.setItem('browse_hide_short', checked ? '1' : '0'); } catch (e) {}
+    applyFacets();
 }
 
 // Restore the persisted sort preference when arriving without an explicit sort.
@@ -195,6 +214,25 @@ function applyFacets() {
     if (saved && saved !== 'default' && sel.value === 'default'
         && [...sel.options].some(o => o.value === saved)) {
         sel.value = saved;
+        applyFacets();
+    }
+})();
+
+// Restore hide_short preference when arriving without an explicit param.
+(function restoreHideShortPreference() {
+    const toggle = document.getElementById('hide-short-toggle');
+    if (!toggle) return;
+    const url = new URL(window.location.href);
+    // URL is authoritative; sync it to localStorage so future visits respect it.
+    if (url.searchParams.has('hide_short')) {
+        try { localStorage.setItem('browse_hide_short', url.searchParams.get('hide_short') === '0' ? '0' : '1'); } catch (e) {}
+        return;
+    }
+    let saved = null;
+    try { saved = localStorage.getItem('browse_hide_short'); } catch (e) {}
+    // Redirect only when the saved preference differs from the server default.
+    if (saved === '0' && toggle.checked) {
+        toggle.checked = false;
         applyFacets();
     }
 })();
@@ -415,5 +453,6 @@ async function clearPlayed(token) {
     }
 }
 // queueItem / playNext / queueAsAdmin / showToast / escapeHtml are provided by /static/js/main.js
+initWatchlistButtons();
 </script>
 {% endblock %}
