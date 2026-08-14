@@ -49,11 +49,12 @@ function _jobFieldHtml(f, prefix = 'jobparam-') {
     const id = `${prefix}${f.name}`;
     const label = escapeHtml(f.label || f.name);
     const def = f.default;
+    const helpHtml = f.help ? `<span class="field-help">${escapeHtml(f.help)}</span>` : '';
     if (f.type === 'bool') {
         return `<label class="field field-inline">
             <input type="checkbox" id="${id}" ${def ? 'checked' : ''}>
             <span>${label}</span>
-        </label>`;
+        </label>${helpHtml ? `<div style="margin:-0.5rem 0 0.85rem 0">${helpHtml}</div>` : ''}`;
     }
     if (f.type === 'enum') {
         const opts = (f.options || []).map(o => {
@@ -63,17 +64,18 @@ function _jobFieldHtml(f, prefix = 'jobparam-') {
             return `<option value="${escapeHtml(String(val))}" ${sel}>${escapeHtml(String(txt))}</option>`;
         }).join('');
         return `<label class="field"><span>${label}</span>
-            <select id="${id}">${opts}</select></label>`;
+            <select id="${id}">${opts}</select>${helpHtml}</label>`;
     }
     if (f.type === 'playlist') {
         return `<label class="field"><span>${label}</span>
-            <select id="${id}" data-playlist-picker="1"><option value="">—</option></select></label>`;
+            <select id="${id}" data-playlist-picker="1"><option value="">—</option></select>${helpHtml}</label>`;
     }
     const inputType = (f.type === 'int' || f.type === 'float') ? 'number' : 'text';
     const step = f.type === 'float' ? ' step="any"' : '';
     const val = (def === null || def === undefined) ? '' : escapeHtml(String(def));
+    const placeholder = f.placeholder ? ` placeholder="${escapeHtml(f.placeholder)}"` : '';
     return `<label class="field"><span>${label}${f.required ? ' *' : ''}</span>
-        <input type="${inputType}"${step} id="${id}" value="${val}"></label>`;
+        <input type="${inputType}"${step}${placeholder} id="${id}" value="${val}">${helpHtml}</label>`;
 }
 
 async function openJobRunnerModal(job) {

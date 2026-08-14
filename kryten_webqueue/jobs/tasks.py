@@ -104,9 +104,11 @@ async def catalog_enrich_job(params: dict, ctx) -> dict:
     )
     step_param = params.get("steps", "all")
     steps = None if step_param == "all" else [s.strip() for s in step_param.split(",")]
-    token_param = params.get("tokens", "all")
+    token_param = (params.get("tokens") or "").strip()
     tokens = (
-        None if token_param == "all" else [t.strip() for t in token_param.split(",")]
+        None
+        if not token_param or token_param == "all"
+        else [t.strip() for t in token_param.replace(",", " ").split() if t.strip()]
     )
 
     report = await pipeline.run(
@@ -124,19 +126,55 @@ async def catalog_enrich_job(params: dict, ctx) -> dict:
 CATALOG_ENRICH_SCHEMA = [
     {
         "name": "steps",
-        "label": "Steps",
-        "type": "string",
+        "label": "Pipeline steps",
+        "type": "enum",
         "default": "all",
         "required": False,
-        "help": "Comma-separated: sync,classify,title,meta,art,tags,categories — or 'all'",
+        "options": [
+            {
+                "value": "all",
+                "label": "Full pipeline — sync → classify → title → meta → art → tags",
+            },
+            {
+                "value": "classify,meta,art,tags",
+                "label": "Enrichment only — classify, fetch metadata, art, and tags (no sync)",
+            },
+            {"value": "art", "label": "Art only — (re-)fetch poster art"},
+            {
+                "value": "classify,art",
+                "label": "Classify + art — re-detect content type then fetch art",
+            },
+            {
+                "value": "classify,meta",
+                "label": "Classify + metadata — descriptions and credits only",
+            },
+            {
+                "value": "tags",
+                "label": "Tags only — push genres/MPAA/hosted-show tags to CMS",
+            },
+            {
+                "value": "title",
+                "label": "Title cleanup only — normalise and push corrected titles",
+            },
+            {"value": "sync", "label": "Sync only — pull latest items from MediaCMS"},
+            {
+                "value": "classify",
+                "label": "Classify only — detect hosted shows, TV episodes, etc.",
+            },
+        ],
+        "help": "Choose which parts of the pipeline to run. 'Full pipeline' is the normal nightly run.",
     },
     {
         "name": "tokens",
-        "label": "Tokens",
+        "label": "Specific items (optional)",
         "type": "string",
-        "default": "all",
+        "default": None,
         "required": False,
-        "help": "Comma-separated friendly_tokens to process, or 'all'",
+        "placeholder": "Leave blank for entire catalog",
+        "help": (
+            "Paste one or more MediaCMS media IDs (the short alphanumeric codes in item URLs, "
+            "e.g. AbCd1234) separated by commas or spaces. Leave blank to process the entire catalog."
+        ),
     },
     {
         "name": "force",
@@ -144,28 +182,36 @@ CATALOG_ENRICH_SCHEMA = [
         "type": "bool",
         "default": False,
         "required": False,
+        "help": "Re-process items even if they were enriched before. Useful after fixing a bug or adding a new hosted-show pattern.",
     },
     {
         "name": "dry_run",
-        "label": "Dry run",
+        "label": "Dry run (preview only)",
         "type": "bool",
         "default": False,
         "required": False,
+        "help": "Walk through the pipeline and log what would change, but write nothing to the database or CMS.",
     },
     {
         "name": "limit",
-        "label": "Limit",
+        "label": "Item limit per step",
         "type": "int",
         "default": None,
         "required": False,
-        "help": "Max items per step (leave blank for all)",
+        "placeholder": "blank = no limit",
+        "help": "Stop after processing this many items per step. Handy for a quick test run before committing to the full catalog.",
     },
     {
         "name": "min_score",
-        "label": "Min description score",
+        "label": "Description quality threshold",
         "type": "int",
         "default": 50,
         "required": False,
+        "help": (
+            "Skip the metadata step for items whose description already scores at or above this value "
+            "(0–130 scale; a fully-enriched description scores ~100). Lower this or use Force re-run "
+            "to refresh already-enriched items."
+        ),
     },
 ]
 

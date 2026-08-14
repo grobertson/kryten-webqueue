@@ -1506,6 +1506,12 @@ a.np-chip {
     font: inherit;
     width: 100%;
 }
+.field-help {
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    line-height: 1.4;
+}
 .check {
     display: flex;
     align-items: center;

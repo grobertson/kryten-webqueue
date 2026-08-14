@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-08-13
+
+### Fixed
+
+- **Catalog Enrich job UX.** The `catalog_enrich` admin job modal was
+  unusable — raw comma-separated step names, unexplained "tokens" field.
+
+  - **Steps** is now a dropdown of labelled presets (e.g. *"Full pipeline",
+    "Enrichment only", "Art only", "Title cleanup only"*) rather than a
+    free-text field requiring knowledge of internal step names.
+  - **Specific items** replaces the opaque "Tokens" label. Placeholder text
+    and help text explain that these are the short MediaCMS media IDs visible
+    in item URLs, and that leaving it blank processes the whole catalog.
+  - **All fields** now show help text beneath them (Force re-run, Dry run,
+    Item limit, Description quality threshold are all explained).
+  - Help text rendering added to `_jobFieldHtml` in `admin.js` — all jobs
+    that define a `help` key on their schema fields now display it. A
+    `placeholder` key is also honoured on text/number inputs.
+  - `.field-help` CSS class added for the muted hint lines.
+  - Token parsing accepts comma- or space-separated IDs and ignores `"all"`
+    for the default blank case.
+
 ## [0.35.0] - 2026-08-13
 
 ### Added
