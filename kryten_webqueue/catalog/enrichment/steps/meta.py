@@ -154,6 +154,19 @@ class MetaStep:
                 new_score = score_description(desc)
                 meta_json = json.dumps(self._meta_to_dict(meta))
 
+                # Validate round-trip before saving
+                try:
+                    json.loads(meta_json)
+                except (ValueError, TypeError) as e:
+                    logger.error(
+                        "[meta] %s: generated malformed meta_json: %s. First 300 chars: %r",
+                        cls.friendly_token,
+                        e,
+                        meta_json[:300],
+                    )
+                    result.record_error(f"{cls.friendly_token}: malformed meta_json ({e})")
+                    continue
+
                 logger.info(
                     "[meta] %s: %r → score %d",
                     cls.friendly_token,
@@ -206,21 +219,24 @@ class MetaStep:
 
     async def _push_description(self, token: str, desc: str) -> None:
         url = f"{self._base}/api/v1/media/{token}"
-        async with httpx.AsyncClient(
-            headers=self._cms_headers, timeout=_TIMEOUT
-        ) as client:
-            resp = await client.get(url)
-            owner = resp.json().get("user") if resp.status_code == 200 else None
-            await client.put(url, data={"description": desc})
-            if owner:
-                await client.post(
-                    f"{self._base}/api/v1/media/user/bulk_actions",
-                    json={
-                        "action": "change_owner",
-                        "media_ids": [token],
-                        "owner": owner,
-                    },
-                )
+        try:
+            async with httpx.AsyncClient(
+                headers=self._cms_headers, timeout=_TIMEOUT
+            ) as client:
+                resp = await client.get(url)
+                owner = resp.json().get("user") if resp.status_code == 200 else None
+                await client.put(url, data={"description": desc})
+                if owner:
+                    await client.post(
+                        f"{self._base}/api/v1/media/user/bulk_actions",
+                        json={
+                            "action": "change_owner",
+                            "media_ids": [token],
+                            "owner": owner,
+                        },
+                    )
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.warning("[meta] Failed to push description for %s: %s", token, exc)
 
     async def _write_people(self, token: str, meta: MovieMetadata) -> None:
         people: list[dict] = []

@@ -1,5 +1,6 @@
 """Step: title — normalise and reformat CMS titles per content type."""
 
+import json
 import logging
 from datetime import datetime, UTC
 
@@ -122,5 +123,5 @@ class TitleStep:
                     },
                 )
             return ok
-        except httpx.HTTPError:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             return False

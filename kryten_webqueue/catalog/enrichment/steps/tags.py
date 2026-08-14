@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import datetime, UTC
@@ -108,35 +109,41 @@ class TagsStep:
         self, client: httpx.AsyncClient, token: str, new_tags: list[str]
     ) -> bool:
         url = f"{self._base}/api/v1/media/{token}"
-        resp = await client.get(url)
-        if resp.status_code != 200:
+        try:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return False
+            data = resp.json()
+            owner = data.get("user")
+            current = {
+                (t.get("title") if isinstance(t, dict) else t)
+                for t in (data.get("tags_info") or [])
+            }
+            to_add = [t for t in new_tags if t not in current]
+            if not to_add:
+                return False
+            merged = list(current | set(to_add))
+            put = await client.put(url, data={"tags": ",".join(merged)})
+            if put.status_code in (200, 201) and owner:
+                await client.post(
+                    f"{self._base}/api/v1/media/user/bulk_actions",
+                    json={"action": "change_owner", "media_ids": [token], "owner": owner},
+                )
+            return put.status_code in (200, 201)
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             return False
-        data = resp.json()
-        owner = data.get("user")
-        current = {
-            (t.get("title") if isinstance(t, dict) else t)
-            for t in (data.get("tags_info") or [])
-        }
-        to_add = [t for t in new_tags if t not in current]
-        if not to_add:
-            return False
-        merged = list(current | set(to_add))
-        put = await client.put(url, data={"tags": ",".join(merged)})
-        if put.status_code in (200, 201) and owner:
-            await client.post(
-                f"{self._base}/api/v1/media/user/bulk_actions",
-                json={"action": "change_owner", "media_ids": [token], "owner": owner},
-            )
-        return put.status_code in (200, 201)
 
     async def _reverse_sync(self, client: httpx.AsyncClient, token: str) -> None:
         """Insert any CMS-only tags into the local catalog_tags table."""
         url = f"{self._base}/api/v1/media/{token}"
-        resp = await client.get(url)
-        if resp.status_code != 200:
-            return
-        data = resp.json()
-        for t in data.get("tags_info") or []:
-            name = t.get("title") if isinstance(t, dict) else t
-            if name:
-                await self._db.add_catalog_tag(token, str(name))
+        try:
+            resp = await client.get(url)
+            if resp.status_code != 200:
+                return
+            data = resp.json()
+            for t in data.get("tags_info") or []:
+                name = t.get("title") if isinstance(t, dict) else t
+                if name:
+                    await self._db.add_catalog_tag(token, str(name))
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.warning("[tags] Failed reverse-sync for %s: %s", token, exc)

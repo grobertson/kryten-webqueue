@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.35.4] - 2026-08-13
+
+### Fixed
+
+- **JSON decode error handling in enrichment pipeline.** All API calls to TMDB,
+  OMDB, and MediaCMS now catch `json.JSONDecodeError` in addition to HTTP errors,
+  preventing malformed responses from crashing enrichment jobs.
+  - Added error handling to `TMDBProvider` search methods
+  - Added error handling to `OMDBProvider` search methods  
+  - Added error handling to CMS API calls in meta, title, and tags steps
+  - Enhanced `parse_meta_json` logging to capture malformed JSON for debugging
+
 ## [0.35.3] - 2026-08-13
 
 ### Added

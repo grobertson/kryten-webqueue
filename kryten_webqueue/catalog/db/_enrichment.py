@@ -110,5 +110,12 @@ class _EnrichmentMixin:
             return None
         try:
             return json.loads(raw)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as exc:
+            import logging
+            logger = logging.getLogger(__name__)
+            token = (row or {}).get("friendly_token", "?")
+            logger.warning(
+                "Failed to parse meta_json for %s: %s. Raw value (first 200 chars): %r",
+                token, exc, raw[:200] if isinstance(raw, str) else raw
+            )
             return None

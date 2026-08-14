@@ -8,6 +8,7 @@ includes poster_url so art and meta steps can share a single provider call.
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 import re
 from dataclasses import dataclass, field
@@ -144,7 +145,7 @@ class TMDBProvider:
                         movie = self._pick(resp2.json().get("results", []), title, None)
                 if movie:
                     return await self._fetch_details(movie, headers, auth)
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug("TMDB search error for %r: %s", title, exc)
         return MovieMetadata()
 
@@ -180,7 +181,7 @@ class TMDBProvider:
                 meta.year = air_date[:4] if air_date else None
                 meta.cast = [c["name"] for c in data.get("guest_stars", [])[:8]]
                 return meta
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug(
                 "TMDB TV search error for %r S%02dE%02d: %s", show, season, episode, exc
             )
@@ -226,7 +227,7 @@ class TMDBProvider:
                     meta.tmdb_rating = f"{vote:.1f}/10"
                 meta.imdb_id = d.get("imdb_id", "")
                 meta.studio = [c["name"] for c in d.get("production_companies", [])[:3]]
-        except httpx.HTTPError:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             pass
 
         try:
@@ -253,7 +254,7 @@ class TMDBProvider:
                     x["name"] for x in crew if x.get("job") == "Original Music Composer"
                 ][:3]
                 meta.editor = [x["name"] for x in crew if x.get("job") == "Editor"][:3]
-        except httpx.HTTPError:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             pass
 
         return meta
@@ -306,7 +307,7 @@ class OMDBProvider:
                     ):
                         return MovieMetadata()
                     return self._parse(data)
-        except httpx.HTTPError as exc:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug("OMDB error for %r: %s", title, exc)
         return MovieMetadata()
 
@@ -327,7 +328,7 @@ class OMDBProvider:
             )
             if resp.status_code == 200 and resp.json().get("Response") == "True":
                 return self._parse(resp.json())
-        except httpx.HTTPError:
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             pass
         return MovieMetadata()
 
