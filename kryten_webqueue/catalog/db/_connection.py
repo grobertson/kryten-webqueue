@@ -395,6 +395,10 @@ MIGRATIONS = [
         last_tags_at      TEXT
     );
     """,
+    # v20: Add last_categories_at for categories enrichment step
+    """
+    ALTER TABLE item_enrichment_state ADD COLUMN last_categories_at TEXT;
+    """,
 ]
 
 

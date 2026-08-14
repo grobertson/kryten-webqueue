@@ -43,6 +43,7 @@ class _EnrichmentMixin:
             "last_meta_at",
             "last_art_at",
             "last_tags_at",
+            "last_categories_at",
         }
         safe = {k: v for k, v in fields.items() if k in allowed}
         if not safe:
@@ -77,7 +78,7 @@ class _EnrichmentMixin:
                    e.tv_show, e.tv_season, e.tv_episode_num,
                    e.description_score, e.tmdb_id, e.imdb_id, e.meta_json,
                    e.last_classify_at, e.last_title_at, e.last_meta_at,
-                   e.last_art_at, e.last_tags_at
+                   e.last_art_at, e.last_tags_at, e.last_categories_at
             FROM catalog c
             LEFT JOIN item_enrichment_state e ON e.friendly_token = c.friendly_token
         """

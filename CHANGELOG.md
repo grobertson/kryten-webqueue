@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.35.9] - 2026-08-14
+
+### Fixed
+
+- **Missing database column for categories step.** Added `last_categories_at` column
+  to `item_enrichment_state` table (migration v20) to support the categories enrichment
+  step. This fixes `OperationalError: no such column: e.last_categories_at` that blocked
+  enrichment jobs when the categories step was included.
+
 ## [0.35.8] - 2026-08-14
 
 ### Fixed
