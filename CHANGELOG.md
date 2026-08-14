@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.36.1] - 2026-08-14
+
+### Fixed
+
+- **Tags now appear on item detail pages.** The tags enrichment step pushed tags to
+  MediaCMS via `PUT /media/{token}`, but that endpoint only accepts title/description
+  and silently ignores a `tags` field — so tags never landed in CMS and thus never
+  reverse-synced into the local catalog. Tag pushes now use the correct
+  `POST /media/user/bulk_actions` (`action: add_tags`) endpoint, and computed
+  genre/MPAA/hosted-show tags are also written directly to the local `catalog_tags`
+  table so they display regardless of CMS write success.
+- **Person and Studio facet links now work.** Clicking a person or studio chip on an
+  item detail page dropped the filter and landed on the unfiltered browse page whenever
+  the user had a saved sort or hide-short preference: the `applyFacets()` redirect
+  rebuilt the URL from the dropdowns only and discarded the `person`/`studio` query
+  params. It now preserves them.
+
 ## [0.36.0] - 2026-08-14
 
 ### Added

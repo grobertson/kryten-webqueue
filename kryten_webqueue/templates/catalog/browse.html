@@ -203,6 +203,13 @@ function applyFacets() {
     }
     if (cat) params.set('category', cat);
     if (tag) params.set('tag', tag);
+    // Preserve person/studio facets — these come from the URL, not the dropdowns,
+    // and must survive a sort/hide_short change or the filter is silently dropped.
+    const current = new URLSearchParams(window.location.search);
+    const person = current.get('person');
+    const studio = current.get('studio');
+    if (person) params.set('person', person);
+    if (studio) params.set('studio', studio);
     if (sort && sort !== 'default') params.set('sort', sort);
     // Only include hide_short in URL when non-default (default = 1, hide).
     if (!hideShort) params.set('hide_short', '0');

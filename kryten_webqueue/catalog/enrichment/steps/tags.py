@@ -83,10 +83,14 @@ class TagsStep:
                         continue
 
                     if not dry_run:
+                        # Persist computed tags locally first so item detail shows
+                        # them even if the CMS write below fails (owner/permission).
+                        for tag in desired:
+                            await self._db.add_catalog_tag(cls.friendly_token, tag)
                         changed = await self._push_tags(
                             client, cls.friendly_token, desired
                         )
-                        # Reverse sync: pull CMS tags back to local DB
+                        # Reverse sync: pull any CMS-only tags back to local DB
                         await self._reverse_sync(client, cls.friendly_token)
                         if changed:
                             result.changed += 1
@@ -108,13 +112,18 @@ class TagsStep:
     async def _push_tags(
         self, client: httpx.AsyncClient, token: str, new_tags: list[str]
     ) -> bool:
-        url = f"{self._base}/api/v1/media/{token}"
+        """Add tags to a CMS media item via the bulk_actions ``add_tags`` action.
+
+        The ``PUT /media/{token}`` endpoint only accepts title/description/media_file
+        and silently ignores a ``tags`` field, so tag changes must go through
+        ``POST /media/user/bulk_actions`` with ``action: add_tags``.
+        """
+        detail_url = f"{self._base}/api/v1/media/{token}"
         try:
-            resp = await client.get(url)
+            resp = await client.get(detail_url)
             if resp.status_code != 200:
                 return False
             data = resp.json()
-            owner = data.get("user")
             current = {
                 (t.get("title") if isinstance(t, dict) else t)
                 for t in (data.get("tags_info") or [])
@@ -122,13 +131,14 @@ class TagsStep:
             to_add = [t for t in new_tags if t not in current]
             if not to_add:
                 return False
-            merged = list(current | set(to_add))
-            put = await client.put(url, data={"tags": ",".join(merged)})
-            if put.status_code in (200, 201) and owner:
-                await client.post(
-                    f"{self._base}/api/v1/media/user/bulk_actions",
-                    json={"action": "change_owner", "media_ids": [token], "owner": owner},
-                )
+            put = await client.post(
+                f"{self._base}/api/v1/media/user/bulk_actions",
+                json={
+                    "action": "add_tags",
+                    "media_ids": [token],
+                    "tag_titles": to_add,
+                },
+            )
             return put.status_code in (200, 201)
         except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             return False
