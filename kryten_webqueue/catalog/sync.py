@@ -57,7 +57,8 @@ class CatalogSync:
     async def sync(self):
         """Full catalog sync from MediaCMS API."""
         log_id = await self._db.start_sync_log()
-        stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0}
+        stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0, "deleted": 0}
+        sync_started_at = datetime.now(UTC).isoformat()
 
         try:
             # /manage_media returns all items (9k+); /media is capped at 1000
@@ -105,6 +106,12 @@ class CatalogSync:
                 logger.debug(
                     f"Catalog sync page {page}: seen={stats['seen']} next={next_url!r}"
                 )
+
+            # Remove items deleted from MediaCMS (not seen during this sync)
+            deleted_count = await self._db.delete_stale_catalog_items(sync_started_at)
+            stats["deleted"] = deleted_count
+            if deleted_count > 0:
+                logger.info(f"Removed {deleted_count} items deleted from MediaCMS")
 
             await self._db.finish_sync_log(log_id, stats, "completed")
             logger.info(f"Catalog sync complete: {stats} ({page} pages)")

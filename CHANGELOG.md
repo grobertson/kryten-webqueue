@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.35.8] - 2026-08-14
+
+### Fixed
+
+- **TV show poster art preservation.** Fixed art enrichment step to use TV show
+  searches instead of movie searches for TV episodes. Previously, searching for
+  "The X-Files" as a movie would find the 1998 X-Files movie poster instead of
+  the TV series poster, causing ~90% of TV show posters to be replaced with
+  incorrect movie posters or wiped out entirely. Now uses `search_tv_show()` for
+  TV content to get the correct series poster art.
+- **Deleted items removed from catalog.** Catalog sync now tracks and removes
+  items that have been deleted from MediaCMS. Items with `synced_at` timestamps
+  older than the sync start time are identified as deleted and removed from the
+  catalog along with their category, tag, people, and studio associations.
+
+### Added
+
+- **TMDBProvider.search_tv_show() and OMDBProvider.search_tv_show().** New methods
+  to search for TV series and return show posters (for use with TV episode items).
+
 ## [0.35.7] - 2026-08-14
 
 ### Added

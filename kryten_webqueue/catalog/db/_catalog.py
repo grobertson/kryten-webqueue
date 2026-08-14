@@ -848,6 +848,44 @@ class _CatalogMixin:
             [path, source, friendly_token],
         )
 
+    async def delete_stale_catalog_items(self, sync_started_at: str) -> int:
+        """Delete catalog items that weren't updated during the sync.
+        
+        Items with synced_at older than sync_started_at are no longer present
+        in MediaCMS and should be removed. Returns count of deleted items.
+        
+        Foreign key CASCADE will automatically remove related entries from:
+        - catalog_fts
+        - catalog_categories
+        - catalog_tags
+        - catalog_people
+        - catalog_studios
+        """
+        cursor = await self._db.execute(
+            "SELECT friendly_token FROM catalog WHERE synced_at < ? OR synced_at IS NULL",
+            [sync_started_at],
+        )
+        tokens = [row[0] for row in await cursor.fetchall()]
+        
+        if not tokens:
+            return 0
+        
+        # Delete from FTS first (not automatically cascaded)
+        placeholders = ",".join("?" * len(tokens))
+        await self._db.execute(
+            f"DELETE FROM catalog_fts WHERE friendly_token IN ({placeholders})",
+            tokens,
+        )
+        
+        # Delete from catalog (cascades to join tables via ON DELETE CASCADE)
+        await self._db.execute(
+            f"DELETE FROM catalog WHERE friendly_token IN ({placeholders})",
+            tokens,
+        )
+        
+        await self._db.commit()
+        return len(tokens)
+
     async def find_catalog_by_title(self, title: str) -> dict | None:
         """Best-effort lookup of a catalog item whose title matches ``title``.
 

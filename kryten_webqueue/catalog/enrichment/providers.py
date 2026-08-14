@@ -149,6 +149,36 @@ class TMDBProvider:
             logger.debug("TMDB search error for %r: %s", title, exc)
         return MovieMetadata()
 
+    async def search_tv_show(self, show: str) -> MovieMetadata:
+        """Search for a TV show and return its poster (for episode art)."""
+        if not self._key:
+            return MovieMetadata()
+        headers, auth = _tmdb_auth(self._key)
+        try:
+            resp = await self._client.get(
+                f"{TMDB_BASE}/search/tv",
+                headers=headers,
+                params={"query": show, **auth},
+            )
+            if resp.status_code != 200:
+                return MovieMetadata()
+            results = resp.json().get("results", [])
+            if not results:
+                return MovieMetadata()
+            # Pick the best match by popularity
+            tv_show = results[0]
+            meta = MovieMetadata()
+            meta.title = tv_show.get("name", "")
+            meta.synopsis = tv_show.get("overview", "")
+            first_air = tv_show.get("first_air_date", "")
+            meta.year = first_air[:4] if first_air else None
+            if tv_show.get("poster_path"):
+                meta.poster_url = f"https://image.tmdb.org/t/p/w780{tv_show['poster_path']}"
+            return meta
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.debug("TMDB TV show search error for %r: %s", show, exc)
+        return MovieMetadata()
+
     async def search_tv_episode(
         self, show: str, season: int, episode: int
     ) -> MovieMetadata:
@@ -309,6 +339,25 @@ class OMDBProvider:
                     return self._parse(data)
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug("OMDB error for %r: %s", title, exc)
+        return MovieMetadata()
+
+    async def search_tv_show(self, show: str) -> MovieMetadata:
+        """Search for a TV show and return its poster (for episode art)."""
+        if not self._key:
+            return MovieMetadata()
+        try:
+            resp = await self._client.get(
+                OMDB_BASE,
+                params={
+                    "apikey": self._key,
+                    "t": show,
+                    "type": "series",
+                },
+            )
+            if resp.status_code == 200 and resp.json().get("Response") == "True":
+                return self._parse(resp.json())
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+            pass
         return MovieMetadata()
 
     async def search_tv_episode(

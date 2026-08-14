@@ -114,9 +114,22 @@ class ArtStep:
         return (meta or {}).get("poster_url")
 
     async def _resolve_poster(self, cls: ItemClassification) -> str | None:
-        """Query TMDB then OMDB using lookup_title (the key fix for hosted movies)."""
+        """Query TMDB then OMDB using lookup_title (the key fix for hosted movies).
+        
+        For TV episodes, search for the show poster (not episode-specific art).
+        """
         if not cls.lookup_title:
             return None
+        
+        # TV episodes: get the show poster
+        if cls.content_type == "tv_episode":
+            meta = await self._tmdb.search_tv_show(cls.lookup_title)
+            if meta.poster_url:
+                return meta.poster_url
+            meta = await self._omdb.search_tv_show(cls.lookup_title)
+            return meta.poster_url
+        
+        # Movies and other content: search as movie
         meta = await self._tmdb.search_movie(cls.lookup_title, cls.lookup_year)
         if meta.poster_url:
             return meta.poster_url
