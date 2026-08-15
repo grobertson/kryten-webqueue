@@ -18,15 +18,15 @@ _TIMEOUT = 20.0
 _MPAA = frozenset({"G", "PG", "PG-13", "R", "NC-17", "NR", "TV-MA", "TV-14", "TV-PG"})
 
 _MPAA_SLUG = {
-    "G": "mpaa-g",
-    "PG": "mpaa-pg",
-    "PG-13": "mpaa-pg13",
-    "R": "mpaa-r",
-    "NC-17": "mpaa-nc17",
-    "NR": "mpaa-nr",
-    "TV-MA": "mpaa-tvma",
-    "TV-14": "mpaa-tv14",
-    "TV-PG": "mpaa-tvpg",
+    "G": "mpaag",
+    "PG": "mpaapg",
+    "PG-13": "mpaapg13",
+    "R": "mpaar",
+    "NC-17": "mpaanc17",
+    "NR": "mpaanr",
+    "TV-MA": "mpaatvma",
+    "TV-14": "mpaatv14",
+    "TV-PG": "mpaatvpg",
 }
 
 
@@ -41,14 +41,17 @@ class TagsStep:
             config.mediacms_url.rstrip("/").removesuffix("/api/v1").removesuffix("/api")
         )
         self._headers = {"Authorization": f"Token {config.mediacms_token}"}
+        # When the token can manage all media (e.g. a manager/superuser on a
+        # patched CMS), push tags for every item instead of only owned media.
+        self._manage_all = bool(getattr(config, "mediacms_manage_all_media", False))
 
     async def _get_api_username(self, client: httpx.AsyncClient) -> str | None:
         """Return the API token's username, or None.
 
-        MediaCMS ``/media/user/bulk_actions`` filters ``Media.objects.filter(
-        user=request.user, ...)`` with no manager/superuser bypass, so tag
-        pushes only succeed on media this user owns. We use this to skip futile
-        pushes against media owned by others instead of flooding CMS with 400s.
+        Stock MediaCMS ``/media/user/bulk_actions`` filters ``Media.objects.filter(
+        user=request.user, ...)``, so tag pushes only succeed on media this user
+        owns. When ``mediacms_manage_all_media`` is not set we use this to skip
+        futile pushes against media owned by others instead of flooding CMS.
         """
         try:
             resp = await client.get(f"{self._base}/api/v1/whoami")
@@ -70,7 +73,11 @@ class TagsStep:
         now = datetime.now(UTC).isoformat()
 
         async with httpx.AsyncClient(headers=self._headers, timeout=_TIMEOUT) as client:
-            api_user = None if dry_run else await self._get_api_username(client)
+            api_user = (
+                None
+                if dry_run or self._manage_all
+                else await self._get_api_username(client)
+            )
             for cls in classifications:
                 result.processed += 1
                 try:
@@ -141,10 +148,10 @@ class TagsStep:
 
         The ``PUT /media/{token}`` endpoint only accepts title/description/media_file
         and silently ignores a ``tags`` field, so tag changes must go through
-        ``POST /media/user/bulk_actions`` with ``action: add_tags``. That endpoint
-        filters ``Media.objects.filter(user=request.user, ...)`` with no manager or
-        superuser bypass, so we skip the push unless the API user owns the media
-        rather than flooding CMS with 400s.
+        ``POST /media/user/bulk_actions`` with ``action: add_tags``. On stock
+        MediaCMS that endpoint is owner-scoped, so unless ``manage_all`` is set we
+        skip the push for media the API user does not own rather than flooding
+        CMS with 400s.
         """
         detail_url = f"{self._base}/api/v1/media/{token}"
         try:
@@ -153,7 +160,7 @@ class TagsStep:
                 return False
             data = resp.json()
             owner = data.get("user")
-            if api_user is None or owner != api_user:
+            if not self._manage_all and (api_user is None or owner != api_user):
                 return False
             current = {
                 (t.get("title") if isinstance(t, dict) else t)

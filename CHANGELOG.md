@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+## [0.36.3] - 2026-08-14
+
+### Added
+
+- **`mediacms_manage_all_media` config flag.** When set (paired with a CMS whose
+  `bulk_actions` is patched to let managers/superusers tag any media), the tags
+  step pushes derived genre/MPAA/hosted tags to CMS for every item, not just
+  media the API user owns. Defaults to `false` (owner-only, safe).
+
+### Changed
+
+- **MPAA rating tags are now alphanumeric** (`mpaar`, `mpaapg13`, …) to match
+  MediaCMS's `Tag.save()` normalization (which strips non-alphanumerics), so tags
+  round-trip cleanly between the local catalog and CMS without creating hyphenated
+  duplicates on reverse-sync.
+
 ## [0.36.2] - 2026-08-14
 
 ### Fixed

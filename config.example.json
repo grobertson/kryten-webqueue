@@ -13,6 +13,7 @@
 
   "mediacms_url": "https://www.dropsugar.com",
   "mediacms_token": "CHANGE_ME",
+  "mediacms_manage_all_media": false,
 
   "tmdb_api_key": "",
   "omdb_api_key": "",

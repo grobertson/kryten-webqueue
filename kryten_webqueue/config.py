@@ -151,6 +151,9 @@ class Config(BaseModel):
     # MediaCMS
     mediacms_url: str = "https://www.dropsugar.com"
     mediacms_token: str
+    # Set true when the token can tag any media (manager/superuser on a CMS whose
+    # bulk_actions is patched to allow it); pushes derived tags for all items.
+    mediacms_manage_all_media: bool = False
 
     # Cover art APIs
     tmdb_api_key: str = ""
