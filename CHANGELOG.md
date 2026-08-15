@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-08-15
+
+### Fixed
+
+- **Login 500 / `TemplateRuntimeError: No filter named 'escapejs'`.** The Delete
+  Permanently buttons added in 0.38.0 used `{{ item.title | escapejs }}`, but
+  `escapejs` is a Django filter and does not exist in Jinja2, so every render of
+  `catalog/browse.html` and `catalog/item_detail.html` raised a 500 — including the
+  post-login redirect to `/catalog/browse`. The title is now passed via
+  HTML-autoescaped `data-token`/`data-title` attributes and read in JS through
+  `this.dataset`, which is both correct for Jinja2 and XSS-safe.
+
 ## [0.38.1] - 2026-08-15
 
 ### Fixed

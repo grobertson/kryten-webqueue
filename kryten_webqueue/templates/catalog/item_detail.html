@@ -29,7 +29,7 @@
                 <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
                 <button class="btn" onclick="openEditModal('{{ item.friendly_token }}')" title="Manually edit item metadata">Edit</button>
                 <button class="btn" onclick="reEnrichItem('{{ item.friendly_token }}')" title="Force re-run classify, title, meta, art, and tags for this item">Re-enrich</button>
-                <button class="btn btn-sm btn-danger" onclick="deleteItem('{{ item.friendly_token }}', '{{ item.title | escapejs }}')" title="Permanently delete this item from catalog and MediaCMS">🗑️ Delete</button>
+                <button class="btn btn-sm btn-danger" data-token="{{ item.friendly_token }}" data-title="{{ item.title }}" onclick="deleteItem(this.dataset.token, this.dataset.title)" title="Permanently delete this item from catalog and MediaCMS">🗑️ Delete</button>
                 {% endif %}
             </div>
         </div>
