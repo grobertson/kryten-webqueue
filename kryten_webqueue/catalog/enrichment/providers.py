@@ -173,7 +173,9 @@ class TMDBProvider:
             first_air = tv_show.get("first_air_date", "")
             meta.year = first_air[:4] if first_air else None
             if tv_show.get("poster_path"):
-                meta.poster_url = f"https://image.tmdb.org/t/p/w780{tv_show['poster_path']}"
+                meta.poster_url = (
+                    f"https://image.tmdb.org/t/p/w780{tv_show['poster_path']}"
+                )
             return meta
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug("TMDB TV show search error for %r: %s", show, exc)

@@ -164,7 +164,9 @@ class MetaStep:
                         e,
                         meta_json[:300],
                     )
-                    result.record_error(f"{cls.friendly_token}: malformed meta_json ({e})")
+                    result.record_error(
+                        f"{cls.friendly_token}: malformed meta_json ({e})"
+                    )
                     continue
 
                 logger.info(

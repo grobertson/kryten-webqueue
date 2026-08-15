@@ -399,6 +399,19 @@ MIGRATIONS = [
     """
     ALTER TABLE item_enrichment_state ADD COLUMN last_categories_at TEXT;
     """,
+    # v21: Item edit audit log (track manual admin edits)
+    """
+    CREATE TABLE IF NOT EXISTS item_edit_log (
+        id             INTEGER PRIMARY KEY AUTOINCREMENT,
+        friendly_token TEXT NOT NULL,
+        username       TEXT NOT NULL,
+        field_name     TEXT NOT NULL,
+        old_value      TEXT,
+        new_value      TEXT,
+        edited_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_item_edit_log_token ON item_edit_log(friendly_token, edited_at DESC);
+    """,
 ]
 
 

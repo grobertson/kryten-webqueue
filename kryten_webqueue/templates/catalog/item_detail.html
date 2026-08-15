@@ -27,6 +27,7 @@
                         onclick="toggleWatchlist(this, '{{ item.friendly_token }}')">+ My List</button>
                 {% if user.rank >= 3 %}
                 <button class="btn btn-admin" onclick="queueAsAdmin('{{ item.friendly_token }}')">Queue as Admin</button>
+                <button class="btn" onclick="openEditModal('{{ item.friendly_token }}')" title="Manually edit item metadata">Edit</button>
                 <button class="btn" onclick="reEnrichItem('{{ item.friendly_token }}')" title="Force re-run classify, title, meta, art, and tags for this item">Re-enrich</button>
                 {% endif %}
             </div>
@@ -163,4 +164,7 @@ async function reEnrichItem(token) {
     }
 }
 </script>
+
+{% include "catalog/edit_item_modal.html" %}
+
 {% endblock %}

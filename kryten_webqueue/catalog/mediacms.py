@@ -122,3 +122,44 @@ class MediaCMSClient:
                 )
             await self._restore_owner(client, friendly_token, owner)
             return ok
+
+    async def update_item(
+        self,
+        friendly_token: str,
+        *,
+        title: str | None = None,
+        description: str | None = None,
+    ) -> bool:
+        """Update item title and/or description in MediaCMS.
+
+        Returns True if the remote write succeeded.
+        """
+        if not title and not description:
+            return True
+
+        async with httpx.AsyncClient(headers=self._headers, timeout=_TIMEOUT) as client:
+            media = await self._get_media(client, friendly_token)
+            if media is None:
+                return False
+
+            owner = media.get("user")
+            payload = {}
+            if title is not None:
+                payload["title"] = title
+            if description is not None:
+                payload["description"] = description
+
+            resp = await client.put(
+                f"{self._base}/api/v1/media/{friendly_token}",
+                data=payload,
+            )
+            ok = resp.status_code in (200, 201)
+            if not ok:
+                logger.warning(
+                    "MediaCMS update for %s failed: HTTP %s — %s",
+                    friendly_token,
+                    resp.status_code,
+                    resp.text[:200],
+                )
+            await self._restore_owner(client, friendly_token, owner)
+            return ok

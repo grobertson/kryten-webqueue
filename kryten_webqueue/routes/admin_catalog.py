@@ -119,6 +119,107 @@ async def enrich_item(
     return result
 
 
+@router.patch("/{friendly_token}/edit")
+async def edit_item(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
+    """Manually edit catalog item metadata (core fields + enrichment state).
+
+    Request body can include:
+    - Core: title, description, duration_sec
+    - Enrichment: content_type, lookup_title, lookup_year, hosted_show,
+                  tv_show, tv_season, tv_episode_num
+    - Options: sync_to_cms (bool), re_enrich (bool)
+
+    All edits are logged to the audit trail. Returns summary of changes.
+    """
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+
+    body = await request.json()
+    username = user.get("username", "unknown")
+    changes_logged = 0
+    cms_synced = False
+    enrich_job_id = None
+
+    # --- Core catalog fields ---
+    catalog_fields = {}
+    for field in ["title", "description", "duration_sec"]:
+        if field in body:
+            new_value = body[field]
+            old_value = item.get(field)
+            if new_value != old_value:
+                catalog_fields[field] = new_value
+                await db.log_item_edit(
+                    friendly_token, username, field, old_value, new_value
+                )
+                changes_logged += 1
+
+    if catalog_fields:
+        await db.update_catalog(friendly_token, catalog_fields)
+
+    # --- Enrichment state fields ---
+    enrichment_fields = {}
+    # Get current enrichment state
+    enrich_state = await db.get_enrichment_state(friendly_token) or {}
+
+    for field in [
+        "content_type",
+        "lookup_title",
+        "lookup_year",
+        "hosted_show",
+        "tv_show",
+        "tv_season",
+        "tv_episode_num",
+    ]:
+        if field in body:
+            new_value = body[field]
+            old_value = enrich_state.get(field)
+            if new_value != old_value:
+                enrichment_fields[field] = new_value
+                await db.log_item_edit(
+                    friendly_token, username, field, old_value, new_value
+                )
+                changes_logged += 1
+
+    if enrichment_fields:
+        await db.update_enrichment_state(friendly_token, enrichment_fields)
+
+    # --- Optional MediaCMS sync ---
+    if body.get("sync_to_cms", False) and (
+        "title" in catalog_fields or "description" in catalog_fields
+    ):
+        cms = _mediacms_client(request)
+        cms_synced = await cms.update_item(
+            friendly_token,
+            title=catalog_fields.get("title"),
+            description=catalog_fields.get("description"),
+        )
+
+    # --- Optional re-enrichment trigger ---
+    if body.get("re_enrich", False):
+        job_manager = request.app.state.job_manager
+        result = await job_manager.run_job(
+            "catalog_enrich",
+            params={
+                "tokens": friendly_token,
+                "force": "true",
+                "steps": "classify,title,meta,art,tags",
+            },
+            triggered_by=username,
+        )
+        enrich_job_id = result.get("run_id")
+
+    return {
+        "success": True,
+        "changes_logged": changes_logged,
+        "cms_synced": cms_synced,
+        "enrich_job_id": enrich_job_id,
+    }
+
+
 @router.get("/recently-played/debug")
 async def recently_played_debug(request: Request, user: dict = Depends(require_admin)):
     """List what the recently-played rules currently hide from regular users."""

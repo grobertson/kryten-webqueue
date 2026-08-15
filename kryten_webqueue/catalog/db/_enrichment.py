@@ -55,6 +55,33 @@ class _EnrichmentMixin:
             [*safe.values(), token],
         )
 
+    async def update_enrichment_state(self, token: str, fields: dict) -> None:
+        """Update specific enrichment state fields for an item.
+
+        Unlike save_enrichment_state (which is for the enrichment pipeline),
+        this is for manual admin edits and only accepts a subset of fields.
+        """
+        if not fields:
+            return
+        allowed = {
+            "content_type",
+            "hosted_show",
+            "lookup_title",
+            "lookup_year",
+            "tv_show",
+            "tv_season",
+            "tv_episode_num",
+        }
+        safe = {k: v for k, v in fields.items() if k in allowed}
+        if not safe:
+            return
+        await self.ensure_enrichment_state(token)
+        sets = ", ".join(f"{k} = ?" for k in safe)
+        await self._execute(
+            f"UPDATE item_enrichment_state SET {sets} WHERE friendly_token = ?",
+            [*safe.values(), token],
+        )
+
     async def get_catalog_for_enrichment(
         self,
         *,
@@ -113,10 +140,13 @@ class _EnrichmentMixin:
             return json.loads(raw)
         except (ValueError, TypeError) as exc:
             import logging
+
             logger = logging.getLogger(__name__)
             token = (row or {}).get("friendly_token", "?")
             logger.warning(
                 "Failed to parse meta_json for %s: %s. Raw value (first 200 chars): %r",
-                token, exc, raw[:200] if isinstance(raw, str) else raw
+                token,
+                exc,
+                raw[:200] if isinstance(raw, str) else raw,
             )
             return None

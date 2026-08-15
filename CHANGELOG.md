@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-08-14
+
+### Added
+
+- **Admin manual item editor.** Admins can now directly edit catalog item metadata
+  via an "Edit" button on catalog tiles and detail pages. The modal editor allows
+  editing both core metadata (title, description, duration) and advanced enrichment
+  state (content_type, lookup fields, hosted show, TV episode details). Edits can
+  optionally sync back to MediaCMS and trigger re-enrichment. All changes are logged
+  to an audit trail (`item_edit_log` table) tracking who edited what and when. This
+  complements the existing re-enrich button for cases where auto-enrichment cannot
+  fix problematic metadata.
+
 ## [0.36.7] - 2026-08-14
 
 ### Fixed

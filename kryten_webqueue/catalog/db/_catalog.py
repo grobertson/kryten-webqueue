@@ -793,21 +793,26 @@ class _CatalogMixin:
 
     async def update_catalog(self, friendly_token: str, row: dict):
         """Update catalog item with partial or full field set.
-        
+
         Only fields present in *row* are updated. Always adds friendly_token
         and updates updated_at to current time when any field changes.
         """
         if not row:
             return
-        
+
         # Build SET clause from provided fields
         allowed = {
-            "title", "description", "duration_sec", "manifest_url",
-            "thumbnail_url", "added_at", "synced_at"
+            "title",
+            "description",
+            "duration_sec",
+            "manifest_url",
+            "thumbnail_url",
+            "added_at",
+            "synced_at",
         }
         updates = []
         params = {"friendly_token": friendly_token}
-        
+
         for key in row:
             if key in allowed:
                 # added_at uses COALESCE to preserve existing if None
@@ -816,20 +821,21 @@ class _CatalogMixin:
                 else:
                     updates.append(f"{key}=:{key}")
                 params[key] = row[key]
-        
+
         # Always update updated_at when modifying
         updates.append("updated_at=:updated_at")
         params["updated_at"] = row.get("synced_at") or params.get("synced_at")
         if not params["updated_at"]:
             from datetime import datetime, UTC
+
             params["updated_at"] = datetime.now(UTC).isoformat()
-        
+
         if not updates:
             return
-        
+
         sql = f"UPDATE catalog SET {', '.join(updates)} WHERE friendly_token=:friendly_token"
         await self._db.execute(sql, params)
-        
+
         # Rebuild FTS for this row if title or description changed
         if "title" in row or "description" in row:
             await self._db.execute(
@@ -850,10 +856,10 @@ class _CatalogMixin:
 
     async def delete_stale_catalog_items(self, sync_started_at: str) -> int:
         """Delete catalog items that weren't updated during the sync.
-        
+
         Items with synced_at older than sync_started_at are no longer present
         in MediaCMS and should be removed. Returns count of deleted items.
-        
+
         Foreign key CASCADE will automatically remove related entries from:
         - catalog_fts
         - catalog_categories
@@ -866,23 +872,23 @@ class _CatalogMixin:
             [sync_started_at],
         )
         tokens = [row[0] for row in await cursor.fetchall()]
-        
+
         if not tokens:
             return 0
-        
+
         # Delete from FTS first (not automatically cascaded)
         placeholders = ",".join("?" * len(tokens))
         await self._db.execute(
             f"DELETE FROM catalog_fts WHERE friendly_token IN ({placeholders})",
             tokens,
         )
-        
+
         # Delete from catalog (cascades to join tables via ON DELETE CASCADE)
         await self._db.execute(
             f"DELETE FROM catalog WHERE friendly_token IN ({placeholders})",
             tokens,
         )
-        
+
         await self._db.commit()
         return len(tokens)
 
@@ -1048,6 +1054,37 @@ class _CatalogMixin:
             await self._execute("UPDATE otps SET used=1 WHERE rowid=?", [row["rowid"]])
             return True
         return False
+
+    # --- Item edit audit log -----------------------------------------------
+
+    async def log_item_edit(
+        self,
+        friendly_token: str,
+        username: str,
+        field_name: str,
+        old_value: str | int | None,
+        new_value: str | int | None,
+    ) -> None:
+        """Log a manual admin edit to the audit trail."""
+        # Convert to strings for storage
+        old_str = str(old_value) if old_value is not None else None
+        new_str = str(new_value) if new_value is not None else None
+
+        await self._execute(
+            "INSERT INTO item_edit_log (friendly_token, username, field_name, old_value, new_value) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [friendly_token, username, field_name, old_str, new_str],
+        )
+
+    async def get_item_edit_history(
+        self, friendly_token: str, limit: int = 50
+    ) -> list[dict]:
+        """Retrieve edit history for an item, most recent first."""
+        return await self._fetch_all(
+            "SELECT * FROM item_edit_log WHERE friendly_token = ? "
+            "ORDER BY edited_at DESC LIMIT ?",
+            [friendly_token, limit],
+        )
 
     async def cleanup_expired_otps(self):
         await self._execute(

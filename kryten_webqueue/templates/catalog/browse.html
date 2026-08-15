@@ -117,6 +117,7 @@
             <button class="btn btn-sm" onclick="addToRecentPlaylist('{{ item.friendly_token }}')">+ Recent</button>
             <button class="btn btn-sm" onclick="markPlayed('{{ item.friendly_token }}')" title="Simulate a play-completion so this item hides from regular users (testing)">Mark played</button>
             <button class="btn btn-sm" onclick="clearPlayed('{{ item.friendly_token }}')" title="Clear recently-played hide state so this item reappears for regular users">Clear played</button>
+            <button class="btn btn-sm" onclick="openEditModal('{{ item.friendly_token }}')" title="Manually edit item metadata">Edit</button>
             <button class="btn btn-sm btn-danger" onclick="hideItem('{{ item.friendly_token }}')">Hide</button>
             {% endif %}
         </div>
@@ -476,4 +477,7 @@ async function clearPlayed(token) {
 // queueItem / playNext / queueAsAdmin / showToast / escapeHtml are provided by /static/js/main.js
 initWatchlistButtons();
 </script>
+
+{% include "catalog/edit_item_modal.html" %}
+
 {% endblock %}
