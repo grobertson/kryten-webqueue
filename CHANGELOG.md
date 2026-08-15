@@ -2,6 +2,54 @@
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-08-15
+
+### Added
+
+- **Delete Permanently feature** for admins. Catalog items can now be permanently
+  deleted from both the local database and MediaCMS via a 🗑️ Delete button on
+  browse cards and item detail pages (admin-only). The deletion requires explicit
+  confirmation with a "CANNOT be undone" warning, removes the item from all
+  catalog tables (tags, categories, people, main catalog) in proper FK order, and
+  logs the action with admin username and item title for audit trail. The MediaCMS
+  deletion is idempotent (404 treated as success) to handle edge cases gracefully.
+
+- **Clickable queue items.** Queue items (both in the main queue list and the
+  Now Playing card) now link to their catalog detail pages. Clicking a queue item's
+  title or cover art navigates to `/catalog/item/{friendly_token}` for quick access
+  to full metadata, tags, and queueing options. Links are conditionally rendered
+  only when `friendly_token` exists (graceful degradation for non-catalog items).
+
+### Changed
+
+- **Typography system overhaul.** Established a consistent three-font hierarchy:
+  Georgia serif (body text and headings), Inter sans-serif with weights 400/500/600/700
+  (UI elements, navigation, buttons), and Consolas monospace (logs, code). Headings
+  now use font-weight 600-700 for proper visual hierarchy, nav links are semi-bold
+  (600) with an animated underline on hover, and the navbar displays the Channel-Z
+  Unicode logo (🟩🟨🟧🟥Channel-Z🟥🟧🟨🟩).
+
+- **Admin jobs grid layout.** The admin dashboard jobs panel now uses CSS Grid
+  instead of flexbox, with properly aligned columns (`minmax(0, 1fr)` for text
+  columns to prevent overflow). Job names, statuses, and actions stay aligned
+  across rows for improved readability.
+
+- **Size increases for readability.** Job badges and queue item badges increased
+  to 0.85rem, queue item titles to 1rem, now-playing descriptions to 0.95rem, and
+  metadata chips to 0.9rem. The Back link on detail pages is now styled as a
+  simple text link (`.back-link` utility class) rather than a button.
+
+- **Light mode contrast improvements.** Pills and badges in light mode now use
+  explicit high-contrast color overrides (solid backgrounds with proper text colors)
+  to meet WCAG AA accessibility standards. Race page pills also received light mode
+  overrides with solid backgrounds.
+
+- **Login page polish.** The login page now displays the Channel-Z Unicode logo as
+  the title (Georgia serif, bold), enhanced instructional text sizing (1.1rem,
+  semi-bold), smart button states (disabled until input has content), Enter key
+  submission on both username and OTP fields, and auto-focus on the OTP input after
+  code delivery.
+
 ## [0.37.0] - 2026-08-14
 
 ### Added
