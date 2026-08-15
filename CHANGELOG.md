@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.36.5] - 2026-08-14
+
+### Changed
+
+- **Tags step no longer reads every item.** With `mediacms_manage_all_media` set,
+  the tags step now issues a single idempotent `add_tags` POST per item (the
+  server skips tags already present) instead of a per-item `GET` to read current
+  tags/owner. The redundant per-item reverse-sync `GET` was also removed — catalog
+  sync already mirrors CMS tags in bulk via `/api/v1/media_facets`. Stock-CMS
+  (owner-scoped) deployments still do the ownership `GET` on the fallback path.
+
 ## [0.36.4] - 2026-08-14
 
 ### Changed

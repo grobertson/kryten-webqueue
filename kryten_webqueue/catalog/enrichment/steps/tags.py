@@ -117,8 +117,6 @@ class TagsStep:
                             desired,
                             api_user=api_user,
                         )
-                        # Reverse sync: pull any CMS-only tags back to local DB
-                        await self._reverse_sync(client, cls.friendly_token)
                         if changed:
                             result.changed += 1
                         else:
@@ -148,50 +146,37 @@ class TagsStep:
 
         The ``PUT /media/{token}`` endpoint only accepts title/description/media_file
         and silently ignores a ``tags`` field, so tag changes must go through
-        ``POST /media/user/bulk_actions`` with ``action: add_tags``. On stock
-        MediaCMS that endpoint is owner-scoped, so unless ``manage_all`` is set we
-        skip the push for media the API user does not own rather than flooding
-        CMS with 400s.
+        ``POST /media/user/bulk_actions`` with ``action: add_tags``.
+
+        When ``manage_all`` is set the server-side ``add_tags`` is idempotent
+        (it skips tags already present), so we POST directly with no per-item GET.
+        On stock MediaCMS the endpoint is owner-scoped, so we must first GET the
+        item to check ownership and skip the push for media we do not own.
         """
-        detail_url = f"{self._base}/api/v1/media/{token}"
         try:
-            resp = await client.get(detail_url)
-            if resp.status_code != 200:
-                return False
-            data = resp.json()
-            owner = data.get("user")
-            if not self._manage_all and (api_user is None or owner != api_user):
-                return False
-            current = {
-                (t.get("title") if isinstance(t, dict) else t)
-                for t in (data.get("tags_info") or [])
-            }
-            to_add = [t for t in new_tags if t not in current]
-            if not to_add:
-                return False
+            if not self._manage_all:
+                resp = await client.get(f"{self._base}/api/v1/media/{token}")
+                if resp.status_code != 200:
+                    return False
+                data = resp.json()
+                owner = data.get("user")
+                if api_user is None or owner != api_user:
+                    return False
+                current = {
+                    (t.get("title") if isinstance(t, dict) else t)
+                    for t in (data.get("tags_info") or [])
+                }
+                new_tags = [t for t in new_tags if t not in current]
+                if not new_tags:
+                    return False
             put = await client.post(
                 f"{self._base}/api/v1/media/user/bulk_actions",
                 json={
                     "action": "add_tags",
                     "media_ids": [token],
-                    "tag_titles": to_add,
+                    "tag_titles": new_tags,
                 },
             )
             return put.status_code in (200, 201)
         except (httpx.HTTPError, json.JSONDecodeError, ValueError):
             return False
-
-    async def _reverse_sync(self, client: httpx.AsyncClient, token: str) -> None:
-        """Insert any CMS-only tags into the local catalog_tags table."""
-        url = f"{self._base}/api/v1/media/{token}"
-        try:
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                return
-            data = resp.json()
-            for t in data.get("tags_info") or []:
-                name = t.get("title") if isinstance(t, dict) else t
-                if name:
-                    await self._db.add_catalog_tag(token, str(name))
-        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
-            logger.warning("[tags] Failed reverse-sync for %s: %s", token, exc)
