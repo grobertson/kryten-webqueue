@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.36.4] - 2026-08-14
+
+### Changed
+
+- **Catalog sync pulls tags/categories in bulk.** Instead of one
+  `GET /api/v1/media/{token}` per item (10k+ requests, ~30+ min), sync now
+  prefetches every item's facets from a new `GET /api/v1/media_facets` endpoint
+  in a handful of paginated calls (~35s for the full catalog). Falls back to the
+  per-item detail endpoint automatically when the bulk endpoint is unavailable
+  (stock MediaCMS). See `scripts/patch_mediacms_bulk_facets.py` for the CMS-side
+  endpoint.
+
 ## [0.36.3] - 2026-08-14
 
 ### Added

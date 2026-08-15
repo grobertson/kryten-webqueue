@@ -46,6 +46,9 @@ class CatalogSync:
         self._token = mediacms_token
         self._db = db
         self._cover_art = cover_art
+        # Populated once per sync by _prefetch_all_facets; None means the bulk
+        # endpoint is unavailable and we fall back to per-item detail fetches.
+        self._facets_map: dict[str, dict] | None = None
         self._client = httpx.AsyncClient(
             headers={"Authorization": f"Token {mediacms_token}"},
             timeout=30.0,
@@ -59,6 +62,10 @@ class CatalogSync:
         log_id = await self._db.start_sync_log()
         stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0, "deleted": 0}
         sync_started_at = datetime.now(UTC).isoformat()
+
+        # Pull every item's tags/categories in a few paginated calls up front so
+        # per-item facet sync needs no HTTP (falls back to detail fetch on miss).
+        await self._prefetch_all_facets()
 
         try:
             # /manage_media returns all items (9k+); /media is capped at 1000
@@ -191,32 +198,75 @@ class CatalogSync:
             await asyncio.sleep(0.25)
 
     async def _sync_item_facets(self, token: str):
-        """Populate category/tag memberships from the media detail endpoint.
+        """Populate category/tag memberships for an item.
 
-        The list (manage_media) serializer omits categories/tags, so we fetch
-        the per-item detail (``/api/v1/media/{token}``) which exposes
-        ``categories_info`` and ``tags_info``.
+        Prefers the bulk facets pulled by :meth:`_prefetch_all_facets`; falls
+        back to the per-item detail endpoint (``/api/v1/media/{token}``) which
+        exposes ``categories_info`` and ``tags_info`` when the bulk map is
+        unavailable or missing this token.
         """
-        resp = await self._client.get(f"{self._url}/api/v1/media/{token}")
-        if resp.status_code != 200:
-            return
-        data = resp.json()
-
-        cat_names = [
-            c.get("title")
-            for c in (data.get("categories_info") or [])
-            if isinstance(c, dict) and c.get("title")
-        ]
-        tag_names = []
-        for t in data.get("tags_info") or []:
-            name = t.get("title") if isinstance(t, dict) else t
-            if name:
-                tag_names.append(name)
+        cached = self._facets_map.get(token) if self._facets_map is not None else None
+        if cached is not None:
+            cat_names = cached.get("categories") or []
+            tag_names = cached.get("tags") or []
+        else:
+            resp = await self._client.get(f"{self._url}/api/v1/media/{token}")
+            if resp.status_code != 200:
+                return
+            data = resp.json()
+            cat_names = [
+                c.get("title")
+                for c in (data.get("categories_info") or [])
+                if isinstance(c, dict) and c.get("title")
+            ]
+            tag_names = []
+            for t in data.get("tags_info") or []:
+                name = t.get("title") if isinstance(t, dict) else t
+                if name:
+                    tag_names.append(name)
 
         cat_ids = [await self._db.upsert_category(n) for n in cat_names]
         tag_ids = [await self._db.upsert_tag(n) for n in tag_names]
         await self._db.set_catalog_categories(token, cat_ids)
         await self._db.set_catalog_tags(token, tag_ids)
+
+    async def _prefetch_all_facets(self) -> None:
+        """Bulk-load every item's tags/categories from ``/api/v1/media_facets``.
+
+        One call per page (page_size=500) instead of one GET per item. Sets
+        ``self._facets_map`` to None on any failure so callers fall back to the
+        per-item detail endpoint.
+        """
+        facets: dict[str, dict] = {}
+        page = 1
+        try:
+            while True:
+                resp = await self._client.get(
+                    f"{self._url}/api/v1/media_facets",
+                    params={"page": page, "page_size": 500},
+                )
+                if resp.status_code != 200:
+                    # Endpoint absent (stock CMS) — fall back to per-item.
+                    self._facets_map = None if page == 1 else facets
+                    return
+                data = resp.json()
+                for row in data.get("results") or []:
+                    tok = row.get("friendly_token")
+                    if tok:
+                        facets[tok] = {
+                            "tags": row.get("tags") or [],
+                            "categories": row.get("categories") or [],
+                        }
+                if not data.get("has_next"):
+                    break
+                page += 1
+            self._facets_map = facets
+            logger.info(
+                "Prefetched facets for %d items in %d page(s)", len(facets), page
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            logger.debug("Facet prefetch failed (%s); using per-item fallback", exc)
+            self._facets_map = None
 
     def _build_manifest_url(self, media: dict) -> str:
         # CyTube custom media ("cm") requires the manifest JSON URL, NOT the
