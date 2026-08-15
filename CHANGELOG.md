@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.36.6] - 2026-08-14
+
+### Fixed
+
+- **`(Dubbed)` / `(Subbed)` markers no longer break art lookup.** `(dubbed)` is
+  stripped from both the display title and the search query (dubbed is the
+  default). `(subbed)`/`(subs)`/`(subtitles)` stay in the display title but are
+  omitted from the metadata/art search.
+- **YouTube “full movie” pipe titles are cleaned properly.** Detection now matches
+  non-adjacent variants like “Full **Horror** Movie”, the title is taken from the
+  first segment before the pipe, and the year is extracted from the whole string
+  (it often trails after the last pipe, e.g. “… | Larry Bucha (1961)”). Both the
+  search query and the display title use this cleanup consistently (previously the
+  display title was never tidied for pipe uploads).
+
 ## [0.36.5] - 2026-08-14
 
 ### Changed

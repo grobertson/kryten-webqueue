@@ -7,7 +7,7 @@ from datetime import datetime, UTC
 import httpx
 
 from ..classify import ItemClassification
-from ..normalise import normalize_and_clean
+from ..normalise import normalize_movie_title
 from ..report import StepResult
 
 logger = logging.getLogger(__name__)
@@ -83,7 +83,9 @@ class TitleStep:
         """Return the desired CMS title, or None if no change needed."""
         ct = cls.content_type
         if ct == "movie":
-            clean, year = normalize_and_clean(cls.raw_title)
+            # Display title keeps sub markers (dubbed is stripped); mirrors the
+            # search cleanup so pipe/YouTube titles are tidied consistently.
+            clean, year = normalize_movie_title(cls.raw_title, for_search=False)
             if year:
                 candidate = f"{clean} ({year})"
             else:
@@ -100,7 +102,6 @@ class TitleStep:
                 candidate = f"{t} - {show}"
             return candidate if candidate != cls.raw_title else None
         if ct == "riffed_movie" and cls.hosted:
-            entry_template = cls.hosted  # HostedInfo has show_name
             if "{title}" in (cls.hosted.show_name or ""):
                 return None  # template handled below
             # Only Rifftrax gets reformat; MST3K keeps original

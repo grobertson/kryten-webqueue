@@ -103,3 +103,57 @@ def normalize_and_clean(title: str) -> tuple[str, str | None]:
     t = strip_extension(t.strip(" .-"))
     t = re.sub(r"\s+", " ", t).strip()
     return t or title, year
+
+
+# ---------------------------------------------------------------------------
+# Dub / sub markers and YouTube "full movie" pipe titles
+# ---------------------------------------------------------------------------
+
+# "dubbed" is the default expectation → stripped from title and search.
+_DUB_TERMS = ["dubbed"]
+# sub markers stay in the display title but are omitted from art/metadata search.
+_SUB_TERMS = ["subbed", "subtitled", "subtitles", "subs"]
+
+# A pipe-delimited YouTube upload advertising a full movie, e.g.
+# "Title | English Full Movie | ...", "Title | Full Horror Movie | ...".
+_YT_FULL_MOVIE_RE = re.compile(
+    r"\bfull\s+(?:\w+\s+)?(?:movie|film|feature|length)\b", re.I
+)
+
+
+def _strip_terms(title: str, terms: list[str]) -> str:
+    """Remove bracketed and bare occurrences of ``terms`` from ``title``."""
+    pat = "|".join(terms)
+    title = re.sub(rf"\s*[\(\[\{{]\s*(?:{pat})\s*[\)\]\}}]", "", title, flags=re.I)
+    title = re.sub(rf"\s*\b(?:{pat})\b", "", title, flags=re.I)
+    return re.sub(r"\s+", " ", title).strip()
+
+
+def _pre_pipe_title(title: str) -> str | None:
+    """First segment of a pipe-delimited YouTube 'full movie' title, else None."""
+    if "|" not in title or not _YT_FULL_MOVIE_RE.search(title):
+        return None
+    return title.split("|", 1)[0].strip()
+
+
+def normalize_movie_title(raw: str, *, for_search: bool) -> tuple[str, str | None]:
+    """Return ``(clean_title, year_or_None)`` for a plain movie title.
+
+    Handles two cases the base cleaner misses:
+    - YouTube pipe titles ("Title | Full Movie | ..."): uses the first segment
+      before the pipe, but extracts the year from the *whole* string (it often
+      trails after the last pipe, e.g. "... | Larry Bucha (1961)").
+    - Dub/sub markers: ``(dubbed)`` is always removed; sub markers are removed
+      only when ``for_search`` (they stay in the display title).
+    """
+    # Year first, from the full string, so a trailing "(1961)" is captured even
+    # when the title before the pipe has none.
+    _, full_year = normalize_and_clean(raw)
+    base = _pre_pipe_title(raw) or raw
+    base = (
+        _strip_terms(base, _DUB_TERMS + _SUB_TERMS)
+        if for_search
+        else _strip_terms(base, _DUB_TERMS)
+    )
+    clean, base_year = normalize_and_clean(base)
+    return clean, base_year or full_year

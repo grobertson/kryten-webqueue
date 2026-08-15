@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from .normalise import normalize_and_clean, strip_extension
+from .normalise import normalize_movie_title
 
 # ---------------------------------------------------------------------------
 # Hosted show registry
@@ -250,13 +250,6 @@ class ItemClassification:
     has_real_art: bool = False
 
 
-# YouTube "Title | English Full Movie | Genre1 Genre2" pattern
-# Also handles variants like "Title | Full Movie HD | Description"
-_YT_FULL_MOVIE_RE = re.compile(
-    r"^(?P<title>.+?)\s*\|.*(Full\s+(?:Movie|Film|Length|Feature)).*$", re.I
-)
-
-
 def classify_item(
     friendly_token: str,
     raw_title: str,
@@ -326,26 +319,9 @@ def classify_item(
 
     # 4. Movie (>= 30 min)
     if duration_sec >= 1800:
-        # YouTube title cleanup: extract title before first pipe if "full movie" appears
-        yt = _YT_FULL_MOVIE_RE.match(raw_title.strip())
-        if yt:
-            clean_title = yt.group("title").strip()
-            # Extract year from the clean title part
-            clean_title, year = normalize_and_clean(clean_title)
-            return ItemClassification(
-                friendly_token=friendly_token,
-                raw_title=raw_title,
-                content_type="movie",
-                hosted=None,
-                lookup_title=clean_title,
-                lookup_year=year,
-                genre_hints=[],
-                duration_sec=duration_sec,
-                description_score=description_score,
-                has_real_art=has_real_art,
-            )
-
-        clean_title, year = normalize_and_clean(raw_title)
+        # Handles YouTube pipe titles and dub/sub markers; year is pulled from
+        # the whole string so a trailing "(1961)" after pipes is still captured.
+        clean_title, year = normalize_movie_title(raw_title, for_search=True)
         return ItemClassification(
             friendly_token=friendly_token,
             raw_title=raw_title,
