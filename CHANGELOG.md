@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.36.7] - 2026-08-14
+
+### Fixed
+
+- **`force` now re-derives classification from the raw title.** The enrichment
+  pipeline cached `content_type`/`lookup_title` from the first classify run and
+  reused them on every subsequent run — so classify-logic improvements (e.g. the
+  new dub/sub and YouTube-pipe title cleaning) never reached already-classified
+  items even under `force`. A forced run now bypasses the cache and recomputes
+  the classification, so title/lookup fixes take effect on re-enrichment.
+
 ## [0.36.6] - 2026-08-14
 
 ### Fixed

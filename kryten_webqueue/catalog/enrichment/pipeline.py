@@ -47,7 +47,11 @@ class CatalogEnrichmentPipeline:
 
         logger.info(
             "[enrichment] Starting pipeline: steps=%s tokens=%s force=%s dry_run=%s limit=%s",
-            steps_to_run, "specific" if tokens else "all", force, dry_run, limit
+            steps_to_run,
+            "specific" if tokens else "all",
+            force,
+            dry_run,
+            limit,
         )
 
         start = time.monotonic()
@@ -73,13 +77,15 @@ class CatalogEnrichmentPipeline:
             )
             logger.info(
                 "[enrichment] step=%s found %d item(s) (force=%s)",
-                step_name, len(rows), force
+                step_name,
+                len(rows),
+                force,
             )
             if not rows:
                 by_step[step_name] = StepResult(skipped=0)
                 continue
 
-            classifications = [self._classify_row(row) for row in rows]
+            classifications = [self._classify_row(row, force=force) for row in rows]
             total_items = max(total_items, len(classifications))
 
             if step_name == "classify":
@@ -140,14 +146,20 @@ class CatalogEnrichmentPipeline:
             by_step[step_name] = r
             logger.info(
                 "[enrichment] step=%s complete: processed=%d changed=%d skipped=%d errors=%d",
-                step_name, r.processed, r.changed, r.skipped, len(r.errors)
+                step_name,
+                r.processed,
+                r.changed,
+                r.skipped,
+                len(r.errors),
             )
             await self._report_progress(ctx, step_name, r)
 
         elapsed = time.monotonic() - start
         logger.info(
             "[enrichment] Pipeline complete in %.1fs: %d item(s), %d step(s)",
-            elapsed, total_items, len(steps_to_run)
+            elapsed,
+            total_items,
+            len(steps_to_run),
         )
 
         return EnrichmentReport(
@@ -158,12 +170,17 @@ class CatalogEnrichmentPipeline:
             dry_run=dry_run,
         )
 
-    def _classify_row(self, row: dict) -> ItemClassification:
-        """Classify a DB row, using cached enrichment state when available."""
+    def _classify_row(self, row: dict, *, force: bool = False) -> ItemClassification:
+        """Classify a DB row, using cached enrichment state when available.
+
+        ``force`` bypasses the cache and re-derives the classification from the
+        raw title so classify-logic improvements apply to already-classified
+        items.
+        """
         token = row["friendly_token"]
         # If enrichment state already has lookup_title from a prior classify run,
         # we reconstruct the classification from that cached data.
-        if row.get("content_type") and row.get("lookup_title"):
+        if not force and row.get("content_type") and row.get("lookup_title"):
             from .classify import ItemClassification, HostedInfo, HOSTED_SHOW_REGISTRY
 
             hosted: HostedInfo | None = None
