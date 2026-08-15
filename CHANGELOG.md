@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.36.2] - 2026-08-14
+
+### Fixed
+
+- **Stop flooding MediaCMS with futile tag-push 400s.** The tags step attempted
+  `POST /media/user/bulk_actions` (`add_tags`) for every enriched item, but that
+  endpoint filters `Media.objects.filter(user=request.user, ...)` with no manager
+  or superuser bypass, so pushes against media owned by other users always return
+  400 "No matching media found". The step now looks up the API token's username
+  once via `/whoami` and only attempts the CMS push for media that user actually
+  owns. Local `catalog_tags` remains the source of truth for derived
+  genre/MPAA/hosted tags, so tags still display regardless.
+
 ## [0.36.1] - 2026-08-14
 
 ### Fixed

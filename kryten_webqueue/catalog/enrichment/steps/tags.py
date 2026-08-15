@@ -42,6 +42,22 @@ class TagsStep:
         )
         self._headers = {"Authorization": f"Token {config.mediacms_token}"}
 
+    async def _get_api_username(self, client: httpx.AsyncClient) -> str | None:
+        """Return the API token's username, or None.
+
+        MediaCMS ``/media/user/bulk_actions`` filters ``Media.objects.filter(
+        user=request.user, ...)`` with no manager/superuser bypass, so tag
+        pushes only succeed on media this user owns. We use this to skip futile
+        pushes against media owned by others instead of flooding CMS with 400s.
+        """
+        try:
+            resp = await client.get(f"{self._base}/api/v1/whoami")
+            if resp.status_code != 200:
+                return None
+            return resp.json().get("username")
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError):
+            return None
+
     async def run(
         self,
         *,
@@ -54,6 +70,7 @@ class TagsStep:
         now = datetime.now(UTC).isoformat()
 
         async with httpx.AsyncClient(headers=self._headers, timeout=_TIMEOUT) as client:
+            api_user = None if dry_run else await self._get_api_username(client)
             for cls in classifications:
                 result.processed += 1
                 try:
@@ -88,7 +105,10 @@ class TagsStep:
                         for tag in desired:
                             await self._db.add_catalog_tag(cls.friendly_token, tag)
                         changed = await self._push_tags(
-                            client, cls.friendly_token, desired
+                            client,
+                            cls.friendly_token,
+                            desired,
+                            api_user=api_user,
                         )
                         # Reverse sync: pull any CMS-only tags back to local DB
                         await self._reverse_sync(client, cls.friendly_token)
@@ -110,13 +130,21 @@ class TagsStep:
         return result
 
     async def _push_tags(
-        self, client: httpx.AsyncClient, token: str, new_tags: list[str]
+        self,
+        client: httpx.AsyncClient,
+        token: str,
+        new_tags: list[str],
+        *,
+        api_user: str | None = None,
     ) -> bool:
         """Add tags to a CMS media item via the bulk_actions ``add_tags`` action.
 
         The ``PUT /media/{token}`` endpoint only accepts title/description/media_file
         and silently ignores a ``tags`` field, so tag changes must go through
-        ``POST /media/user/bulk_actions`` with ``action: add_tags``.
+        ``POST /media/user/bulk_actions`` with ``action: add_tags``. That endpoint
+        filters ``Media.objects.filter(user=request.user, ...)`` with no manager or
+        superuser bypass, so we skip the push unless the API user owns the media
+        rather than flooding CMS with 400s.
         """
         detail_url = f"{self._base}/api/v1/media/{token}"
         try:
@@ -124,6 +152,9 @@ class TagsStep:
             if resp.status_code != 200:
                 return False
             data = resp.json()
+            owner = data.get("user")
+            if api_user is None or owner != api_user:
+                return False
             current = {
                 (t.get("title") if isinstance(t, dict) else t)
                 for t in (data.get("tags_info") or [])
