@@ -21,8 +21,8 @@
     --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     --radius: 8px;
     --nav-height: 4rem;
-    --font-body: Georgia, 'Times New Roman', serif;
-    --font-heading: Georgia, 'Times New Roman', serif;
+    --font-body: 'Inter', 'Helvetica Neue', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    --font-heading: 'Inter', 'Helvetica Neue', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     --font-ui: 'Inter', 'Helvetica Neue', 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     --font-mono: 'Consolas', 'Courier New', monospace;
 }
@@ -65,35 +65,9 @@
     --shadow: 0 4px 12px rgba(60, 40, 0, 0.15);
 }
 
-/* Light mode contrast overrides for pills, badges, chips */
-:root[data-theme="light"] .job-badge {
-    color: var(--text-primary);
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-}
-
-:root[data-theme="light"] .np-chip-cat,
-:root[data-theme="light"] .np-chip-tag,
-:root[data-theme="light"] .np-chip-person,
-:root[data-theme="light"] .np-chip-studio {
-    background: var(--accent);
-    color: var(--accent-text);
-    border-color: var(--accent);
-    font-weight: 600;
-}
-
-:root[data-theme="light"] .qi-badge,
-:root[data-theme="light"] .badge-paid {
-    background: var(--accent);
-    color: var(--accent-text);
-    font-weight: 600;
-}
-
-:root[data-theme="light"] .badge-promo {
-    background: var(--warning);
-    color: #ffffff;
-    font-weight: 600;
-}
+/* Pills, badges, and chips keep their colored styles in both themes
+   (mint-green people, peach tags, etc.). Their translucent backgrounds and
+   colored borders read correctly on the light cream surfaces too. */
 
 * {
     margin: 0;
@@ -713,7 +687,7 @@ a:hover {
 .qi-badge {
     font-size: 0.85rem;
     padding: 0.2rem 0.6rem;
-    border-radius: 3px;
+    border-radius: 999px;
     background: var(--accent);
     color: var(--accent-text);
 }
@@ -1310,40 +1284,60 @@ a.np-chip {
 
 /* Jobs */
 .jobs-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: stretch;
+    gap: 0.4rem 1.25rem;
     margin-bottom: 1rem;
 }
+/* Each row spreads its three cells across the shared grid so the status,
+   last-run, and action columns line up across every row. */
 .job-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto auto;
-    gap: 0.75rem;
-    align-items: center;
-    padding: 0.5rem 0.75rem;
+    display: contents;
+}
+.job-row > * {
     background: var(--bg-card);
+    padding: 0.55rem 0.75rem;
     border-radius: var(--radius);
+    display: flex;
+    align-items: center;
 }
 .job-label {
     min-width: 0;
+    gap: 0.4rem;
     overflow: hidden;
-    text-overflow: ellipsis;
+}
+.job-actions {
+    justify-content: flex-end;
+    gap: 0.4rem;
 }
 .job-badge {
-    font-size: 0.85rem;
+    font-family: var(--font-ui);
+    font-size: 0.8rem;
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    padding: 0.2rem 0.6rem;
-    border-radius: 3px;
-    background: var(--bg-elevated, #222);
-    color: var(--text-secondary);
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    background: rgba(232, 150, 16, 0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent);
     white-space: nowrap;
 }
 .job-last-run {
-    font-size: 0.75rem;
+    font-size: 0.9rem;
     color: var(--text-secondary);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+    .jobs-list {
+        grid-template-columns: 1fr;
+        gap: 0.25rem;
+    }
+    .job-row > .job-actions {
+        justify-content: flex-start;
+    }
 }
 /* Job Run parameter modal */
 .job-params {

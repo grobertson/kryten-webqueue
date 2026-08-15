@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [0.38.3] - 2026-08-15
+
+### Changed
+
+- **Reverted to sans-serif everywhere.** The 0.38.0 serif experiment (Georgia for
+  body and headings) was reverted; `--font-body` and `--font-heading` now use the
+  same Inter sans stack as the rest of the UI.
+- **Restored the colored light-mode pills.** The 0.38.0 light-mode "contrast"
+  overrides that flattened every `.np-chip-*` to solid amber were removed, bringing
+  back the mint-green people and peach tag pills in light mode. All pills keep their
+  colored translucent styles in both themes.
+- **Pill-shaped badges.** `.qi-badge` and `.job-badge` were rounded from 3px to full
+  999px pills to match the catalog/queue chips.
+
+### Fixed
+
+- **Login title now centers.** The Channel-Z Unicode title rendered at the default
+  h1 size overflowed the 400px auth container (with `white-space: nowrap`), so it
+  could not center. It now uses a clamped `font-size` that fits and centers.
+- **Admin jobs list is a real aligned grid.** Previously each row was its own grid,
+  so the status/last-run/action columns never lined up. `.jobs-list` is now the
+  shared grid and rows use `display: contents`, so buttons and timestamps align in
+  columns across every row. Job badges are more visible and the last-run timestamp
+  is larger (0.75rem -> 0.9rem).
+
 ## [0.38.2] - 2026-08-15
 
 ### Fixed
