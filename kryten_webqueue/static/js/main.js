@@ -333,6 +333,34 @@ function showModal(html) {
 }
 function closeModal() { const m = document.getElementById('admin-modal'); if (m) m.remove(); }
 
+// ---------- Delete permanently ----------
+async function deleteItem(token, title) {
+    const msg = `PERMANENT DELETE\n\n` +
+                `This will remove "${title}" from the catalog AND MediaCMS.\n` +
+                `This action CANNOT be undone.\n\n` +
+                `Are you absolutely sure?`;
+    
+    if (!confirm(msg)) return;
+    
+    try {
+        const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}`, {
+            method: 'DELETE',
+            credentials: 'same-origin',
+        });
+        const data = await resp.json();
+        
+        if (resp.ok) {
+            showToast(`Deleted: ${title}`);
+            // Redirect to browse page after deletion
+            setTimeout(() => window.location.href = '/catalog/browse', 1000);
+        } else {
+            showToast(data.detail || `Failed to delete (${resp.status})`, 'error');
+        }
+    } catch (e) {
+        showToast(`Network error: ${e.message}`, 'error');
+    }
+}
+
 // ---------- duration formatter ----------
 function fmtDur(sec) {
     if (!sec && sec !== 0) return '';

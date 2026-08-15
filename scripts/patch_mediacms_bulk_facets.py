@@ -59,9 +59,7 @@ class MediaFacetsList(APIView):
 INIT_ANCHOR = "from .media import MediaBulkUserActions  # noqa: F401\n"
 INIT_ADD = "from .media import MediaFacetsList  # noqa: F401\n"
 
-URL_ANCHOR = (
-    '    re_path(r"^api/v1/media/user/bulk_actions/$", views.MediaBulkUserActions.as_view()),\n'
-)
+URL_ANCHOR = '    re_path(r"^api/v1/media/user/bulk_actions/$", views.MediaBulkUserActions.as_view()),\n'
 URL_ADD = '    re_path(r"^api/v1/media_facets$", views.MediaFacetsList.as_view()),\n'
 
 
@@ -87,16 +85,18 @@ def main() -> int:
     ok &= patch(
         INIT,
         INIT_ADD.strip(),
-        lambda s: s.replace(INIT_ANCHOR, INIT_ANCHOR + INIT_ADD, 1)
-        if INIT_ANCHOR in s
-        else None,
+        lambda s: (
+            s.replace(INIT_ANCHOR, INIT_ANCHOR + INIT_ADD, 1)
+            if INIT_ANCHOR in s
+            else None
+        ),
     )
     ok &= patch(
         URLS,
         "media_facets",
-        lambda s: s.replace(URL_ANCHOR, URL_ANCHOR + URL_ADD, 1)
-        if URL_ANCHOR in s
-        else None,
+        lambda s: (
+            s.replace(URL_ANCHOR, URL_ANCHOR + URL_ADD, 1) if URL_ANCHOR in s else None
+        ),
     )
     return 0 if ok else 1
 

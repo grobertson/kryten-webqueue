@@ -4,19 +4,19 @@
 
 {% block content %}
 <div class="auth-container">
-    <h1>Login</h1>
-    <p>Enter your CyTube username to receive a one-time code via PM.</p>
+    <h1 class="login-title">🟩🟨🟧🟥Channel-Z🟥🟧🟨🟩</h1>
+    <p class="login-instructions">Enter your CyTube username to receive a one-time code via PM.</p>
     <p class="auth-hint"><strong>Username is case-sensitive</strong> &mdash; it must match your CyTube username exactly. For example, <code>TacoBelmont</code> is not the same as <code>tacobelmont</code>.</p>
 
     <div id="otp-request" class="auth-form">
         <input type="text" id="username" placeholder="CyTube username (case-sensitive)" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="50">
-        <button id="request-otp-btn" class="btn btn-primary">Send Code</button>
+        <button id="request-otp-btn" class="btn btn-primary" disabled>Send Code</button>
     </div>
 
     <div id="otp-verify" class="auth-form hidden">
         <p class="otp-sent-msg">Code sent! Check your PMs from Kryten.</p>
         <input type="text" id="otp-code" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="one-time-code">
-        <button id="verify-otp-btn" class="btn btn-primary">Verify</button>
+        <button id="verify-otp-btn" class="btn btn-primary" disabled>Verify</button>
     </div>
 
     <div id="auth-error" class="error-msg hidden"></div>
@@ -24,8 +24,48 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.login-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+.login-instructions {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+}
+</style>
 <script>
-document.getElementById('request-otp-btn').addEventListener('click', async () => {
+const usernameInput = document.getElementById('username');
+const requestBtn = document.getElementById('request-otp-btn');
+const otpInput = document.getElementById('otp-code');
+const verifyBtn = document.getElementById('verify-otp-btn');
+
+// Enable/disable buttons based on input
+usernameInput.addEventListener('input', () => {
+    requestBtn.disabled = !usernameInput.value.trim();
+});
+
+otpInput.addEventListener('input', () => {
+    verifyBtn.disabled = !otpInput.value.trim();
+});
+
+// Enter key submits
+usernameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !requestBtn.disabled) {
+        requestBtn.click();
+    }
+});
+
+otpInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter' && !verifyBtn.disabled) {
+        verifyBtn.click();
+    }
+});
+
+requestBtn.addEventListener('click', async () => {
     const username = document.getElementById('username').value.trim();
     if (!username) return;
     const errEl = document.getElementById('auth-error');
@@ -39,6 +79,8 @@ document.getElementById('request-otp-btn').addEventListener('click', async () =>
     if (resp.ok) {
         document.getElementById('otp-request').classList.add('hidden');
         document.getElementById('otp-verify').classList.remove('hidden');
+        // Focus the OTP input
+        setTimeout(() => otpInput.focus(), 100);
     } else {
         const data = await resp.json();
         errEl.textContent = data.detail || 'Failed to send OTP';

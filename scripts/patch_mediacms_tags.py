@@ -6,9 +6,7 @@ import sys
 
 PATH = "/home/mediacms.io/mediacms/files/views/media.py"
 
-QS_OLD = (
-    "        media = Media.objects.filter(user=request.user, friendly_token__in=media_ids)\n"
-)
+QS_OLD = "        media = Media.objects.filter(user=request.user, friendly_token__in=media_ids)\n"
 QS_NEW = (
     "        if is_mediacms_editor(request.user):\n"
     "            media = Media.objects.filter(friendly_token__in=media_ids)\n"
@@ -46,7 +44,7 @@ TAGS_NEW = (
     "                title = helpers.get_alphanumeric_only(raw)[:100]\n"
     "                if not title:\n"
     "                    continue\n"
-    "                tag, _ = Tag.objects.get_or_create(title=title, defaults={\"user\": request.user})\n"
+    '                tag, _ = Tag.objects.get_or_create(title=title, defaults={"user": request.user})\n'
     "                tags.append(tag)\n"
     "            if not tags:\n"
     '                return Response({"detail": "No matching tags found"}, status=status.HTTP_400_BAD_REQUEST)\n'

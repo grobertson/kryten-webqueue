@@ -226,3 +226,57 @@ async def recently_played_debug(request: Request, user: dict = Depends(require_a
     db = request.app.state.db
     days = request.app.state.config.catalog_recently_played_hide_days
     return await db.get_recently_played_debug(days)
+
+
+@router.delete("/{friendly_token}")
+async def delete_catalog_item(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
+    """
+    Permanently delete a catalog item from SQLite and MediaCMS.
+
+    HIGH-STAKES: This is a destructive operation with no recovery path.
+    The item is removed from both the local catalog database and MediaCMS.
+
+    Admin-only. Use with caution.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    db = request.app.state.db
+
+    # 1. Fetch item from catalog DB (need to verify it exists)
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Item not found")
+
+    # 2. Delete from MediaCMS
+    cms_deleted = False
+    cms_client = _mediacms_client(request)
+    try:
+        cms_deleted = await cms_client.delete_media(friendly_token)
+        if not cms_deleted:
+            logger.warning(
+                f"MediaCMS deletion failed for {friendly_token}, continuing with local deletion"
+            )
+    except Exception as e:
+        logger.error(
+            f"MediaCMS deletion error for {friendly_token}: {e}, continuing with local deletion"
+        )
+
+    # 3. Delete from local catalog DB (source of truth for the webapp)
+    deleted = await db.delete_catalog_item(friendly_token)
+
+    if not deleted:
+        raise HTTPException(500, "Failed to delete item from catalog")
+
+    logger.info(
+        f"Admin {user.get('username')} deleted catalog item {friendly_token} (title: {item.get('title')})"
+    )
+
+    return {
+        "success": True,
+        "deleted": friendly_token,
+        "title": item.get("title"),
+        "cms_deleted": cms_deleted,
+    }

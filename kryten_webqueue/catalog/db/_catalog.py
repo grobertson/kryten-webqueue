@@ -557,6 +557,42 @@ class _CatalogMixin:
         )
         return {"completions": pc["c"] if pc else 0}
 
+    async def delete_catalog_item(self, friendly_token: str) -> bool:
+        """Permanently delete a catalog item and all facet associations.
+
+        Removes the item from the catalog, tags, categories, and people join tables.
+        This is a destructive operation with no recovery path.
+        Returns True if the item was deleted, False if it didn't exist.
+        """
+        # Check if item exists
+        item = await self._fetch_one(
+            "SELECT id FROM catalog WHERE friendly_token = ?", [friendly_token]
+        )
+        if not item:
+            return False
+
+        # Delete facet associations first (FK constraints)
+        await self._execute(
+            "DELETE FROM catalog_tags WHERE item_id = ?",
+            [item["id"]],
+        )
+        await self._execute(
+            "DELETE FROM catalog_categories WHERE item_id = ?",
+            [item["id"]],
+        )
+        await self._execute(
+            "DELETE FROM catalog_people WHERE item_id = ?",
+            [item["id"]],
+        )
+
+        # Delete the item itself
+        await self._execute(
+            "DELETE FROM catalog WHERE id = ?",
+            [item["id"]],
+        )
+
+        return True
+
     async def purge_promo_hide_state(self) -> dict:
         """Remove any recently-played hide state recorded for promos/bumpers.
 

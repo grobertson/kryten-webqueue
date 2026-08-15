@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-08-15
+
+### Fixed
+
+- **v0.38.0 shipped without its feature code.** The 0.38.0 release commit staged
+  only the version bump and `CHANGELOG.md`; the eleven modified template, CSS, JS,
+  and route files were left uncommitted in the working tree, so the published build
+  contained the new version string but none of the visual/UX changes. This release
+  commits and ships the actual implementation described under 0.38.0 below.
+
 ## [0.38.0] - 2026-08-15
 
 ### Added

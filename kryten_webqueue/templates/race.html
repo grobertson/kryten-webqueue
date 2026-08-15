@@ -6,13 +6,35 @@
 <style>
   .race-wrap { max-width: 960px; margin: 0 auto; }
   .race-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
-  .race-head h1 { font-family: 'Sora', sans-serif; margin: 0; }
+  .race-head h1 { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; margin: 0; }
   .race-status { font-weight: 600; opacity: 0.9; }
-  .race-status .pill { padding: 0.18rem 0.7rem; border-radius: 999px; font-size: 0.82rem; }
+  .race-status .pill { padding: 0.25rem 0.8rem; border-radius: 999px; font-size: 0.9rem; font-weight: 600; }
   .pill-betting { background: #1f6feb33; color: #79c0ff; }
   .pill-racing  { background: #2ea04333; color: #7ee787; }
   .pill-finished{ background: #d2992233; color: #f0c674; }
   .pill-idle    { background: #6e768166; color: #c9d1d9; }
+
+  /* Light mode contrast overrides for race pills */
+  :root[data-theme="light"] .pill-betting { background: #0969da; color: #ffffff; }
+  :root[data-theme="light"] .pill-racing  { background: #1a7f37; color: #ffffff; }
+  :root[data-theme="light"] .pill-finished{ background: #bf8700; color: #ffffff; }
+  :root[data-theme="light"] .pill-idle    { background: #57606a; color: #ffffff; }
+
+  /* Light mode lane/track overrides */
+  :root[data-theme="light"] .lane {
+    background: var(--bg-card);
+    border-color: var(--border);
+    color: var(--text-primary);
+  }
+  :root[data-theme="light"] .lane-rail {
+    background: repeating-linear-gradient(90deg, var(--bg-secondary) 0 18px, var(--bg-hover) 18px 36px);
+    border-color: var(--border);
+  }
+  :root[data-theme="light"] .race-commentary {
+    background: var(--bg-secondary);
+    border-color: var(--border);
+    color: var(--text-primary);
+  }
 
   /* Commentary feed — newest line, fades on change. */
   .race-commentary {
@@ -78,7 +100,7 @@
   .race-side .stat b { font-size: 1.12rem; }
   .race-winner { margin: 1rem 0; padding: 0.8rem 1.05rem; border-radius: 11px;
     background: #d2992218; border: 1px solid #f0c67455; }
-  .race-winner h2 { margin: 0 0 0.4rem; font-family: 'Sora', sans-serif; }
+  .race-winner h2 { margin: 0 0 0.4rem; font-family: Georgia, 'Times New Roman', serif; font-weight: 700; }
   .race-payouts { margin: 0.3rem 0 0; padding-left: 1.15rem; }
   .race-payouts li { margin: 0.1rem 0; }
   .race-idle { text-align: center; opacity: 0.7; padding: 3rem 1rem; }

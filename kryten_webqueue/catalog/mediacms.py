@@ -163,3 +163,40 @@ class MediaCMSClient:
                 )
             await self._restore_owner(client, friendly_token, owner)
             return ok
+
+    async def delete_media(self, friendly_token: str) -> bool:
+        """
+        Delete a media item from MediaCMS.
+
+        Args:
+            friendly_token: The item's friendly_token (MediaCMS uses this as primary identifier)
+
+        Returns:
+            True if deletion succeeds (204 response) or item not found (404), False otherwise
+
+        DELETE https://www.dropsugar.co/api/v1/media/{friendly_token}
+        Success: 204 No Content
+        """
+        async with httpx.AsyncClient(headers=self._headers, timeout=_TIMEOUT) as client:
+            url = f"{self._base}/api/v1/media/{friendly_token}"
+            try:
+                resp = await client.delete(url)
+                if resp.status_code == 204:
+                    logger.info(f"MediaCMS item {friendly_token} deleted successfully")
+                    return True
+                elif resp.status_code == 404:
+                    logger.warning(
+                        f"MediaCMS item {friendly_token} not found (already deleted?)"
+                    )
+                    return True  # Idempotent
+                else:
+                    logger.error(
+                        "MediaCMS deletion failed for %s: HTTP %s — %s",
+                        friendly_token,
+                        resp.status_code,
+                        resp.text[:200],
+                    )
+                    return False
+            except httpx.HTTPError as e:
+                logger.error(f"MediaCMS deletion HTTP error for {friendly_token}: {e}")
+                return False
