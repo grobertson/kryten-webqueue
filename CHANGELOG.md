@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.4] - 2026-08-15
+
+### Changed
+
+- **Admin job action buttons now sit in fixed, aligned columns.** The action rail
+  is a fixed three-column grid: Run/Begin (col 1), edit-schedule (col 2, empty
+  placeholder when no schedule exists), and a toggling add/delete-schedule button
+  (col 3). Buttons line up across every row regardless of schedule state. Dropped
+  the trailing ellipsis from the "Begin"/"Running" labels for a more uniform look,
+  and the delete-schedule button now uses the standard `btn-danger` style instead
+  of an inline (and mis-named) color variable.
+
 ## [0.38.3] - 2026-08-15
 
 ### Changed

@@ -262,19 +262,23 @@ async function loadJobs() {
                 const schedBadge = sched
                     ? ` <span class="job-badge" title="${escapeHtml(sched.cron_expression || '')}">${sched.is_active ? 'scheduled' : 'paused'}</span>`
                     : '';
-                const schedEditBtn = `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="${sched ? 'Edit schedule' : 'Create schedule'}">${sched ? (sched.is_active ? '\u23f0' : '\u23f8') : '\u2295'}</button>`;
-                const schedDelBtn = sched
-                    ? `<button class="btn btn-sm" onclick="removeJobSchedule('${j.name}')" title="Remove schedule" style="color:var(--color-danger)">\u00d7</button>`
-                    : '';
+                // Column 2: edit an existing schedule. When none exists this is an
+                // empty placeholder so the add/delete toggle stays anchored in column 3.
+                const schedEditBtn = sched
+                    ? `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Edit schedule">${sched.is_active ? '\u23f0' : '\u23f8'}</button>`
+                    : '<span class="job-action-empty"></span>';
+                // Column 3: toggles between "add schedule" (none) and "delete schedule".
+                const schedToggleBtn = sched
+                    ? `<button class="btn btn-sm btn-danger" onclick="removeJobSchedule('${j.name}')" title="Delete schedule">\u00d7</button>`
+                    : `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Add schedule">\u2295</button>`;
                 return `
                 <div class="job-row">
                     <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}${schedBadge}</span>
                     ${summary}
                     <div class="job-actions">
-                        <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>
-                            ${j.running ? 'Running\u2026' : (hasParams ? 'Begin\u2026' : 'Run')}
-                        </button>
-                        ${schedEditBtn}${schedDelBtn}
+                        <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>${j.running ? 'Running' : (hasParams ? 'Begin' : 'Run')}</button>
+                        ${schedEditBtn}
+                        ${schedToggleBtn}
                     </div>
                 </div>`;
             }).join('')
