@@ -1368,16 +1368,18 @@ def main() -> None:
 
 
 def upcoming_weekend_sheet(today=None) -> tuple[str, "datetime.date", "datetime.date"]:
-    """Return (sheet_name, friday, saturday) for the upcoming weekend.
+    """Return (sheet_name, friday, saturday) for the current/upcoming weekend.
 
-    Per OQ-3: ``friday = today + ((4 - weekday) % 7)`` yields *today* when run
-    on a Friday (the imminent weekend); Sat/Sun roll forward to next Friday.
-    Sheet name matches ``_SHEET_DATE_RE`` (e.g. ``3.6-3.7``).
+    ``friday = today + (4 - weekday)`` (no modulo): Mon–Thu target the coming
+    Friday, Friday targets today, and Sat/Sun stay on the *current* weekend's
+    Friday (yesterday / two days ago). The window only rolls forward on Monday,
+    so Saturday and Sunday keep reading this weekend's sheet rather than next
+    week's. Sheet name matches ``_SHEET_DATE_RE`` (e.g. ``3.6-3.7``).
     """
     import datetime as _dt
 
     today = today or _dt.date.today()
-    friday = today + _dt.timedelta(days=((4 - today.weekday()) % 7))
+    friday = today + _dt.timedelta(days=(4 - today.weekday()))
     saturday = friday + _dt.timedelta(days=1)
     sheet = f"{friday.month}.{friday.day}-{saturday.month}.{saturday.day}"
     return sheet, friday, saturday

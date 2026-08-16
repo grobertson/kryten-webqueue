@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.5] - 2026-08-16
+
+### Fixed
+
+- **Weekend workbook window rolled forward a weekend too early.** The
+  `fetchurls` job's `upcoming_weekend_sheet` used `today + ((4 - weekday) % 7)`,
+  which pushed Saturday and Sunday runs to *next* week's Friday — so a Sunday run
+  overwrote the in-progress weekend's playlists (e.g. `8.14-8.15`) with the next
+  sheet (`8.21-8.22`). Dropped the `% 7` so `friday = today + (4 - weekday)`:
+  Mon–Fri target the coming Friday, and Sat/Sun stay on the current weekend's
+  Friday. The window now rolls forward on **Monday** instead of Saturday.
+
 ## [0.38.4] - 2026-08-15
 
 ### Changed

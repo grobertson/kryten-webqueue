@@ -56,9 +56,10 @@ def _ctx(db, **kw):
     [
         (datetime.date(2026, 3, 4), "3.6-3.7"),  # Wed → upcoming Fri
         (datetime.date(2026, 3, 5), "3.6-3.7"),  # Thu → upcoming Fri
-        (datetime.date(2026, 3, 6), "3.6-3.7"),  # Fri → TODAY (per OQ-3)
-        (datetime.date(2026, 3, 7), "3.13-3.14"),  # Sat → next Fri
-        (datetime.date(2026, 3, 8), "3.13-3.14"),  # Sun → next Fri
+        (datetime.date(2026, 3, 6), "3.6-3.7"),  # Fri → TODAY
+        (datetime.date(2026, 3, 7), "3.6-3.7"),  # Sat → current weekend
+        (datetime.date(2026, 3, 8), "3.6-3.7"),  # Sun → current weekend
+        (datetime.date(2026, 3, 9), "3.13-3.14"),  # Mon → rolls forward
     ],
 )
 def test_upcoming_weekend_sheet(today, expected):

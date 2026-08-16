@@ -17,7 +17,7 @@
 | 4 | Hide Item tag + write target | Write tag **`kryten-hidden`** to MediaCMS via the API token (MediaCMS is the source of truth). Hide **immediately in the local catalog**; the next sync confirms it. |
 | 5 | Browse sort options + scope | `Default (quality)`, `Title A–Z`, `Title Z–A`, `Newest first`, `Oldest first`. **`Newest first` is available to everyone** (not admin-only). |
 | 6 | "Most recent playlist" | **Most recently *created* saved playlist by the current admin** (`saved_playlists` where `created_by = user ORDER BY created_at DESC LIMIT 1`). |
-| 7 | fetchurls weekend | **Always the upcoming weekend**: compute the next Friday and target the sheet named `M.D-M.D` (e.g. `3.6-3.7`), overriding the tool's current/just-past auto-select. |
+| 7 | fetchurls weekend | **Current/upcoming weekend**: `friday = today + (4 - weekday)` targets the sheet named `M.D-M.D` (e.g. `3.6-3.7`), overriding the tool's auto-select. Mon–Fri point at the coming Friday; **Sat/Sun stay on the current weekend** and only roll forward on Monday. |
 
 ### 0.1 Resolved open questions (was §I)
 
@@ -25,7 +25,7 @@
 |----|----------|----------------|
 | OQ-1 | fetchurls SharePoint auth in a headless service | **v1 = local file only.** The job reads the workbook from a configured/uploaded `.xlsx` path (`sharepoint.workbook_path` or an admin upload), reusing the tool's existing `--file` code path. **No Microsoft Graph / MSAL device-code in v1.** A future phase MAY add Graph with the device code surfaced in the admin UI; spec'd but not built now. Column-F writeback is **disabled** in file-only mode unless the file is writable in place. |
 | OQ-2 | Vendor vs packaged dependency | **Vendor-and-adapt** into `kryten_webqueue/integrations/` (accept drift from `d:\devel\cmsutils`). Record the upstream commit/date in each vendored file's header. A future option to repackage `cmsutils` as an installable dependency is noted but not pursued now. |
-| OQ-3 | "Upcoming weekend" when run on a Friday | **Use today's weekend** (the imminent Fri/Sat). `friday = today + ((4 - weekday) mod 7)` yields today when run on Friday; only Sat/Sun roll forward to next Friday. |
+| OQ-3 | "Upcoming weekend" when run on a Friday / over the weekend | **Use the current weekend through Sunday.** `friday = today + (4 - weekday)` (no modulo): Mon–Thu target the coming Friday, Friday yields today, and **Sat/Sun stay on the just-past Friday** (the weekend in progress). The window rolls forward on **Monday**, so a Sunday run does not overwrite this weekend's playlists with next week's sheet. |
 | OQ-4 | Random branded art stability | **Per server-render.** The browse route picks `random.choice(placeholders)` per affected tile when building the page; the src is stable for that page load (no client reshuffle, no layout thrash). Hover still reveals the real thumbnail. |
 | OQ-5 | Include `unhide`? | **Yes.** Ship `POST /admin/catalog/{token}/unhide` (removes `kryten-hidden` in MediaCMS + locally) so a mis-hide is reversible from the admin "show hidden" view. |
 | OQ-6 | MediaCMS tag-write endpoint | **Reuse the enrich tools' MediaCMS edit path.** Tags are written via the media-edit call to `POST /api/v1/media/{friendly_token}` with the `tags` field and the API token — the same mechanism `enrichmeta`/`enrichtv` use. Extract into `integrations/cmsutils/_common.py:MediaCMSClient.set_tags(token, tags)` and **read-modify-write** (fetch current tags, add/remove `kryten-hidden`, submit) to preserve existing tags. **Verify exact field/verb against the live instance during B6** with a round-trip integration test on a disposable item before wiring the UI. |
@@ -137,8 +137,8 @@ Reimplements `youtube_to_mediacms.py` (today wrapped by `fetch.ps1`). Downloads 
 
 Reimplements `fetchurls.py`: read the Channel Z Excel workbook from SharePoint, resolve each source URL (validate dropsugar.co with HEAD; download YouTube/Tubi via the `fetch` downloader), and produce per-section playlists.
 
-**Always-upcoming-weekend rule (new, overrides tool):**
-- Compute the **next Friday** from today: `friday = today + ((4 - today.weekday()) % 7)`. When run **on a Friday this yields today** (the imminent weekend, per OQ-3); Sat/Sun roll forward to the next Friday. Saturday = friday + 1.
+**Current-weekend rule (overrides tool):**
+- Compute the anchor Friday from today: `friday = today + (4 - today.weekday())` (no modulo). Mon–Thu yield the coming Friday, Friday yields today, and **Sat/Sun yield the just-past Friday** (the weekend in progress) — the window rolls forward only on Monday. Saturday = friday + 1.
 - Sheet name = `f"{friday.month}.{friday.day}-{saturday.month}.{saturday.day}"` (e.g. `3.6-3.7`), matching `_SHEET_DATE_RE`. Pass this explicitly as the target sheet rather than calling `_auto_select_sheet` (which selects current/just-past).
 - If the computed sheet is absent from the workbook, fail the run with a clear message listing available sheet names.
 
