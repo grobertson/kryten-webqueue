@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.38.11] - 2026-08-16
+
+### Fixed
+
+- **Per-item enrichment failed with "Pipeline steps must be one of ...".** Both
+  the "Re-run Enrichment" button and "Re-enrich after save" switch were passing
+  `"steps": "classify,title,meta,art,tags"`, but that combo is not in the
+  `catalog_enrich` schema's allowed enum values. Changed both callsites to use
+  `"classify,meta,art,tags"` (the "Enrichment only" preset), which runs the
+  full classify → metadata → art → tags pipeline without the sync step.
+
 ## [0.38.10] - 2026-08-16
 
 ### Fixed
