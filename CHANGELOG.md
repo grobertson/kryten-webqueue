@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [0.38.6] - 2026-08-16
+
+### Fixed
+
+- **Disabling promos in the admin panel 500'd and had no effect.** Under the
+  hardened systemd unit (`ProtectSystem=strict`), `/etc/kryten-webqueue` was not
+  in `ReadWritePaths`, so `Config.save()`'s atomic temp-file write failed with
+  `OSError: [Errno 30] Read-only file system`. The promo config `PUT` only caught
+  `RuntimeError`, so it surfaced as a 500 — and because the exception fired
+  *before* `PromoDirector.update_config()`, the running director kept its old
+  settings while the in-memory config had already been mutated. The panel showed
+  promos disabled while they kept inserting. Fixes:
+  - `deploy/kryten-webqueue.service` now lists `/etc/kryten-webqueue` in
+    `ReadWritePaths` so config edits persist. **Deploy note:** existing hosts must
+    reinstall the unit (`sudo cp`/`systemctl daemon-reload`) for the change to
+    apply.
+  - The promo config `PUT` now catches `OSError` as well and, on any persist
+    failure, rolls the in-memory config back so the GET view and the live director
+    stay consistent instead of silently diverging.
+- **Promos leaked into non-preemptable scheduled events.** The production
+  `active_schedule` table was missing the `last_item_media_id` column (migration
+  drift: `_migrations` recorded the version but the `ALTER` never landed). Every
+  schedule fire therefore threw at `set_active_schedule`, so the event-lock row
+  was never written, `is_event_lock_active()` returned `False`, and the promo
+  director inserted promos during a non-preemptable event. `run_migrations` now
+  reconciles the `active_schedule` event-lock columns (`last_item_uid`,
+  `lock_disabled`, `last_item_media_id`) idempotently on startup — a no-op on
+  healthy databases, a self-repair on drifted ones.
+
 ## [0.38.5] - 2026-08-16
 
 ### Fixed

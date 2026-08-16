@@ -434,7 +434,7 @@ class _DBBase:
             await self._db.close()
 
     async def run_migrations(self):
-        """Apply pending migrations sequentially."""
+        """Apply pending migrations sequentially, then reconcile known drift."""
         await self._executescript(MIGRATIONS[0])
         row = await self._fetch_one("SELECT MAX(version) as v FROM _migrations")
         current_version = (row["v"] or 0) if row else 0
@@ -444,6 +444,33 @@ class _DBBase:
                 await self._executescript(sql)
                 await self._execute(
                     "INSERT INTO _migrations (version) VALUES (?)", [version]
+                )
+
+        await self._reconcile_schema()
+
+    async def _reconcile_schema(self):
+        """Idempotently repair known column drift the migration tracking missed.
+
+        Some databases recorded a migration version whose ``ALTER`` never actually
+        landed (a migration was reordered before forward-only was enforced). The
+        event-lock path depends on these ``active_schedule`` columns; a missing one
+        makes ``set_active_schedule`` raise, which silently disables the
+        scheduled-event lock and lets promos leak into a non-preemptable event.
+        Add any that are absent — a no-op on healthy databases.
+        """
+        expected = {
+            "last_item_uid": "INTEGER",
+            "lock_disabled": "INTEGER NOT NULL DEFAULT 0",
+            "last_item_media_id": "TEXT",
+        }
+        existing = {
+            r["name"]
+            for r in await self._fetch_all("PRAGMA table_info(active_schedule)")
+        }
+        for name, decl in expected.items():
+            if name not in existing:
+                await self._execute(
+                    f"ALTER TABLE active_schedule ADD COLUMN {name} {decl}"
                 )
 
     # --- Low-level helpers ---

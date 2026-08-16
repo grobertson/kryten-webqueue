@@ -470,3 +470,35 @@ async def test_fire_stores_last_item_media_id(db):
     )
     active = await db.get_active_schedule()
     assert active["last_item_media_id"] == "https://cms/b.json"
+
+
+async def test_reconcile_restores_missing_event_lock_column(db):
+    """A drifted DB missing last_item_media_id self-repairs on startup.
+
+    Mirrors the production drift where the migration was recorded but the ALTER
+    never landed, which made set_active_schedule raise and silently disabled the
+    scheduled-event lock (letting promos leak into a non-preemptable event).
+    """
+    await db._execute("ALTER TABLE active_schedule DROP COLUMN last_item_media_id")
+    cols = {
+        r["name"] for r in await db._fetch_all("PRAGMA table_info(active_schedule)")
+    }
+    assert "last_item_media_id" not in cols
+
+    # Reconciliation runs at the tail of run_migrations and re-adds it.
+    await db.run_migrations()
+    cols = {
+        r["name"] for r in await db._fetch_all("PRAGMA table_info(active_schedule)")
+    }
+    assert "last_item_media_id" in cols
+
+    # The event-lock write path works again.
+    await db.set_active_schedule(
+        schedule_id=None,
+        playlist_id=None,
+        is_immutable=True,
+        started_at="2026-01-01T00:00:00",
+        estimated_end_at="2026-01-01T01:00:00",
+        last_item_media_id="https://cms/x.json",
+    )
+    assert await db.is_event_lock_active() is True

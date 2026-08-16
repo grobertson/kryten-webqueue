@@ -17,7 +17,9 @@ NoNewPrivileges=true
 ProtectSystem=strict
 # ProtectHome must be off — executable and venv live in ~/.local/pipx
 ProtectHome=false
-ReadWritePaths=/var/lib/kryten-webqueue /home/kryten/.local /home/kryten/emote_backups
+# /etc/kryten-webqueue must be writable: the admin panel persists config edits
+# (e.g. promo enable/disable) back to config.json via an atomic temp-file write.
+ReadWritePaths=/etc/kryten-webqueue /var/lib/kryten-webqueue /home/kryten/.local /home/kryten/emote_backups
 PrivateTmp=true
 
 [Install]
