@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.38.9] - 2026-08-16
+
+### Changed
+
+- **Removed superseded jobs from the admin jobs list.** The unified **Catalog
+  Enrichment Pipeline** (`catalog_enrich`) now covers what the standalone
+  **Catalog Sync**, **Enrich Titles**, **Enrich Movie Metadata**, and **Enrich
+  TV Metadata** jobs did, so those four are no longer registered in the admin UI.
+  The underlying task functions remain available to the pipeline; catalog sync is
+  still driven by the startup loop and the queue-management "Sync Now" button.
+
+### Fixed
+
+- **Jobs-list "last run" line was mis-spaced.** `.job-last-run` is a flex
+  container, so the whitespace text nodes around the status badge collapsed,
+  jamming the status against the timestamp. The label is now capitalized
+  (`Last Run:`) and a flex `gap` restores the spaces after the colon and between
+  the status and the date.
+
 ## [0.38.8] - 2026-08-16
 
 ### Fixed

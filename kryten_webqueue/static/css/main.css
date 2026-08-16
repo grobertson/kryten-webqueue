@@ -1340,6 +1340,7 @@ a.np-chip {
     color: var(--text-secondary);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+    gap: 0.35rem;
 }
 @media (max-width: 640px) {
     .jobs-list {

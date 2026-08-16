@@ -94,32 +94,15 @@ async def lifespan(app: FastAPI):
     # Generic background job runner (records run history to job_runs)
     job_manager = JobManager(db, api_gate=api_gate, config=config, cover_art=cover_art)
 
-    async def _catalog_sync_job(params, ctx):
-        # catalog_sync registers with no schema; params/ctx are ignored. The
-        # adapter keeps the zero-arg sync compatible with the params/ctx job API.
-        return await catalog_sync.sync()
-
-    job_manager.register(
-        "catalog_sync",
-        _catalog_sync_job,
-        label="Catalog Sync",
-    )
-
     # Reimplemented cmsutils enrichment jobs (vendored, run off-loop). These
     # register regardless of optional deps; a missing dep fails the run fast
     # with a clear message rather than crashing startup.
     from .jobs.tasks import (
-        enrichtitles_job,
-        enrichmeta_job,
-        enrichtv_job,
         catalog_enrich_job,
         fetch_job,
         fetchurls_job,
         motd_posters_job,
         CATALOG_ENRICH_SCHEMA,
-        ENRICHTITLES_SCHEMA,
-        ENRICHMETA_SCHEMA,
-        ENRICHTV_SCHEMA,
         FETCH_SCHEMA,
         FETCHURLS_SCHEMA,
         MOTD_POSTERS_SCHEMA,
@@ -130,21 +113,6 @@ async def lifespan(app: FastAPI):
         catalog_enrich_job,
         label="Catalog Enrichment Pipeline",
         schema=CATALOG_ENRICH_SCHEMA,
-    )
-    job_manager.register(
-        "enrichtitles",
-        enrichtitles_job,
-        label="Enrich Titles",
-        schema=ENRICHTITLES_SCHEMA,
-    )
-    job_manager.register(
-        "enrichmeta",
-        enrichmeta_job,
-        label="Enrich Movie Metadata",
-        schema=ENRICHMETA_SCHEMA,
-    )
-    job_manager.register(
-        "enrichtv", enrichtv_job, label="Enrich TV Metadata", schema=ENRICHTV_SCHEMA
     )
     job_manager.register(
         "fetch", fetch_job, label="Fetch (download → MediaCMS)", schema=FETCH_SCHEMA

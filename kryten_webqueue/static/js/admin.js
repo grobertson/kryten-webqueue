@@ -256,7 +256,7 @@ async function loadJobs() {
                 const hasParams = Array.isArray(j.schema) && j.schema.length;
                 const lr = j.last_run;
                 const summary = lr
-                    ? `<span class="job-last-run">last: <span class="job-status job-status-${escapeHtml(lr.status || '')}">${escapeHtml(lr.status || '')}</span> ${formatLocalDateTime(lr.started_at)}</span>`
+                    ? `<span class="job-last-run">Last Run: <span class="job-status job-status-${escapeHtml(lr.status || '')}">${escapeHtml(lr.status || '')}</span> ${formatLocalDateTime(lr.started_at)}</span>`
                     : '<span class="job-last-run muted">never run</span>';
                 const sched = SCHEDULES_CACHE[j.name];
                 const schedBadge = sched
