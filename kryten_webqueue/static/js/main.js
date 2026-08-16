@@ -334,7 +334,7 @@ function showModal(html) {
 function closeModal() { const m = document.getElementById('admin-modal'); if (m) m.remove(); }
 
 // ---------- Delete permanently ----------
-async function deleteItem(token, title) {
+async function deleteItem(token, title, after) {
     const msg = `PERMANENT DELETE\n\n` +
                 `This will remove "${title}" from the catalog AND MediaCMS.\n` +
                 `This action CANNOT be undone.\n\n` +
@@ -351,8 +351,15 @@ async function deleteItem(token, title) {
         
         if (resp.ok) {
             showToast(`Deleted: ${title}`);
-            // Redirect to browse page after deletion
-            setTimeout(() => window.location.href = '/catalog/browse', 1000);
+            setTimeout(() => {
+                if (after === 'reload') {
+                    // Browse view: stay on the current search/filter results.
+                    window.location.reload();
+                } else {
+                    // Detail view: the item's page no longer exists.
+                    window.location.href = '/catalog/browse';
+                }
+            }, 1000);
         } else {
             showToast(data.detail || `Failed to delete (${resp.status})`, 'error');
         }

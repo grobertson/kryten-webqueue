@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.8] - 2026-08-16
+
+### Fixed
+
+- **Deleting an item from the browse/search view dropped your active search.**
+  The delete button always redirected to the base `/catalog/browse`, discarding
+  any query/filter/sort/page params. `deleteItem` now takes a post-delete
+  behavior: the browse and search views (both rendered from `browse.html`, whose
+  state lives in the URL) reload in place to preserve the active search, while
+  the item detail view still redirects to the catalog (its page no longer
+  exists).
+
 ## [0.38.7] - 2026-08-16
 
 ### Fixed
