@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.38.10] - 2026-08-16
+
+### Fixed
+
+- **Per-item enrichment triggers crashed with "no attribute 'run_job'".** The
+  "Re-run Enrichment" button and the "Re-enrich after save" switch in the item
+  edit dialog both called `job_manager.run_job()`, but the method is named
+  `run()`. Both calls now use the correct method name.
+
 ## [0.38.9] - 2026-08-16
 
 ### Changed

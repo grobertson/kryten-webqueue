@@ -107,7 +107,7 @@ async def enrich_item(
     if not item:
         raise HTTPException(404, "Catalog item not found")
     job_manager = request.app.state.job_manager
-    result = await job_manager.run_job(
+    result = await job_manager.run(
         "catalog_enrich",
         params={
             "tokens": friendly_token,
@@ -201,7 +201,7 @@ async def edit_item(
     # --- Optional re-enrichment trigger ---
     if body.get("re_enrich", False):
         job_manager = request.app.state.job_manager
-        result = await job_manager.run_job(
+        result = await job_manager.run(
             "catalog_enrich",
             params={
                 "tokens": friendly_token,
