@@ -560,35 +560,34 @@ class _CatalogMixin:
     async def delete_catalog_item(self, friendly_token: str) -> bool:
         """Permanently delete a catalog item and all facet associations.
 
-        Removes the item from the catalog, tags, categories, and people join tables.
-        This is a destructive operation with no recovery path.
+        Removes the item from the catalog plus its FTS row and its tag, category,
+        people, and studio associations. Destructive, with no recovery path.
         Returns True if the item was deleted, False if it didn't exist.
         """
         # Check if item exists
         item = await self._fetch_one(
-            "SELECT id FROM catalog WHERE friendly_token = ?", [friendly_token]
+            "SELECT friendly_token FROM catalog WHERE friendly_token = ?",
+            [friendly_token],
         )
         if not item:
             return False
 
-        # Delete facet associations first (FK constraints)
+        # FTS and the people/studio join tables are not FK-cascaded from catalog,
+        # so remove them explicitly.
         await self._execute(
-            "DELETE FROM catalog_tags WHERE item_id = ?",
-            [item["id"]],
+            "DELETE FROM catalog_fts WHERE friendly_token = ?", [friendly_token]
         )
         await self._execute(
-            "DELETE FROM catalog_categories WHERE item_id = ?",
-            [item["id"]],
+            "DELETE FROM catalog_people WHERE friendly_token = ?", [friendly_token]
         )
         await self._execute(
-            "DELETE FROM catalog_people WHERE item_id = ?",
-            [item["id"]],
+            "DELETE FROM catalog_studios WHERE friendly_token = ?", [friendly_token]
         )
 
-        # Delete the item itself
+        # Deleting the catalog row cascades catalog_tags / catalog_categories
+        # (ON DELETE CASCADE on friendly_token).
         await self._execute(
-            "DELETE FROM catalog WHERE id = ?",
-            [item["id"]],
+            "DELETE FROM catalog WHERE friendly_token = ?", [friendly_token]
         )
 
         return True

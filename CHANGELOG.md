@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.38.7] - 2026-08-16
+
+### Fixed
+
+- **Deleting a catalog item 500'd (`no such column: id`).** `delete_catalog_item`
+  queried `catalog.id` and `catalog_tags/categories/people.item_id`, but the
+  schema keys every catalog table on `friendly_token` (the `catalog` primary key)
+  — there is no `id`/`item_id` column, so the delete failed for every item on
+  every database, *after* the MediaCMS item had already been removed. The method
+  now deletes by `friendly_token`: it removes the FTS row and the (non-cascaded)
+  people/studio associations explicitly, then deletes the catalog row, letting
+  `ON DELETE CASCADE` clear `catalog_tags`/`catalog_categories`.
+
 ## [0.38.6] - 2026-08-16
 
 ### Fixed
