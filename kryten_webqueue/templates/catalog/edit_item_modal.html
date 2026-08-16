@@ -173,58 +173,29 @@
 <script>
 async function openEditModal(token) {
     try {
-        // Fetch current item data (we need both catalog and enrichment state)
-        const [itemResp, enrichResp] = await Promise.all([
-            fetch(`/admin/catalog/${encodeURIComponent(token)}/enrich`).then(r => 
-                r.status === 404 ? fetch(`/catalog/item/${encodeURIComponent(token)}`) : 
-                fetch(`/admin/catalog/${encodeURIComponent(token)}`).catch(() => 
-                    fetch(`/catalog/item/${encodeURIComponent(token)}`))
-            ),
-            // Try to get enrichment state; it's okay if this fails
-            fetch(`/api/catalog/enrichment/${encodeURIComponent(token)}`).catch(() => null)
-        ]);
+        // Fetch item data with enrichment state from the admin API
+        const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}/data`);
+        if (!resp.ok) {
+            throw new Error(`Failed to fetch item data (${resp.status})`);
+        }
+        const {item, enrichment} = await resp.json();
         
-        // For now, we'll use a simpler approach - just fetch via the admin endpoint
-        // which should give us the full catalog row
-        const itemData = await fetch(`/catalog/item/${encodeURIComponent(token)}`).then(r => r.text());
-        
-        // Actually, let's use a different strategy - scrape the current page data
-        // or make a simple JSON endpoint. For now, let's use the title/description
-        // that are visible on the page.
-        
-        // Simpler: just pre-populate from the DOM if we're on detail page,
-        // or make the modal fetch the data itself
-        
+        // Store the token
         document.getElementById('edit-token').value = token;
         
-        // Try to get data from the current page context (if we're on detail page)
-        const titleEl = document.querySelector('h1.item-detail-title, h3.card-title a');
-        const descEl = document.querySelector('p.item-detail-description');
-        const durationEl = document.querySelector('.item-duration, .card-duration');
+        // Populate core catalog fields
+        document.getElementById('edit-title').value = item.title || '';
+        document.getElementById('edit-description').value = item.description || '';
+        document.getElementById('edit-duration').value = item.duration_sec || '';
         
-        if (titleEl) {
-            document.getElementById('edit-title').value = titleEl.textContent.trim();
-        }
-        if (descEl && !descEl.classList.contains('empty-state')) {
-            document.getElementById('edit-description').value = descEl.textContent.trim();
-        } else {
-            document.getElementById('edit-description').value = '';
-        }
-        if (durationEl) {
-            const match = durationEl.textContent.match(/(\d+)m/);
-            if (match) {
-                document.getElementById('edit-duration').value = parseInt(match[1]) * 60;
-            }
-        }
-        
-        // Enrichment state fields start empty (admin can fill if needed)
-        document.getElementById('edit-content-type').value = '';
-        document.getElementById('edit-lookup-title').value = '';
-        document.getElementById('edit-lookup-year').value = '';
-        document.getElementById('edit-hosted-show').value = '';
-        document.getElementById('edit-tv-show').value = '';
-        document.getElementById('edit-tv-season').value = '';
-        document.getElementById('edit-tv-episode').value = '';
+        // Populate enrichment state fields
+        document.getElementById('edit-content-type').value = enrichment.content_type || '';
+        document.getElementById('edit-lookup-title').value = enrichment.lookup_title || '';
+        document.getElementById('edit-lookup-year').value = enrichment.lookup_year || '';
+        document.getElementById('edit-hosted-show').value = enrichment.hosted_show || '';
+        document.getElementById('edit-tv-show').value = enrichment.tv_show || '';
+        document.getElementById('edit-tv-season').value = enrichment.tv_season || '';
+        document.getElementById('edit-tv-episode').value = enrichment.tv_episode_num || '';
         
         // Reset checkboxes to defaults
         document.getElementById('edit-sync-cms').checked = true;

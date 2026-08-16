@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+## [0.38.12] - 2026-08-16
+
+### Fixed
+
+- **Edit modal always loaded data for the first item on the page.** The
+  `openEditModal` function used `document.querySelector()` to scrape title,
+  description, and duration from the DOM, which always returned the first
+  matching element regardless of which item's Edit button was clicked. Fixed by
+  adding a new `GET /admin/catalog/{token}/data` endpoint that returns item +
+  enrichment state as JSON, and rewriting `openEditModal` to fetch from that
+  endpoint instead of DOM scraping. The modal now correctly loads the clicked
+  item's data.
+
 ## [0.38.11] - 2026-08-16
 
 ### Fixed

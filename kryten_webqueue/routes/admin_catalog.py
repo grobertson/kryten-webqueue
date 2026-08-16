@@ -94,6 +94,19 @@ async def clear_played(
     return {"success": True, "removed": removed}
 
 
+@router.get("/{friendly_token}/data")
+async def get_item_data(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
+    """Get item data with enrichment state for editing."""
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+    enrichment = await db.get_enrichment_state(friendly_token) or {}
+    return {"item": item, "enrichment": enrichment}
+
+
 @router.post("/{friendly_token}/enrich")
 async def enrich_item(
     request: Request, friendly_token: str, user: dict = Depends(require_admin)
