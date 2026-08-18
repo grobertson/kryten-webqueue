@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.38.16] - 2026-08-17
+
+### Fixed
+
+- **Duration range filters now apply upper bounds correctly.** The browse and
+  browse_count methods were using the old `_duration_filter` function which only
+  applied minimum duration, completely ignoring the `max_duration_sec` parameter.
+  They now use `_duration_range_filter` like the search methods, so filters like
+  "10-60 min", "10-45 min", and "10-30 min" properly exclude items longer than
+  the upper bound.
+
 ## [0.38.15] - 2026-08-17
 
 ### Fixed

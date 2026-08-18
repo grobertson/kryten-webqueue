@@ -278,8 +278,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
             params.extend(rp_params)
-        if min_duration_sec > 0:
-            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+        if min_duration_sec > 0 or max_duration_sec is not None:
+            dur_sql, dur_params = _duration_range_filter(
+                "c", min_duration_sec or None, max_duration_sec
+            )
             query += dur_sql
             params.extend(dur_params)
         if category:
@@ -364,8 +366,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
             params.extend(rp_params)
-        if min_duration_sec > 0:
-            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+        if min_duration_sec > 0 or max_duration_sec is not None:
+            dur_sql, dur_params = _duration_range_filter(
+                "c", min_duration_sec or None, max_duration_sec
+            )
             query += dur_sql
             params.extend(dur_params)
         if category:
