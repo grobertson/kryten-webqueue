@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.38.17] - 2026-08-17
+
+### Changed
+
+- **Improved MediaCMS link button consistency and placement.** Standardized the
+  button label to "View in MediaCMS" across both browse cards and detail pages.
+  Moved the button to appear with other non-destructive admin actions (after Edit,
+  before Hide/Delete). Added centered text alignment for visual consistency with
+  other action buttons.
+
 ## [0.38.16] - 2026-08-17
 
 ### Fixed
