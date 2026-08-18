@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.38.19] - 2026-08-17
+
+### Changed
+
+- **Removed category display from item detail view.** Categories are now hidden
+  on item detail pages to match the browse/search interface where the category
+  facet dropdown was previously removed. The category display is commented out
+  and can be easily restored if needed.
+
 ## [0.38.18] - 2026-08-17
 
 ### Added
