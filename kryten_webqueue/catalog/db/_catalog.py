@@ -750,19 +750,39 @@ class _CatalogMixin:
         return await self._fetch_all(sql, params)
 
     async def get_tags(
-        self, *, limit: int = 100, show_hidden: bool = False
+        self,
+        *,
+        limit: int = 100,
+        show_hidden: bool = False,
+        min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
     ) -> list[dict]:
-        """Most-used tags that have at least one catalog item, for facets."""
+        """Most-used tags that have at least one catalog item, for facets.
+
+        Only returns tags with > 2 items matching the duration filter.
+        """
         sql = """
             SELECT t.id, t.name, COUNT(ct.friendly_token) AS cnt
             FROM tags t
             JOIN catalog_tags ct ON ct.tag_id = t.id
+            JOIN catalog c ON ct.friendly_token = c.friendly_token
+            WHERE c.friendly_token NOT IN (
+                SELECT spi.media_id FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
+            )
         """
         params: list = []
         if not show_hidden:
             ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
-            sql += f" WHERE t.name NOT IN ({ph})"
+            sql += f" AND t.name NOT IN ({ph})"
             params.extend(HIDDEN_TAG_NAMES)
+        if min_duration_sec > 0 or max_duration_sec is not None:
+            dur_sql, dur_params = _duration_range_filter(
+                "c", min_duration_sec or None, max_duration_sec
+            )
+            sql += dur_sql
+            params.extend(dur_params)
         sql += """
             GROUP BY t.id, t.name
             HAVING COUNT(ct.friendly_token) > 2

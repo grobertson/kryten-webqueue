@@ -13,9 +13,12 @@ async def browse(
     page: int = 1,
     show_hidden: int = 0,
     sort: str = "default",
+    duration: str = "10+",
     user: dict = Depends(get_current_user),
 ):
     """Browse catalog with optional category/tag filter."""
+    from ..routes.pages import DURATION_FILTER_MAP
+
     db = request.app.state.db
     is_admin = (user.get("rank") or 0) >= 3
     show_hidden = bool(show_hidden) and is_admin
@@ -24,6 +27,7 @@ async def browse(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
+    min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
     items = await db.browse(
         category=category,
         tag=tag,
@@ -31,9 +35,15 @@ async def browse(
         show_hidden=show_hidden,
         sort=sort,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
     )
     categories = await db.get_categories(show_hidden=show_hidden)
-    tags = await db.get_tags(show_hidden=show_hidden)
+    tags = await db.get_tags(
+        show_hidden=show_hidden,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
+    )
     return {
         "items": items,
         "categories": categories,
@@ -52,9 +62,12 @@ async def search(
     page: int = 1,
     show_hidden: int = 0,
     sort: str = "default",
+    duration: str = "10+",
     user: dict = Depends(get_current_user),
 ):
     """Full-text search of catalog, optionally narrowed by category/tag."""
+    from ..routes.pages import DURATION_FILTER_MAP
+
     if not q.strip():
         raise HTTPException(400, "Query required")
     db = request.app.state.db
@@ -63,6 +76,7 @@ async def search(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
+    min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
     items = await db.search(
         q,
         category=category,
@@ -71,9 +85,15 @@ async def search(
         show_hidden=show_hidden,
         sort=sort,
         recently_played_days=recently_played_days,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
     )
     categories = await db.get_categories(show_hidden=show_hidden)
-    tags = await db.get_tags(show_hidden=show_hidden)
+    tags = await db.get_tags(
+        show_hidden=show_hidden,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
+    )
     return {
         "items": items,
         "categories": categories,

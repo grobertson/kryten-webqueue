@@ -141,7 +141,11 @@ async def catalog_browse_page(
     )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
-    tags = await db.get_tags(show_hidden=show_hidden)
+    tags = await db.get_tags(
+        show_hidden=show_hidden,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
+    )
     _decorate_placeholder_art(request, items)
     return templates.TemplateResponse(
         request,
@@ -221,7 +225,11 @@ async def catalog_search_page(
     )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
-    tags = await db.get_tags(show_hidden=show_hidden)
+    tags = await db.get_tags(
+        show_hidden=show_hidden,
+        min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
+    )
     _decorate_placeholder_art(request, items)
     return templates.TemplateResponse(
         request,

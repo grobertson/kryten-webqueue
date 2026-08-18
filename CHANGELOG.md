@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.38.15] - 2026-08-17
+
+### Fixed
+
+- **Tag list now respects active duration filter.** Tags are only shown if they have
+  > 2 items matching the current duration filter. For example, with "10+ min" selected,
+  a tag with 3 total items but only 1 item ≥10min will not appear in the dropdown.
+  This prevents noise tags from appearing when they have insufficient relevant content.
+
 ## [0.38.14] - 2026-08-17
 
 ### Changed
