@@ -12,6 +12,21 @@ from .. import __version__ as _wq_version
 
 templates.env.globals["app_version"] = _wq_version
 
+# Duration filter options: (value, label, min_sec, max_sec)
+# Default ("10+") hides <10min content (min=600, max=None)
+DURATION_FILTERS = [
+    ("all", "All durations", 0, None),
+    ("10+", "10+ min (default)", 600, None),
+    ("60+", "1+ hour", 3600, None),
+    ("120+", "2+ hours", 7200, None),
+    ("10-60", "10-60 min", 600, 3600),
+    ("10-45", "10-45 min", 600, 2700),
+    ("10-30", "10-30 min", 600, 1800),
+    ("short", "< 10 min", 0, 600),
+]
+DURATION_FILTER_MAP = {k: (mi, ma) for k, _, mi, ma in DURATION_FILTERS}
+DURATION_FILTER_LABELS = [(k, lab) for k, lab, _, _ in DURATION_FILTERS]
+
 router = APIRouter(tags=["pages"])
 
 # Sort keys exposed in the browse/search UI. Order defines the dropdown order.
@@ -90,7 +105,7 @@ async def catalog_browse_page(
     page: int = 1,
     show_hidden: int = 0,
     sort: str = "default",
-    hide_short: int = 1,
+    duration: str = "10+",
 ):
     user = _get_user_or_none(request)
     if not user:
@@ -102,7 +117,7 @@ async def catalog_browse_page(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
-    min_duration_sec = 600 if hide_short else 0
+    min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
     items = await db.browse(
         category=category,
         tag=tag,
@@ -113,6 +128,7 @@ async def catalog_browse_page(
         sort=sort,
         recently_played_days=recently_played_days,
         min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
     )
     total = await db.browse_count(
         category=category,
@@ -144,9 +160,10 @@ async def catalog_browse_page(
             "query": None,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
-            "hide_short": bool(hide_short),
+            "duration": duration,
             "sort": sort,
             "sort_options": SORT_OPTIONS,
+            "duration_options": DURATION_FILTER_LABELS,
             "mediacms_url": request.app.state.config.mediacms_url,
         },
     )
@@ -163,7 +180,7 @@ async def catalog_search_page(
     studio: str | None = None,
     show_hidden: int = 0,
     sort: str = "default",
-    hide_short: int = 1,
+    duration: str = "10+",
 ):
     user = _get_user_or_none(request)
     if not user:
@@ -177,7 +194,7 @@ async def catalog_search_page(
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
-    min_duration_sec = 600 if hide_short else 0
+    min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
     items = await db.search(
         q,
         category=category,
@@ -189,6 +206,7 @@ async def catalog_search_page(
         sort=sort,
         recently_played_days=recently_played_days,
         min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
     )
     total = await db.search_count(
         q,
@@ -199,6 +217,7 @@ async def catalog_search_page(
         show_hidden=show_hidden,
         recently_played_days=recently_played_days,
         min_duration_sec=min_duration_sec,
+        max_duration_sec=max_duration_sec,
     )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
@@ -221,9 +240,10 @@ async def catalog_search_page(
             "query": q,
             "is_admin": is_admin,
             "show_hidden": show_hidden,
-            "hide_short": bool(hide_short),
+            "duration": duration,
             "sort": sort,
             "sort_options": SORT_OPTIONS,
+            "duration_options": DURATION_FILTER_LABELS,
             "mediacms_url": request.app.state.config.mediacms_url,
         },
     )

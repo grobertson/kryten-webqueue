@@ -23,12 +23,11 @@
                     <option value="{{ key }}" {% if sort == key %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
             </select>
-            <label class="toggle-label" title="Hide music videos, trailers, shorts, and other clips under 10 minutes">
-                <input type="checkbox" id="hide-short-toggle"
-                       {% if hide_short %}checked{% endif %}
-                       onchange="onHideShortChange()">
-                Hide &lt;10 min
-            </label>
+            <select id="duration-select" onchange="applyFacets()" title="Duration filter">
+                {% for key, label in duration_options %}
+                    <option value="{{ key }}" {% if duration == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
         </div>
     </div>
     {% if is_admin %}
@@ -192,8 +191,9 @@ function applyFacets() {
     const cat = catSelect ? catSelect.value : null;
     const tag = document.getElementById('tag-select').value;
     const sort = document.getElementById('sort-select').value;
-    const hideShort = document.getElementById('hide-short-toggle').checked;
+    const duration = document.getElementById('duration-select').value;
     try { localStorage.setItem('browse_sort', sort); } catch (e) { /* ignore */ }
+    try { localStorage.setItem('browse_duration', duration); } catch (e) { /* ignore */ }
     const params = new URLSearchParams();
     // On a search results page keep the query AND apply the facets so search
     // results are narrowed by category/tag (they AND together server-side).
@@ -203,57 +203,47 @@ function applyFacets() {
     if (cat) params.set('category', cat);
     if (tag) params.set('tag', tag);
     // Preserve person/studio facets — these come from the URL, not the dropdowns,
-    // and must survive a sort/hide_short change or the filter is silently dropped.
+    // and must survive a sort/duration change or the filter is silently dropped.
     const current = new URLSearchParams(window.location.search);
     const person = current.get('person');
     const studio = current.get('studio');
     if (person) params.set('person', person);
     if (studio) params.set('studio', studio);
     if (sort && sort !== 'default') params.set('sort', sort);
-    // Only include hide_short in URL when non-default (default = 1, hide).
-    if (!hideShort) params.set('hide_short', '0');
+    // Only include duration in URL when non-default (default = 10+).
+    if (duration && duration !== '10+') params.set('duration', duration);
     const base = CURRENT_QUERY ? '/catalog/search' : '/catalog/browse';
     const qs = params.toString();
     window.location.href = base + (qs ? '?' + qs : '');
 }
 
-function onHideShortChange() {
-    const checked = document.getElementById('hide-short-toggle').checked;
-    try { localStorage.setItem('browse_hide_short', checked ? '1' : '0'); } catch (e) {}
-    applyFacets();
-}
-
-// Restore the persisted sort preference when arriving without an explicit sort.
-(function restoreSortPreference() {
-    const sel = document.getElementById('sort-select');
-    if (!sel) return;
+// Restore the persisted sort and duration preferences when arriving without explicit params.
+(function restorePreferences() {
+    const sortSel = document.getElementById('sort-select');
+    const durationSel = document.getElementById('duration-select');
     const url = new URL(window.location.href);
-    if (url.searchParams.has('sort')) return;
-    let saved = null;
-    try { saved = localStorage.getItem('browse_sort'); } catch (e) { /* ignore */ }
-    if (saved && saved !== 'default' && sel.value === 'default'
-        && [...sel.options].some(o => o.value === saved)) {
-        sel.value = saved;
-        applyFacets();
+    
+    // Restore sort preference
+    if (sortSel && !url.searchParams.has('sort')) {
+        let saved = null;
+        try { saved = localStorage.getItem('browse_sort'); } catch (e) { /* ignore */ }
+        if (saved && saved !== 'default' && sortSel.value === 'default'
+            && [...sortSel.options].some(o => o.value === saved)) {
+            sortSel.value = saved;
+            applyFacets();
+            return;
+        }
     }
-})();
-
-// Restore hide_short preference when arriving without an explicit param.
-(function restoreHideShortPreference() {
-    const toggle = document.getElementById('hide-short-toggle');
-    if (!toggle) return;
-    const url = new URL(window.location.href);
-    // URL is authoritative; sync it to localStorage so future visits respect it.
-    if (url.searchParams.has('hide_short')) {
-        try { localStorage.setItem('browse_hide_short', url.searchParams.get('hide_short') === '0' ? '0' : '1'); } catch (e) {}
-        return;
-    }
-    let saved = null;
-    try { saved = localStorage.getItem('browse_hide_short'); } catch (e) {}
-    // Redirect only when the saved preference differs from the server default.
-    if (saved === '0' && toggle.checked) {
-        toggle.checked = false;
-        applyFacets();
+    
+    // Restore duration preference
+    if (durationSel && !url.searchParams.has('duration')) {
+        let saved = null;
+        try { saved = localStorage.getItem('browse_duration'); } catch (e) { /* ignore */ }
+        if (saved && saved !== '10+' && durationSel.value === '10+'
+            && [...durationSel.options].some(o => o.value === saved)) {
+            durationSel.value = saved;
+            applyFacets();
+        }
     }
 })();
 

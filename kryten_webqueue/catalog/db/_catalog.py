@@ -53,6 +53,23 @@ def _duration_filter(alias: str, min_sec: int) -> tuple[str, list]:
     return f" AND {alias}.duration_sec >= ? ", [min_sec]
 
 
+def _duration_range_filter(
+    alias: str, min_sec: int | None = None, max_sec: int | None = None
+) -> tuple[str, list]:
+    """SQL AND-fragment filtering items by duration range."""
+    if min_sec is not None and max_sec is not None:
+        return f" AND {alias}.duration_sec >= ? AND {alias}.duration_sec < ? ", [
+            min_sec,
+            max_sec,
+        ]
+    elif min_sec is not None:
+        return f" AND {alias}.duration_sec >= ? ", [min_sec]
+    elif max_sec is not None:
+        return f" AND {alias}.duration_sec < ? ", [max_sec]
+    else:
+        return "", []
+
+
 def _slugify(text: str) -> str:
     """Derive a URL-safe slug from a category title."""
     s = (text or "").strip().lower()
@@ -241,6 +258,7 @@ class _CatalogMixin:
         sort: str = "default",
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
     ) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
@@ -327,6 +345,7 @@ class _CatalogMixin:
         show_hidden: bool = False,
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
     ) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
@@ -402,6 +421,7 @@ class _CatalogMixin:
         sort: str = "default",
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
     ) -> list[dict]:
         sanitized = _sanitize_fts_query(query_text)
         if not sanitized:
@@ -427,8 +447,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
             params.extend(rp_params)
-        if min_duration_sec > 0:
-            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+        if min_duration_sec > 0 or max_duration_sec is not None:
+            dur_sql, dur_params = _duration_range_filter(
+                "c", min_duration_sec or None, max_duration_sec
+            )
             sql += dur_sql
             params.extend(dur_params)
         # Category/tag/person/studio facets AND with the text match.
@@ -457,6 +479,7 @@ class _CatalogMixin:
         show_hidden: bool = False,
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
     ) -> int:
         sanitized = _sanitize_fts_query(query_text)
         if not sanitized:
@@ -481,8 +504,10 @@ class _CatalogMixin:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
             params.extend(rp_params)
-        if min_duration_sec > 0:
-            dur_sql, dur_params = _duration_filter("c", min_duration_sec)
+        if min_duration_sec > 0 or max_duration_sec is not None:
+            dur_sql, dur_params = _duration_range_filter(
+                "c", min_duration_sec or None, max_duration_sec
+            )
             sql += dur_sql
             params.extend(dur_params)
         facet_sql, facet_params = _facet_filter("c", category, tag, person, studio)

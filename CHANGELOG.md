@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.38.14] - 2026-08-17
+
+### Changed
+
+- **Replaced "Hide <10 min" checkbox with Duration filter dropdown.** Browse/search
+  now offers granular duration filtering: All durations, 10+ min (default), 1+ hour,
+  2+ hours, 10-60 min, 10-45 min, 10-30 min, and < 10 min. Backend supports both
+  minimum and maximum duration filters. Default remains "10+ min" (matches old
+  checkbox behavior). JavaScript restores saved duration preference from localStorage.
+
 ## [0.38.13] - 2026-08-17
 
 ### Changed
