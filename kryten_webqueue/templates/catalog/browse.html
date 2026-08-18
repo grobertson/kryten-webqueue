@@ -11,12 +11,7 @@
             <button type="submit" class="btn btn-sm">Search</button>
         </form>
         <div class="category-filter">
-            <select id="category-select" onchange="applyFacets()">
-                <option value="">All Categories</option>
-                {% for cat in categories %}
-                    <option value="{{ cat.slug }}" {% if active_category == cat.slug %}selected{% endif %}>{{ cat.name }}</option>
-                {% endfor %}
-            </select>
+            {# Category select temporarily removed #}
             <select id="tag-select" onchange="applyFacets()">
                 <option value="">All Tags</option>
                 {% for tag in tags %}
@@ -120,6 +115,7 @@
             <button class="btn btn-sm" onclick="openEditModal('{{ item.friendly_token }}')" title="Manually edit item metadata">Edit</button>
             <button class="btn btn-sm btn-danger" onclick="hideItem('{{ item.friendly_token }}')">Hide</button>
             <button class="btn btn-sm btn-danger" data-token="{{ item.friendly_token }}" data-title="{{ item.title }}" onclick="deleteItem(this.dataset.token, this.dataset.title, 'reload')" title="Permanently delete this item">🗑️ Delete</button>
+            <a class="btn btn-sm" href="{{ mediacms_url.rstrip('/') }}/view?m={{ item.friendly_token }}" target="_blank" rel="noopener" title="Open in MediaCMS">📺 CMS</a>
             {% endif %}
         </div>
     </div>
@@ -192,7 +188,8 @@
 const CURRENT_QUERY = {{ (query | tojson) if query else 'null' }};
 
 function applyFacets() {
-    const cat = document.getElementById('category-select').value;
+    const catSelect = document.getElementById('category-select');
+    const cat = catSelect ? catSelect.value : null;
     const tag = document.getElementById('tag-select').value;
     const sort = document.getElementById('sort-select').value;
     const hideShort = document.getElementById('hide-short-toggle').checked;

@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.38.13] - 2026-08-17
+
+### Changed
+
+- **Removed Categories facet from catalog browse UI.** Category dropdown is
+  temporarily hidden from the browse/search interface. Backend category
+  filtering still works via URL params. The filter control bar now shows only
+  Tags, Sort, and Hide <10 min.
+
+### Added
+
+- **Admin CMS link buttons on catalog pages.** Browse results cards and item
+  detail pages now show a "📺 CMS" / "📺 Open in CMS" button (admins only) that
+  opens the item's MediaCMS view page in a new tab.
+
+### Fixed
+
+- **Tag facet cleanup.** Added `Commercials`, `channelzpromo`, `promo`,
+  `commercial`, `donotplay`, `hidden`, `hide`, and `Halifax` to the hidden tag
+  list. Tags with 2 or fewer items are now filtered out of the tag dropdown.
+
 ## [0.38.12] - 2026-08-16
 
 ### Fixed

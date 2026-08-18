@@ -15,10 +15,18 @@ HIDDEN_TAG_NAMES = [
     "commercialsforbumpers",
     "bumpers",
     "channelz",
+    "channelzpromo",
+    "promo",
+    "commercial",
+    "Commercials",
+    "donotplay",
     "grindhousetrailer",
     "publicaccess",
     "religioustv",
     "kryten-hidden",
+    "hidden",
+    "hide",
+    "Halifax",
 ]
 
 # Tag applied by the admin "Hide Item" action. Source of truth is MediaCMS;
@@ -732,6 +740,7 @@ class _CatalogMixin:
             params.extend(HIDDEN_TAG_NAMES)
         sql += """
             GROUP BY t.id, t.name
+            HAVING COUNT(ct.friendly_token) > 2
             ORDER BY cnt DESC, t.name ASC
             LIMIT ?
         """

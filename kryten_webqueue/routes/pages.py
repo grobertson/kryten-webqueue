@@ -147,6 +147,7 @@ async def catalog_browse_page(
             "hide_short": bool(hide_short),
             "sort": sort,
             "sort_options": SORT_OPTIONS,
+            "mediacms_url": request.app.state.config.mediacms_url,
         },
     )
 
@@ -223,6 +224,7 @@ async def catalog_search_page(
             "hide_short": bool(hide_short),
             "sort": sort,
             "sort_options": SORT_OPTIONS,
+            "mediacms_url": request.app.state.config.mediacms_url,
         },
     )
 
@@ -257,6 +259,7 @@ async def catalog_item_page(request: Request, friendly_token: str):
             "tags": facets.get("tags") or [],
             "people": facets.get("people") or {},
             "studios": facets.get("studios") or [],
+            "mediacms_url": request.app.state.config.mediacms_url,
         },
     )
 
