@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.38.18] - 2026-08-17
+
+### Added
+
+- **Admin action buttons in My List view.** Admins (rank ≥ 3) now have access
+  to Edit, Re-enrich, and View in MediaCMS buttons on My List cards, matching
+  the functionality available in catalog browse and detail views. Non-admin users
+  continue to see only Queue and My List buttons.
+
 ## [0.38.17] - 2026-08-17
 
 ### Changed

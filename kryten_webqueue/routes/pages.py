@@ -318,6 +318,7 @@ async def my_list_page(request: Request, page: int = 1):
             "items": items,
             "page": page,
             "total_pages": total_pages,
+            "mediacms_url": request.app.state.config.mediacms_url,
         },
     )
 
