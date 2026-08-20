@@ -127,7 +127,11 @@
 {% set studio_q = ('&studio=' ~ active_studio | urlencode) if active_studio else '' %}
 {% if not items %}
 <div class="empty-state">
-    {% if query and (active_category or active_tag) %}
+    {% if error %}
+        <p>{{ error }}</p>
+        <p class="muted">The search index may need to be rebuilt. Contact an admin if this persists.</p>
+        <p><a class="btn btn-sm" href="/catalog/browse">Back to browse</a></p>
+    {% elif query and (active_category or active_tag) %}
         <p>No results for "{{ query }}" within the selected filter{% if active_category and active_tag %}s{% endif %}.</p>
         <p class="muted">
             Active:

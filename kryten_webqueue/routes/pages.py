@@ -1,8 +1,13 @@
+import logging
+import sqlite3
+
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
 import random
+
+log = logging.getLogger(__name__)
 
 
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
@@ -199,30 +204,59 @@ async def catalog_search_page(
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
     )
     min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
-    items = await db.search(
-        q,
-        category=category,
-        tag=tag,
-        person=person,
-        studio=studio,
-        page=page,
-        show_hidden=show_hidden,
-        sort=sort,
-        recently_played_days=recently_played_days,
-        min_duration_sec=min_duration_sec,
-        max_duration_sec=max_duration_sec,
-    )
-    total = await db.search_count(
-        q,
-        category=category,
-        tag=tag,
-        person=person,
-        studio=studio,
-        show_hidden=show_hidden,
-        recently_played_days=recently_played_days,
-        min_duration_sec=min_duration_sec,
-        max_duration_sec=max_duration_sec,
-    )
+    try:
+        items = await db.search(
+            q,
+            category=category,
+            tag=tag,
+            person=person,
+            studio=studio,
+            page=page,
+            show_hidden=show_hidden,
+            sort=sort,
+            recently_played_days=recently_played_days,
+            min_duration_sec=min_duration_sec,
+            max_duration_sec=max_duration_sec,
+        )
+        total = await db.search_count(
+            q,
+            category=category,
+            tag=tag,
+            person=person,
+            studio=studio,
+            show_hidden=show_hidden,
+            recently_played_days=recently_played_days,
+            min_duration_sec=min_duration_sec,
+            max_duration_sec=max_duration_sec,
+        )
+    except sqlite3.DatabaseError as exc:
+        log.error("Search failed for query %r: %s", q, exc)
+        return templates.TemplateResponse(
+            request,
+            "catalog/browse.html",
+            {
+                "user": user,
+                "items": [],
+                "categories": [],
+                "tags": [],
+                "page": 1,
+                "total_pages": 1,
+                "active_category": category,
+                "active_tag": tag,
+                "active_person": person,
+                "active_studio": studio,
+                "query": q,
+                "is_admin": is_admin,
+                "show_hidden": show_hidden,
+                "duration": duration,
+                "sort": sort,
+                "sort_options": SORT_OPTIONS,
+                "duration_options": DURATION_FILTER_LABELS,
+                "mediacms_url": request.app.state.config.mediacms_url,
+                "error": "Search is temporarily unavailable. Please try again later.",
+            },
+            status_code=503,
+        )
     total_pages = max(1, (total + 23) // 24)
     categories = await db.get_categories(show_hidden=show_hidden)
     tags = await db.get_tags(

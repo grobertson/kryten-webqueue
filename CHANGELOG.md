@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.24] - 2026-08-20
+
+### Fixed
+
+- **Search 500 errors on certain terms.** The FTS5 index in the production
+  database was corrupted, causing `sqlite3.DatabaseError: database disk image is
+  malformed` for queries whose index pages were affected (e.g. "halloween",
+  "maniac", "nightmare"). The FTS index was rebuilt in-place on the server.
+  The search route now catches `sqlite3.DatabaseError` and returns a 503 with
+  a user-friendly "Search is temporarily unavailable" message instead of a raw
+  500 crash, so any future FTS corruption degrades gracefully.
+
 ## [0.38.23] - 2026-08-20
 
 ### Fixed
