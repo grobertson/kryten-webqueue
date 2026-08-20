@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.38.22] - 2026-08-19
+
 ### Added
 
 - **Persistent fetch queue.** Two new admin jobs replace the need to babysit
