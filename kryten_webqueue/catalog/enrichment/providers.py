@@ -120,6 +120,25 @@ class TMDBProvider:
     async def close(self) -> None:
         await self._client.aclose()
 
+    async def search_by_imdb_id(self, imdb_id: str) -> MovieMetadata:
+        """Look up a movie directly by IMDB tt number via the TMDB /find endpoint."""
+        if not self._key:
+            return MovieMetadata()
+        headers, auth = _tmdb_auth(self._key)
+        try:
+            resp = await self._client.get(
+                f"{TMDB_BASE}/find/{imdb_id}",
+                headers=headers,
+                params={"external_source": "imdb_id", **auth},
+            )
+            if resp.status_code == 200:
+                movies = resp.json().get("movie_results", [])
+                if movies:
+                    return await self._fetch_details(movies[0], headers, auth)
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.debug("TMDB /find error for %r: %s", imdb_id, exc)
+        return MovieMetadata()
+
     async def search_movie(self, title: str, year: str | None = None) -> MovieMetadata:
         if not self._key:
             return MovieMetadata()

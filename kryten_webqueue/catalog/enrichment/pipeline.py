@@ -215,6 +215,7 @@ class CatalogEnrichmentPipeline:
                 duration_sec=row.get("duration_sec", 0),
                 description_score=row.get("description_score") or 0,
                 has_real_art=(row.get("cover_art_source") or "") in ("tmdb", "omdb"),
+                imdb_tt=row.get("imdb_tt") or None,
             )
         # Fresh classification
         return classify_item(
@@ -224,6 +225,7 @@ class CatalogEnrichmentPipeline:
             cover_art_source=row.get("cover_art_source"),
             description=row.get("description"),
             description_score=0,
+            imdb_tt=row.get("imdb_tt") or None,
         )
 
     async def _run_classify(

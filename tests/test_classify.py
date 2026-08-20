@@ -1,6 +1,5 @@
 """Tests for classify.py — hosted show detection, content-type determination."""
 
-
 from kryten_webqueue.catalog.enrichment.classify import (
     classify_item,
     HOSTED_SHOW_REGISTRY,

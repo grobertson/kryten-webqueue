@@ -430,6 +430,14 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_fetch_queue_status ON fetch_queue(status, added_at);
     """,
+    # v23: Admin-settable canonical IMDB tt identifier.
+    # When present this bypasses title-based matching in the meta enrichment step.
+    # Sparse unique index allows many NULL rows alongside a unique non-NULL value.
+    """
+    ALTER TABLE catalog ADD COLUMN imdb_tt TEXT;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_imdb_tt
+        ON catalog(imdb_tt) WHERE imdb_tt IS NOT NULL;
+    """,
 ]
 
 

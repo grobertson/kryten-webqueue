@@ -1960,9 +1960,9 @@ class MediaDownloaderToMediaCMS:
 
                     all_candidates = list(self.download_dir.glob(f"{safe_filename}.*"))
                     downloaded_files = [
-                        f for f in all_candidates
-                        if ".part" not in f.name
-                        and not _re.search(r"\.f\d+\.", f.name)
+                        f
+                        for f in all_candidates
+                        if ".part" not in f.name and not _re.search(r"\.f\d+\.", f.name)
                     ]
                     if downloaded_files:
                         downloaded_file = downloaded_files[0]

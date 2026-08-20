@@ -904,6 +904,7 @@ class _CatalogMixin:
             "thumbnail_url",
             "added_at",
             "synced_at",
+            "imdb_tt",
         }
         updates = []
         params = {"friendly_token": friendly_token}
@@ -947,6 +948,19 @@ class _CatalogMixin:
         await self._execute(
             "UPDATE catalog SET cover_art_path=?, cover_art_source=? WHERE friendly_token=?",
             [path, source, friendly_token],
+        )
+
+    async def set_imdb_tt(self, friendly_token: str, imdb_tt: str | None) -> None:
+        """Set or clear the canonical IMDB tt identifier for a catalog item."""
+        await self._execute(
+            "UPDATE catalog SET imdb_tt = ?, updated_at = datetime('now') WHERE friendly_token = ?",
+            [imdb_tt or None, friendly_token],
+        )
+
+    async def get_item_by_imdb_tt(self, imdb_tt: str) -> dict | None:
+        """Return the catalog item (admin view) that has the given IMDB tt number."""
+        return await self._fetch_one(
+            "SELECT * FROM catalog WHERE imdb_tt = ?", [imdb_tt]
         )
 
     async def delete_stale_catalog_items(self, sync_started_at: str) -> int:

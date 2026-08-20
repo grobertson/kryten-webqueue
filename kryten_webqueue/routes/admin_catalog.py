@@ -1,3 +1,5 @@
+import re
+
 from fastapi import APIRouter, Request, Depends, HTTPException
 
 from ..auth.session import require_admin
@@ -5,6 +7,8 @@ from ..catalog.db import HIDDEN_ITEM_TAG
 from ..catalog.mediacms import MediaCMSClient
 
 router = APIRouter(prefix="/admin/catalog", tags=["admin"])
+
+_IMDB_TT_RE = re.compile(r"^tt\d{7,8}$")
 
 
 def _mediacms_client(request: Request) -> MediaCMSClient:
@@ -107,6 +111,37 @@ async def get_item_data(
     return {"item": item, "enrichment": enrichment}
 
 
+@router.patch("/{friendly_token}/imdb-tt")
+async def set_imdb_tt(
+    request: Request, friendly_token: str, user: dict = Depends(require_admin)
+):
+    """Set or clear the canonical IMDB tt number for a catalog item.
+
+    Request body: ``{"imdb_tt": "tt1234567"}`` to set, or ``{"imdb_tt": null}``
+    to clear.  When set, the enrichment meta step will use this as a direct
+    lookup key, bypassing title-based matching.
+    """
+    db = request.app.state.db
+    item = await db.get_item_admin(friendly_token)
+    if not item:
+        raise HTTPException(404, "Catalog item not found")
+
+    body = await request.json()
+    raw = body.get("imdb_tt") or None
+    if raw is not None and not _IMDB_TT_RE.match(raw):
+        raise HTTPException(400, "imdb_tt must match tt<7-8 digits> (e.g. tt0133093)")
+
+    old_value = item.get("imdb_tt")
+    if raw == old_value:
+        return {"success": True, "changed": False, "imdb_tt": raw}
+
+    await db.set_imdb_tt(friendly_token, raw)
+    await db.log_item_edit(
+        friendly_token, user.get("username", "unknown"), "imdb_tt", old_value, raw
+    )
+    return {"success": True, "changed": True, "imdb_tt": raw}
+
+
 @router.post("/{friendly_token}/enrich")
 async def enrich_item(
     request: Request, friendly_token: str, user: dict = Depends(require_admin)
@@ -169,6 +204,17 @@ async def edit_item(
                     friendly_token, username, field, old_value, new_value
                 )
                 changes_logged += 1
+
+    # imdb_tt treated as a catalog field but needs format validation
+    if "imdb_tt" in body:
+        raw_tt = body["imdb_tt"] or None
+        if raw_tt is not None and not _IMDB_TT_RE.match(raw_tt):
+            raise HTTPException(400, "imdb_tt must match tt<7-8 digits> (e.g. tt0133093)")
+        old_tt = item.get("imdb_tt")
+        if raw_tt != old_tt:
+            catalog_fields["imdb_tt"] = raw_tt
+            await db.log_item_edit(friendly_token, username, "imdb_tt", old_tt, raw_tt)
+            changes_logged += 1
 
     if catalog_fields:
         await db.update_catalog(friendly_token, catalog_fields)

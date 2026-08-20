@@ -1,6 +1,5 @@
 """Tests for title normalisation applied at catalog sync time."""
 
-
 from kryten_webqueue.catalog.images import (
     _normalize_leading_year,
     _strip_extension,

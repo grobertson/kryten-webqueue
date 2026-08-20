@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [0.38.26] - 2026-08-20
+
+### Added
+
+- **Canonical IMDB tt identifier for catalog items.** Admins can set an IMDB
+  `tt<xxxxxxx>` number on any catalog item via `PATCH /admin/catalog/{token}/imdb-tt`
+  or the `/edit` endpoint. When set, the meta enrichment step bypasses fuzzy
+  title matching and performs a direct IMDB-keyed lookup against both TMDB
+  (`/find/{id}?external_source=imdb_id`) and OMDB (`?i={id}`), giving reliable
+  results for titles that are hard to match by name alone.  The field is stored
+  in the `catalog` table (`imdb_tt TEXT`, sparse unique index), flows through
+  `ItemClassification.imdb_tt`, and is surfaced in item-data and audit-log
+  responses.  Backfilling existing items is left for a future task.
+  DB migration: v23.
+
 ## [0.38.25] - 2026-08-20
 
 ### Changed

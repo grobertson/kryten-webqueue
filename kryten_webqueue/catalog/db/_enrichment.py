@@ -100,7 +100,7 @@ class _EnrichmentMixin:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec,
                    c.cover_art_path, c.cover_art_source, c.thumbnail_url,
-                   c.description, c.manifest_url,
+                   c.description, c.manifest_url, c.imdb_tt,
                    e.content_type, e.hosted_show, e.lookup_title, e.lookup_year,
                    e.tv_show, e.tv_season, e.tv_episode_num,
                    e.description_score, e.tmdb_id, e.imdb_id, e.meta_json,
