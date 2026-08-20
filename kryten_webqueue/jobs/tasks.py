@@ -13,6 +13,7 @@ with a clear message instead of crashing startup.
 import asyncio
 import functools
 import importlib
+import json
 import logging
 
 from .manager import JobError
@@ -225,8 +226,8 @@ def _manifest_url_for(config, token: str) -> str:
     return f"{base}/api/v1/media/cytube/{token}.json?format=json"
 
 
-async def fetch_job(params: dict, ctx):
-    """Download a URL to MediaCMS and optionally append results to a playlist."""
+async def _run_single_fetch(params: dict, ctx) -> dict:
+    """Download one URL and optionally add results to a playlist. Shared by fetch_job and drain."""
     result = await _run_vendored(
         "kryten_webqueue.integrations.ytpipe.downloader",
         params,
@@ -263,6 +264,11 @@ async def fetch_job(params: dict, ctx):
             )
         result["added_to_playlist"] = playlist_id
     return result
+
+
+async def fetch_job(params: dict, ctx):
+    """Download a URL to MediaCMS and optionally append results to a playlist."""
+    return await _run_single_fetch(params, ctx)
 
 
 # ── fetchurls job ──────────────────────────────────────────────────────────────
@@ -542,3 +548,132 @@ async def motd_posters_job(params: dict, ctx):
         ctx,
         deps=["openpyxl", "requests"],
     )
+
+
+# ── Fetch queue jobs ───────────────────────────────────────────────────────────
+
+
+FETCH_QUEUE_ADD_SCHEMA = [
+    {
+        "name": "urls",
+        "type": "textarea",
+        "required": True,
+        "label": "URL(s)",
+        "placeholder": "One URL per line",
+        "help": "Paste one or more URLs to download. Each line becomes a separate queue item.",
+    },
+    {
+        "name": "quality",
+        "type": "enum",
+        "default": "medium",
+        "options": ["best", "good", "medium"],
+        "label": "Quality",
+    },
+    {
+        "name": "max_videos",
+        "type": "int",
+        "default": 50,
+        "label": "Max videos (playlists)",
+    },
+    {
+        "name": "add_to_playlist",
+        "type": "playlist",
+        "default": None,
+        "label": "Add results to playlist",
+    },
+]
+
+FETCH_QUEUE_DRAIN_SCHEMA: list[dict] = []
+
+
+async def fetch_queue_add_job(params: dict, ctx) -> dict:
+    """Add one or more URLs to the fetch queue and auto-start the drain if idle."""
+    raw = (params.get("urls") or "").strip()
+    urls = [u.strip() for u in raw.splitlines() if u.strip()]
+    if not urls:
+        from .manager import JobError
+
+        raise JobError("At least one URL is required")
+
+    quality = params.get("quality") or "medium"
+    max_videos = int(params.get("max_videos") or 50)
+    add_to_raw = params.get("add_to_playlist")
+    add_to_playlist = int(add_to_raw) if add_to_raw else None
+
+    queued = []
+    for url in urls:
+        item_id = await ctx.db.enqueue_fetch(
+            url=url,
+            quality=quality,
+            max_videos=max_videos,
+            add_to_playlist=add_to_playlist,
+            added_by=ctx.triggered_by,
+        )
+        queued.append({"id": item_id, "url": url})
+        logger.info(
+            "fetch_queue: enqueued %s (id=%d, by=%s)", url, item_id, ctx.triggered_by
+        )
+
+    if ctx.job_manager and not ctx.job_manager.is_running("fetch_queue_drain"):
+        try:
+            await ctx.job_manager.run(
+                "fetch_queue_drain", triggered_by=ctx.triggered_by
+            )
+            logger.info(
+                "fetch_queue: auto-started drain (triggered by %s)", ctx.triggered_by
+            )
+        except Exception:  # noqa: BLE001
+            logger.debug("fetch_queue: could not auto-start drain", exc_info=True)
+
+    return {"queued": len(queued), "items": queued}
+
+
+async def fetch_queue_drain_job(params: dict, ctx) -> dict:
+    """Process all pending fetch-queue items one at a time."""
+    processed = 0
+    failed = 0
+
+    while True:
+        item = await ctx.db.claim_next_fetch_item()
+        if not item:
+            break
+
+        await ctx.progress(
+            {
+                "status": "downloading",
+                "url": item["url"],
+                "processed": processed,
+                "failed": failed,
+            }
+        )
+        logger.info(
+            "fetch_queue_drain: processing id=%d url=%s", item["id"], item["url"]
+        )
+
+        item_params = {
+            "url": item["url"],
+            "quality": item["quality"],
+            "max_videos": item["max_videos"],
+            "add_to_playlist": item["add_to_playlist"],
+        }
+        try:
+            result = await _run_single_fetch(item_params, ctx)
+            await ctx.db.finish_fetch_item(
+                item["id"], status="done", result_json=json.dumps(result)
+            )
+            processed += 1
+            logger.info("fetch_queue_drain: id=%d done", item["id"])
+        except asyncio.CancelledError:
+            await ctx.db.finish_fetch_item(
+                item["id"], status="failed", error="cancelled"
+            )
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "fetch_queue_drain: id=%d (%s) failed: %s", item["id"], item["url"], exc
+            )
+            await ctx.db.finish_fetch_item(item["id"], status="failed", error=str(exc))
+            failed += 1
+
+    logger.info("fetch_queue_drain: done — processed=%d failed=%d", processed, failed)
+    return {"processed": processed, "failed": failed}

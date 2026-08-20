@@ -11,6 +11,7 @@ from ._feedback import _FeedbackMixin
 from ._watchlist import _WatchlistMixin
 from ._people import _PeopleMixin
 from ._enrichment import _EnrichmentMixin
+from ._fetch_queue import _FetchQueueMixin
 
 
 class Database(
@@ -21,6 +22,7 @@ class Database(
     _WatchlistMixin,
     _PeopleMixin,
     _EnrichmentMixin,
+    _FetchQueueMixin,
     _DBBase,
 ):
     """Async SQLite database wrapper."""

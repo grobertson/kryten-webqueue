@@ -100,10 +100,14 @@ async def lifespan(app: FastAPI):
     from .jobs.tasks import (
         catalog_enrich_job,
         fetch_job,
+        fetch_queue_add_job,
+        fetch_queue_drain_job,
         fetchurls_job,
         motd_posters_job,
         CATALOG_ENRICH_SCHEMA,
         FETCH_SCHEMA,
+        FETCH_QUEUE_ADD_SCHEMA,
+        FETCH_QUEUE_DRAIN_SCHEMA,
         FETCHURLS_SCHEMA,
         MOTD_POSTERS_SCHEMA,
     )
@@ -116,6 +120,18 @@ async def lifespan(app: FastAPI):
     )
     job_manager.register(
         "fetch", fetch_job, label="Fetch (download → MediaCMS)", schema=FETCH_SCHEMA
+    )
+    job_manager.register(
+        "fetch_queue_add",
+        fetch_queue_add_job,
+        label="Fetch Queue — Add URL(s)",
+        schema=FETCH_QUEUE_ADD_SCHEMA,
+    )
+    job_manager.register(
+        "fetch_queue_drain",
+        fetch_queue_drain_job,
+        label="Fetch Queue — Process",
+        schema=FETCH_QUEUE_DRAIN_SCHEMA,
     )
     job_manager.register(
         "fetchurls",

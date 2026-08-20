@@ -412,6 +412,24 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_item_edit_log_token ON item_edit_log(friendly_token, edited_at DESC);
     """,
+    # v22: Persistent download queue for background fetch jobs.
+    """
+    CREATE TABLE IF NOT EXISTS fetch_queue (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        url             TEXT NOT NULL,
+        quality         TEXT NOT NULL DEFAULT 'medium',
+        max_videos      INTEGER NOT NULL DEFAULT 50,
+        add_to_playlist INTEGER,
+        status          TEXT NOT NULL DEFAULT 'pending',
+        added_at        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        started_at      TIMESTAMP,
+        finished_at     TIMESTAMP,
+        added_by        TEXT,
+        result_json     TEXT,
+        error           TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_fetch_queue_status ON fetch_queue(status, added_at);
+    """,
 ]
 
 

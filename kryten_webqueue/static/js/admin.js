@@ -70,6 +70,12 @@ function _jobFieldHtml(f, prefix = 'jobparam-') {
         return `<label class="field"><span>${label}</span>
             <select id="${id}" data-playlist-picker="1"><option value="">—</option></select>${helpHtml}</label>`;
     }
+    if (f.type === 'textarea') {
+        const tval = (def === null || def === undefined) ? '' : escapeHtml(String(def));
+        const tph = f.placeholder ? ` placeholder="${escapeHtml(f.placeholder)}"` : '';
+        return `<label class="field"><span>${label}${f.required ? ' *' : ''}</span>
+            <textarea id="${id}" rows="5"${tph}>${tval}</textarea>${helpHtml}</label>`;
+    }
     const inputType = (f.type === 'int' || f.type === 'float') ? 'number' : 'text';
     const step = f.type === 'float' ? ' step="any"' : '';
     const val = (def === null || def === undefined) ? '' : escapeHtml(String(def));

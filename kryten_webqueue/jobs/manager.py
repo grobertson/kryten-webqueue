@@ -123,6 +123,7 @@ class JobContext:
         run_id: int,
         triggered_by: str | None = None,
         cover_art=None,
+        job_manager=None,
     ):
         self.db = db
         self.api_gate = api_gate
@@ -130,6 +131,7 @@ class JobContext:
         self.cover_art = cover_art
         self.run_id = run_id
         self.triggered_by = triggered_by
+        self.job_manager = job_manager
 
     async def progress(self, detail: dict) -> None:
         try:
@@ -233,6 +235,7 @@ class JobManager:
             run_id=run_id,
             triggered_by=triggered_by,
             cover_art=getattr(self, "_cover_art", None),
+            job_manager=self,
         )
         try:
             result = await func(params, ctx)
