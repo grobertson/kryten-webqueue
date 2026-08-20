@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Persistent fetch queue.** Two new admin jobs replace the need to babysit
+  single-URL downloads: **Fetch Queue — Add URL(s)** accepts a multi-line
+  textarea of URLs (one per line), enqueues each as a separate item, then
+  automatically starts the drain if it is not already running. **Fetch Queue —
+  Process** is a single-flight drain worker that claims items one at a time,
+  runs the yt-dlp download + MediaCMS upload, marks each done or failed, and
+  loops until the queue is empty. URLs can be added at any time — new items are
+  picked up on the drain's next iteration. The original **Fetch (download →
+  MediaCMS)** job is unchanged for immediate one-shot downloads. DB migration
+  v22 adds the `fetch_queue` table (url, quality, max_videos, add_to_playlist,
+  status, timestamps, result/error).
+
 ## [0.38.21] - 2026-08-19
 
 ### Fixed
