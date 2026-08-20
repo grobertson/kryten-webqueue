@@ -209,7 +209,9 @@ async def edit_item(
     if "imdb_tt" in body:
         raw_tt = body["imdb_tt"] or None
         if raw_tt is not None and not _IMDB_TT_RE.match(raw_tt):
-            raise HTTPException(400, "imdb_tt must match tt<7-8 digits> (e.g. tt0133093)")
+            raise HTTPException(
+                400, "imdb_tt must match tt<7-8 digits> (e.g. tt0133093)"
+            )
         old_tt = item.get("imdb_tt")
         if raw_tt != old_tt:
             catalog_fields["imdb_tt"] = raw_tt

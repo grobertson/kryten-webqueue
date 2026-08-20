@@ -8,11 +8,28 @@ from datetime import datetime, UTC
 
 from .classify import classify_item, ItemClassification
 from .report import EnrichmentReport, StepResult
-from .steps import SyncStep, TitleStep, MetaStep, ArtStep, TagsStep, CategoriesStep
+from .steps import (
+    SyncStep,
+    TitleStep,
+    MetaStep,
+    ArtStep,
+    TagsStep,
+    CategoriesStep,
+    IdentifyStep,
+)
 
 logger = logging.getLogger(__name__)
 
-ALL_STEPS = ["sync", "classify", "title", "meta", "art", "tags", "categories"]
+ALL_STEPS = [
+    "sync",
+    "classify",
+    "identify",
+    "title",
+    "meta",
+    "art",
+    "tags",
+    "categories",
+]
 
 
 class CatalogEnrichmentPipeline:
@@ -92,6 +109,17 @@ class CatalogEnrichmentPipeline:
                 r = await self._run_classify(
                     classifications, force=force, dry_run=dry_run
                 )
+            elif step_name == "identify":
+                ident = IdentifyStep(db=self._db, config=self._config)
+                try:
+                    r = await ident.run(
+                        classifications=classifications,
+                        dry_run=dry_run,
+                        force=force,
+                        ctx=ctx,
+                    )
+                finally:
+                    await ident.close()
             elif step_name == "title":
                 step = TitleStep(db=self._db, config=self._config)
                 r = await step.run(
@@ -216,6 +244,9 @@ class CatalogEnrichmentPipeline:
                 description_score=row.get("description_score") or 0,
                 has_real_art=(row.get("cover_art_source") or "") in ("tmdb", "omdb"),
                 imdb_tt=row.get("imdb_tt") or None,
+                tmdb_id=str(row["tmdb_id"]) if row.get("tmdb_id") else None,
+                description=row.get("description"),
+                source_url=row.get("manifest_url"),
             )
         # Fresh classification
         return classify_item(
@@ -226,6 +257,7 @@ class CatalogEnrichmentPipeline:
             description=row.get("description"),
             description_score=0,
             imdb_tt=row.get("imdb_tt") or None,
+            source_url=row.get("manifest_url"),
         )
 
     async def _run_classify(

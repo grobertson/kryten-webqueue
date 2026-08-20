@@ -438,6 +438,16 @@ MIGRATIONS = [
     CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_imdb_tt
         ON catalog(imdb_tt) WHERE imdb_tt IS NOT NULL;
     """,
+    # v24: Identity-resolution step state. last_identify_at gates the `identify`
+    # enrichment step; identify_source records how the identity was resolved
+    # (admin | scraped_url | scraped_desc | original_title | english_title |
+    # api_search) and identify_reason its outcome (resolved | low_confidence |
+    # no_local_match | ambiguous | non_movie) for the coverage report.
+    """
+    ALTER TABLE item_enrichment_state ADD COLUMN last_identify_at TEXT;
+    ALTER TABLE item_enrichment_state ADD COLUMN identify_source TEXT;
+    ALTER TABLE item_enrichment_state ADD COLUMN identify_reason TEXT;
+    """,
 ]
 
 

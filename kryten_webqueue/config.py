@@ -159,6 +159,12 @@ class Config(BaseModel):
     tmdb_api_key: str = ""
     omdb_api_key: str = ""
 
+    # Local TMDB index (standalone DB rebuilt from the daily ID-export dumps).
+    # tmdb_index_source_dir is the directory holding the unpacked dump files and
+    # doubles as the allowed root for the refresh job's dump_dir param.
+    tmdb_index_path: str = "/var/lib/kryten-webqueue/tmdb_index.db"
+    tmdb_index_source_dir: str = ""
+
     # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
     fetch_cookies_path: str = ""  # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()

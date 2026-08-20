@@ -249,6 +249,9 @@ class ItemClassification:
     description_score: int = 0
     has_real_art: bool = False
     imdb_tt: str | None = None  # admin-set canonical IMDB tt identifier
+    tmdb_id: str | None = None  # cached TMDB id from a prior identify run
+    description: str | None = None  # item description (scanned for an IMDb tt#)
+    source_url: str | None = None  # source/manifest URL (scanned for an IMDb tt#)
 
 
 def classify_item(
@@ -260,6 +263,7 @@ def classify_item(
     description: str | None = None,
     description_score: int = 0,
     imdb_tt: str | None = None,
+    source_url: str | None = None,
 ) -> ItemClassification:
     """Classify a single catalog item.  Pure function; no DB access."""
     has_real_art = (cover_art_source or "") in ("tmdb", "omdb")
@@ -279,6 +283,8 @@ def classify_item(
                 description_score=description_score,
                 has_real_art=has_real_art,
                 imdb_tt=imdb_tt,
+                description=description,
+                source_url=source_url,
             )
 
     # 2. TV episode
@@ -305,6 +311,8 @@ def classify_item(
             description_score=description_score,
             has_real_art=has_real_art,
             imdb_tt=imdb_tt,
+            description=description,
+            source_url=source_url,
         )
 
     # 3. Archive (broadcast recordings, wrestling)
@@ -320,6 +328,8 @@ def classify_item(
             description_score=description_score,
             has_real_art=has_real_art,
             imdb_tt=imdb_tt,
+            description=description,
+            source_url=source_url,
         )
 
     # 4. Movie (>= 30 min)
@@ -338,6 +348,8 @@ def classify_item(
             description_score=description_score,
             has_real_art=has_real_art,
             imdb_tt=imdb_tt,
+            description=description,
+            source_url=source_url,
         )
 
     # 5. Unknown / short
@@ -352,4 +364,6 @@ def classify_item(
         description_score=description_score,
         has_real_art=has_real_art,
         imdb_tt=imdb_tt,
+        description=description,
+        source_url=source_url,
     )

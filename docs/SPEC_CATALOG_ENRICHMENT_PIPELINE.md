@@ -74,15 +74,22 @@ CatalogEnrichmentPipeline.run(steps, tokens, force, dry_run)
     │                   extract lookup_title / lookup_year for downstream steps.
     │                   Writes ItemClassification → item_enrichment_state.
     │
+    ├── Step: identify  Resolve each item to a stable tmdb_id + IMDb tt# via an
+    │                   accuracy-first waterfall (admin tt# → scraped tt# →
+    │                   original-language title → English title → API search).
+    │                   Auto-promotes tt# to catalog.imdb_tt on confident hits.
+    │                   See SPEC_TMDB_LOCAL_INDEX.md.
+    │
     ├── Step: title     Normalize / reformat titles; write-through to CMS.
     │                   Rules differ per content type (see §4.3).
     │
     ├── Step: meta      TMDB + OMDB lookup using classification.lookup_title.
+    │                   Prefers cached imdb_tt / tmdb_id (from identify) over search.
     │                   Build structured description. Write-through to CMS.
     │                   Cache MovieMetadata (including poster_url) in enrichment state.
     │
     ├── Step: art       Resolve and download poster art.
-    │                   Uses classification.lookup_title (not raw CMS title).
+    │                   Prefers cached imdb_tt / tmdb_id (from identify) over search.
     │                   Reads cached poster_url from enrichment state when available.
     │                   Writes to local images dir only (not CMS).
     │

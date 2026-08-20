@@ -7,13 +7,15 @@ includes poster_url so art and meta steps can share a single provider call.
 
 from __future__ import annotations
 
-import difflib
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 
 import httpx
+
+# Re-exported for backward compatibility; canonical impl lives in the leaf module
+# so tmdb_index can share it without a circular import.
+from ..tmdb_index._textmatch import _norm, _titles_similar  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -58,48 +60,6 @@ class MovieMetadata:
         return bool(self.synopsis or self.cast or self.director)
 
 
-# ---------------------------------------------------------------------------
-# Title similarity (port from enrichmeta.py)
-# ---------------------------------------------------------------------------
-
-_STRIP_ARTICLES_RE = re.compile(r"\b(?:the|a|an)\b", re.I)
-_NON_ALNUM_RE = re.compile(r"[^a-z0-9 ]")
-_NUMBER_WORDS = {
-    "zero": "0",
-    "one": "1",
-    "two": "2",
-    "three": "3",
-    "four": "4",
-    "five": "5",
-    "six": "6",
-    "seven": "7",
-    "eight": "8",
-    "nine": "9",
-    "ten": "10",
-    "eleven": "11",
-    "twelve": "12",
-}
-
-
-def _norm(s: str) -> str:
-    s = _STRIP_ARTICLES_RE.sub("", s.lower())
-    s = _NON_ALNUM_RE.sub(" ", s)
-    return " ".join(_NUMBER_WORDS.get(w, w) for w in s.split())
-
-
-def _titles_similar(query: str, result: str, threshold: float = 0.50) -> bool:
-    a, b = _norm(query), _norm(result)
-    if not a or not b:
-        return False
-    if a == b:
-        return True
-    if a in b and len(a) / len(b) >= 0.5:
-        return True
-    if b in a and len(b) / len(a) >= 0.5:
-        return True
-    return difflib.SequenceMatcher(None, a, b).ratio() >= threshold
-
-
 def _tmdb_auth(key: str) -> tuple[dict, dict]:
     if len(key) <= 40 and all(c in "0123456789abcdefABCDEF" for c in key):
         return {}, {"api_key": key}
@@ -137,6 +97,21 @@ class TMDBProvider:
                     return await self._fetch_details(movies[0], headers, auth)
         except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
             logger.debug("TMDB /find error for %r: %s", imdb_id, exc)
+        return MovieMetadata()
+
+    async def fetch_by_tmdb_id(self, tmdb_id: int) -> MovieMetadata:
+        """Fetch full movie metadata directly by TMDB id (no title matching)."""
+        if not self._key:
+            return MovieMetadata()
+        headers, auth = _tmdb_auth(self._key)
+        try:
+            resp = await self._client.get(
+                f"{TMDB_BASE}/movie/{tmdb_id}", headers=headers, params=auth
+            )
+            if resp.status_code == 200:
+                return await self._fetch_details(resp.json(), headers, auth)
+        except (httpx.HTTPError, json.JSONDecodeError, ValueError) as exc:
+            logger.debug("TMDB fetch_by_tmdb_id error for %s: %s", tmdb_id, exc)
         return MovieMetadata()
 
     async def search_movie(self, title: str, year: str | None = None) -> MovieMetadata:

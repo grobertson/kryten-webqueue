@@ -204,10 +204,23 @@ class MetaStep:
     async def _lookup_movie(self, cls: ItemClassification) -> MovieMetadata:
         if cls.imdb_tt:
             # Direct lookup bypasses title matching entirely — authoritative.
-            logger.debug("[meta] %s: direct IMDB lookup via %s", cls.friendly_token, cls.imdb_tt)
+            logger.debug(
+                "[meta] %s: direct IMDB lookup via %s", cls.friendly_token, cls.imdb_tt
+            )
             tmdb = await self._tmdb.search_by_imdb_id(cls.imdb_tt)
             omdb = await self._omdb.search_movie(
                 cls.lookup_title, cls.lookup_year, imdb_id=cls.imdb_tt
+            )
+            meta = merge_metadata(tmdb, omdb)
+            if not meta.genres and cls.genre_hints:
+                meta.genres = cls.genre_hints
+            return meta
+        if cls.tmdb_id:
+            # Cached identity from the identify step — fetch by id, skip search.
+            tmdb = await self._tmdb.fetch_by_tmdb_id(int(cls.tmdb_id))
+            imdb_id = tmdb.imdb_id or None
+            omdb = await self._omdb.search_movie(
+                cls.lookup_title, cls.lookup_year, imdb_id=imdb_id
             )
             meta = merge_metadata(tmdb, omdb)
             if not meta.genres and cls.genre_hints:

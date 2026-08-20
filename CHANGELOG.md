@@ -2,6 +2,35 @@
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-08-20
+
+### Added
+
+- **Local TMDB index + identity-first enrichment.** A standalone, rebuildable
+  SQLite index (`tmdb_index_path`, separate from `webqueue.db`) is built from the
+  TMDB daily ID-export dumps via the new `tmdb_index_refresh` job, and an offline
+  resolver (`TMDBLocalIndex.resolve`) maps titles — including original-language
+  titles — to a `tmdb_id` with no network call.
+- **New `identify` enrichment step** (runs after `classify`) resolves each item to
+  a stable `tmdb_id` + IMDb `tt#` via an accuracy-first waterfall: admin `tt#` →
+  IMDb `tt#` scraped from the item description/source URL (the primary fix for
+  YouTube full-movie rips) → original-language title → English title → API search.
+  Resolved identities are **auto-promoted** to `catalog.imdb_tt` on authoritative
+  or exact/high-confidence hits (guarded by the v23 unique index) with an
+  `item_edit_log` audit entry recording the resolution source.
+- **Identity-first art & metadata.** The `art` and `meta` steps now fetch by cached
+  `imdb_tt`/`tmdb_id` and skip fuzzy title search when identity is known — fixing
+  wrong posters on hosted/ambiguously-titled films.
+- **`tmdb_coverage_report` job** summarising which catalog items are identified and
+  why the rest are not (a cleanup worklist).
+- Config keys `tmdb_index_path` and `tmdb_index_source_dir`.
+
+### Changed
+
+- DB migration **v24** adds `last_identify_at`, `identify_source`, and
+  `identify_reason` to `item_enrichment_state`. Existing items are re-identified
+  only on a `force` enrichment run.
+
 ## [0.38.28] - 2026-08-20
 
 ### Fixed

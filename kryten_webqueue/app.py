@@ -104,12 +104,16 @@ async def lifespan(app: FastAPI):
         fetch_queue_drain_job,
         fetchurls_job,
         motd_posters_job,
+        tmdb_index_refresh_job,
+        tmdb_coverage_report_job,
         CATALOG_ENRICH_SCHEMA,
         FETCH_SCHEMA,
         FETCH_QUEUE_ADD_SCHEMA,
         FETCH_QUEUE_DRAIN_SCHEMA,
         FETCHURLS_SCHEMA,
         MOTD_POSTERS_SCHEMA,
+        TMDB_INDEX_REFRESH_SCHEMA,
+        TMDB_COVERAGE_REPORT_SCHEMA,
     )
 
     job_manager.register(
@@ -144,6 +148,18 @@ async def lifespan(app: FastAPI):
         motd_posters_job,
         label="MOTD Posters (weekend poster grid)",
         schema=MOTD_POSTERS_SCHEMA,
+    )
+    job_manager.register(
+        "tmdb_index_refresh",
+        tmdb_index_refresh_job,
+        label="TMDB Index Refresh (rebuild local index from dumps)",
+        schema=TMDB_INDEX_REFRESH_SCHEMA,
+    )
+    job_manager.register(
+        "tmdb_coverage_report",
+        tmdb_coverage_report_job,
+        label="TMDB Coverage Report (identity resolution summary)",
+        schema=TMDB_COVERAGE_REPORT_SCHEMA,
     )
     from .jobs.rehost_emotes import rehost_emotes_job, REHOST_EMOTES_SCHEMA
 

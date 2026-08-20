@@ -18,6 +18,9 @@
   "tmdb_api_key": "",
   "omdb_api_key": "",
 
+  "tmdb_index_path": "/var/lib/kryten-webqueue/tmdb_index.db",
+  "tmdb_index_source_dir": "",
+
   "fetch_cookies_path": "",
   "fetchurls": {
     "workbook_path": "",

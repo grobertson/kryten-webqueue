@@ -128,6 +128,17 @@ class ArtStep:
             meta = await self._omdb.search_tv_show(cls.lookup_title)
             return meta.poster_url
 
+        # Identity-first: a cached tt#/tmdb_id resolves the poster authoritatively,
+        # avoiding fuzzy title search (the main source of wrong hosted-movie art).
+        if cls.imdb_tt:
+            meta = await self._tmdb.search_by_imdb_id(cls.imdb_tt)
+            if meta.poster_url:
+                return meta.poster_url
+        elif cls.tmdb_id:
+            meta = await self._tmdb.fetch_by_tmdb_id(int(cls.tmdb_id))
+            if meta.poster_url:
+                return meta.poster_url
+
         # Movies and other content: search as movie
         meta = await self._tmdb.search_movie(cls.lookup_title, cls.lookup_year)
         if meta.poster_url:

@@ -44,6 +44,9 @@ class _EnrichmentMixin:
             "last_art_at",
             "last_tags_at",
             "last_categories_at",
+            "last_identify_at",
+            "identify_source",
+            "identify_reason",
         }
         safe = {k: v for k, v in fields.items() if k in allowed}
         if not safe:
@@ -105,7 +108,8 @@ class _EnrichmentMixin:
                    e.tv_show, e.tv_season, e.tv_episode_num,
                    e.description_score, e.tmdb_id, e.imdb_id, e.meta_json,
                    e.last_classify_at, e.last_title_at, e.last_meta_at,
-                   e.last_art_at, e.last_tags_at, e.last_categories_at
+                   e.last_art_at, e.last_tags_at, e.last_categories_at,
+                   e.last_identify_at, e.identify_source, e.identify_reason
             FROM catalog c
             LEFT JOIN item_enrichment_state e ON e.friendly_token = c.friendly_token
         """
@@ -130,6 +134,17 @@ class _EnrichmentMixin:
             params.append(limit)
 
         return await self._fetch_all(sql, params)
+
+    async def get_identify_coverage(self) -> list[dict]:
+        """Return catalog rows joined with identify-step state for the coverage report."""
+        return await self._fetch_all(
+            "SELECT c.friendly_token, c.title, c.imdb_tt, "
+            "e.content_type, e.tmdb_id, e.identify_source, e.identify_reason, "
+            "e.last_identify_at "
+            "FROM catalog c "
+            "LEFT JOIN item_enrichment_state e ON e.friendly_token = c.friendly_token "
+            "ORDER BY c.title"
+        )
 
     def parse_meta_json(self, row: dict) -> dict | None:
         """Deserialise the cached meta_json field from an enrichment row."""

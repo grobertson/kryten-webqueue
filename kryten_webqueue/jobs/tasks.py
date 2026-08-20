@@ -134,11 +134,15 @@ CATALOG_ENRICH_SCHEMA = [
         "options": [
             {
                 "value": "all",
-                "label": "Full pipeline — sync → classify → title → meta → art → tags",
+                "label": "Full pipeline — sync → classify → identify → title → meta → art → tags",
             },
             {
-                "value": "classify,meta,art,tags",
-                "label": "Enrichment only — classify, fetch metadata, art, and tags (no sync)",
+                "value": "classify,identify,meta,art,tags",
+                "label": "Enrichment only — classify, identify, fetch metadata, art, and tags (no sync)",
+            },
+            {
+                "value": "classify,identify",
+                "label": "Identify only — resolve TMDB id + IMDb tt# for each item",
             },
             {"value": "art", "label": "Art only — (re-)fetch poster art"},
             {
@@ -213,6 +217,120 @@ CATALOG_ENRICH_SCHEMA = [
             "(0–130 scale; a fully-enriched description scores ~100). Lower this or use Force re-run "
             "to refresh already-enriched items."
         ),
+    },
+]
+
+
+# ── TMDB local index refresh ───────────────────────────────────────────────────
+
+
+async def tmdb_index_refresh_job(params: dict, ctx) -> dict:
+    """Rebuild the local TMDB index from the daily ID-export dumps.
+
+    params:
+      source    "local" (default) — build from unpacked dumps on disk
+      dump_dir  directory holding the dumps; must resolve under the configured
+                ``tmdb_index_source_dir`` (defaults to it when blank)
+      kinds     "movies,tv" (default) | "movies" | "tv" | "all"
+    """
+    import os.path
+
+    from ..catalog.tmdb_index import build_index
+
+    source = params.get("source", "local")
+    if source != "local":
+        raise JobError(f"Unsupported source {source!r}; only 'local' is available")
+
+    allowed_root = (ctx.config.tmdb_index_source_dir or "").strip()
+    dump_dir = (params.get("dump_dir") or allowed_root).strip()
+    if not dump_dir:
+        raise JobError(
+            "No dump directory configured. Set 'tmdb_index_source_dir' in config "
+            "or pass a dump_dir under it."
+        )
+    # Confine dump_dir to the configured root to prevent arbitrary path access.
+    if allowed_root:
+        root = os.path.realpath(allowed_root)
+        target = os.path.realpath(dump_dir)
+        if target != root and not target.startswith(root + os.sep):
+            raise JobError(f"dump_dir must be within {allowed_root!r}")
+        dump_dir = target
+
+    kinds = params.get("kinds", "movies,tv")
+    index_path = ctx.config.tmdb_index_path
+
+    loop = asyncio.get_running_loop()
+    progress = _thread_safe_progress(ctx, loop)
+    try:
+        stats = await asyncio.to_thread(
+            build_index, dump_dir, index_path, kinds, progress=progress
+        )
+    except ValueError as exc:
+        raise JobError(str(exc)) from exc
+
+    return {
+        "source_date": stats.source_date,
+        "built_at": stats.built_at,
+        "elapsed_sec": round(stats.elapsed_sec, 1),
+        "counts": stats.counts,
+        "index_path": index_path,
+    }
+
+
+async def tmdb_coverage_report_job(params: dict, ctx) -> dict:
+    """Summarise identity-resolution coverage across the catalog (no network)."""
+    from ..catalog.tmdb_index.coverage import build_coverage_report
+
+    report = await build_coverage_report(ctx.db)
+    return report.to_dict()
+
+
+TMDB_COVERAGE_REPORT_SCHEMA: list[dict] = []
+
+
+TMDB_INDEX_REFRESH_SCHEMA = [
+    {
+        "name": "source",
+        "label": "Source",
+        "type": "enum",
+        "default": "local",
+        "required": False,
+        "options": [
+            {
+                "value": "local",
+                "label": "Local dumps — build from unpacked files on disk",
+            },
+        ],
+        "help": "Where to read the TMDB ID-export dumps from.",
+    },
+    {
+        "name": "dump_dir",
+        "label": "Dump directory (optional)",
+        "type": "string",
+        "default": None,
+        "required": False,
+        "placeholder": "blank = configured tmdb_index_source_dir",
+        "help": (
+            "Directory holding the unpacked TMDB dump files. Must be within the "
+            "configured tmdb_index_source_dir. Leave blank to use it directly."
+        ),
+    },
+    {
+        "name": "kinds",
+        "label": "Kinds to index",
+        "type": "enum",
+        "default": "movies,tv",
+        "required": False,
+        "options": [
+            {"value": "movies,tv", "label": "Movies + TV (recommended)"},
+            {"value": "movies", "label": "Movies only"},
+            {"value": "tv", "label": "TV only"},
+            {
+                "value": "all",
+                "label": "Everything (movies, tv, people, keywords, companies, networks)",
+            },
+        ],
+        "help": "Which dump types to load into the index.",
     },
 ]
 
