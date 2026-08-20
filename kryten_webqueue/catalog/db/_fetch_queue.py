@@ -1,5 +1,3 @@
-
-
 class _FetchQueueMixin:
     """Persistent download queue for the fetch_queue_add / fetch_queue_drain jobs."""
 
@@ -76,3 +74,12 @@ class _FetchQueueMixin:
             "SELECT COUNT(*) AS c FROM fetch_queue WHERE status = 'pending'"
         )
         return int(row["c"]) if row else 0
+
+    async def delete_fetch_queue_item(self, item_id: int) -> bool:
+        """Remove a non-running item. Returns False if not found or currently running."""
+        cursor = await self._db.execute(
+            "DELETE FROM fetch_queue WHERE id = ? AND status != 'running'",
+            [item_id],
+        )
+        await self._db.commit()
+        return (cursor.rowcount or 0) > 0

@@ -46,6 +46,11 @@
             <div class="admin-section">
                 <h2>Jobs</h2>
                 <div id="jobs-list" class="jobs-list">Loading...</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.5rem">
+                    <h3 style="margin:0">Download Queue</h3>
+                    <button class="btn btn-sm" onclick="loadFetchQueue()">Refresh</button>
+                </div>
+                <div id="fetch-queue-list" style="margin-top:.5rem">Loading…</div>
                 <h3>Recent Job Runs</h3>
                 <div id="job-runs">Loading...</div>
             </div>

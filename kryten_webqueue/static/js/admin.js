@@ -291,6 +291,9 @@ async function loadJobs() {
             : '<p>No jobs registered</p>';
     }
 
+    // Download queue — shown above job runs
+    loadFetchQueue();
+
     // Recent job-run history — table includes an expand button for full output
     const rResp = await fetch('/admin/jobs/runs?limit=15');
     if (rResp.ok) {
@@ -323,6 +326,49 @@ async function loadJobs() {
             el.innerHTML = '<p>No job runs yet</p>';
         }
     }
+}
+
+// ── Download Queue ────────────────────────────────────────────────────────────
+
+async function loadFetchQueue() {
+    const el = document.getElementById('fetch-queue-list');
+    if (!el) return;
+    const resp = await fetch('/admin/jobs/fetch-queue');
+    if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load queue.</p>'; return; }
+    const items = await resp.json();
+    if (!items.length) {
+        el.innerHTML = '<p class="empty-state" style="opacity:.6">Queue is empty.</p>';
+        return;
+    }
+    const STATUS_ICON = { pending: '\u23f3', running: '\u25b6\ufe0f', done: '\u2705', failed: '\u274c' };
+    el.innerHTML = `<table class="admin-table">
+        <tr><th>#</th><th>URL</th><th>Status</th><th>Added</th><th></th></tr>
+        ${items.map(item => {
+            const icon = STATUS_ICON[item.status] || '';
+            const errAttr = item.error ? ` title="${escapeHtml(item.error)}"` : '';
+            const statusCell = `<span class="job-status job-status-${escapeHtml(item.status || '')}"${errAttr}>${icon} ${escapeHtml(item.status || '')}</span>`;
+            const errorRow = item.error
+                ? `<tr><td></td><td colspan="4" style="font-size:.8rem;color:var(--danger);padding-bottom:.4rem">${escapeHtml(item.error)}</td></tr>`
+                : '';
+            const canDelete = item.status !== 'running';
+            const deleteBtn = canDelete
+                ? `<button class="btn btn-sm btn-danger" onclick="deleteFetchQueueItem(${item.id})" title="Remove">&times;</button>`
+                : '';
+            return `<tr>
+                <td style="opacity:.5">${item.id}</td>
+                <td style="word-break:break-all;max-width:340px">${escapeHtml(item.url)}</td>
+                <td>${statusCell}</td>
+                <td style="white-space:nowrap">${formatLocalDateTime(item.added_at)}</td>
+                <td>${deleteBtn}</td>
+            </tr>${errorRow}`;
+        }).join('')}
+    </table>`;
+}
+
+async function deleteFetchQueueItem(id) {
+    const resp = await fetch(`/admin/jobs/fetch-queue/${id}`, { method: 'DELETE' });
+    showToast(resp.ok ? 'Removed from queue' : 'Failed to remove', resp.ok ? 'success' : 'error');
+    if (resp.ok) loadFetchQueue();
 }
 
 // Run-detail cache so we don't re-fetch on re-open.
@@ -375,6 +421,23 @@ async function showRunDetail(runId) {
         // In-progress heartbeat snapshot
         bodyHtml = `<p style="color:var(--warning)">\u23f3 Job still running — last progress snapshot:</p>
             <pre style="white-space:pre-wrap;font-size:.82rem">${escapeHtml(JSON.stringify(d, null, 2))}</pre>`;
+    } else if (d && typeof d.queued === 'number' && Array.isArray(d.items)) {
+        // fetch_queue_add result
+        const rows = d.items.map(item =>
+            `<tr><td style="white-space:nowrap;opacity:.6">#${item.id}</td><td style="word-break:break-all">${escapeHtml(item.url)}</td></tr>`
+        ).join('');
+        bodyHtml = `<p>Queued <strong>${d.queued}</strong> URL${d.queued !== 1 ? 's' : ''} for download.</p>
+            <table class="admin-table"><tr><th>#</th><th>URL</th></tr>${rows}</table>`;
+    } else if (d && typeof d.processed === 'number' && typeof d.failed === 'number' && !d.status) {
+        // fetch_queue_drain final result
+        const icon = d.failed === 0 ? '\u2705' : d.processed === 0 ? '\u274c' : '\u26a0\ufe0f';
+        bodyHtml = `<p>${icon} Processed: <strong>${d.processed}</strong> &nbsp; Failed: <strong style="${d.failed ? 'color:var(--danger)' : ''}">${d.failed}</strong></p>
+            <p style="font-size:.85rem;opacity:.7">See the Download Queue in the Jobs tab for per-item results and error details.</p>`;
+    } else if (d && d.status === 'downloading') {
+        // fetch_queue_drain progress heartbeat
+        bodyHtml = `<p style="color:var(--warning)">\u23f3 Download in progress</p>
+            <p>Current URL: <code style="word-break:break-all">${escapeHtml(d.url || '')}</code></p>
+            <p>Done: <strong>${d.processed || 0}</strong> &nbsp; Failed: <strong>${d.failed || 0}</strong></p>`;
     } else {
         // Generic / legacy format
         const raw = typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail, null, 2);
@@ -519,6 +582,21 @@ function summarizeRunDetail(detail) {
             if (d.output_path) parts.push(`→ ${d.output_path}`);
         }
         if (typeof d.added_to_playlist !== 'undefined' && d.added_to_playlist) parts.push(`→ playlist ${d.added_to_playlist}`);
+        // fetch_queue_add result
+        if (typeof d.queued === 'number' && Array.isArray(d.items)) return `Queued ${d.queued} URL${d.queued !== 1 ? 's' : ''}`;
+        // fetch_queue_drain final
+        if (typeof d.processed === 'number' && typeof d.failed === 'number' && !d.status) {
+            if (!d.processed && !d.failed) return 'nothing pending';
+            const bits = [];
+            if (d.processed) bits.push(`${d.processed} done`);
+            if (d.failed) bits.push(`${d.failed} failed`);
+            return bits.join(' · ');
+        }
+        // fetch_queue_drain progress heartbeat
+        if (d.status === 'downloading' && d.url) {
+            const host = (() => { try { return new URL(d.url).hostname; } catch (e) { return d.url.slice(0, 40); } })();
+            return `\u23f3 ${host} (${d.processed || 0} done)`;
+        }
         if (parts.length) return parts.join(' · ');
     }
     return '';

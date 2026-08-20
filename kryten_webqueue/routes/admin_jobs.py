@@ -66,3 +66,22 @@ async def run_job(request: Request, name: str, user: dict = Depends(require_admi
     if not result.get("started"):
         raise HTTPException(409, result.get("reason", "Job already running"))
     return {"success": True, **result}
+
+
+@router.get("/fetch-queue")
+async def get_fetch_queue(request: Request, user: dict = Depends(require_admin)):
+    """Return all fetch queue items, newest first."""
+    db = request.app.state.db
+    return await db.get_fetch_queue(limit=200)
+
+
+@router.delete("/fetch-queue/{item_id}")
+async def delete_fetch_queue_item(
+    request: Request, item_id: int, user: dict = Depends(require_admin)
+):
+    """Remove a pending or finished fetch queue item (running items are protected)."""
+    db = request.app.state.db
+    ok = await db.delete_fetch_queue_item(item_id)
+    if not ok:
+        raise HTTPException(404, "Item not found or currently running")
+    return {"ok": True}
