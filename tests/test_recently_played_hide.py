@@ -110,7 +110,7 @@ async def _make_mutable_playlist(db, tokens, *, duration_sec):
         [
             {
                 "media_type": "cm",
-                "media_id": t,
+                "media_id": _manifest(t),  # production always stores manifest URL
                 "title": t,
                 "duration_sec": duration_sec,
             }
@@ -154,7 +154,13 @@ async def test_rotation_moves_item_to_bottom(db):
     assert rotated == 1
 
     items = await db.get_saved_playlist_items(pid)
-    assert [it["media_id"] for it in items] == ["ep1", "ep2", "ep4", "ep5", "ep3"]
+    assert [it["media_id"] for it in items] == [
+        _manifest("ep1"),
+        _manifest("ep2"),
+        _manifest("ep4"),
+        _manifest("ep5"),
+        _manifest("ep3"),
+    ]
 
 
 async def test_rotation_on_last_item_is_noop(db):
@@ -167,7 +173,11 @@ async def test_rotation_on_last_item_is_noop(db):
     assert rotated == 0
 
     items = await db.get_saved_playlist_items(pid)
-    assert [it["media_id"] for it in items] == ["ep1", "ep2", "ep3"]
+    assert [it["media_id"] for it in items] == [
+        _manifest("ep1"),
+        _manifest("ep2"),
+        _manifest("ep3"),
+    ]
 
 
 async def test_rotation_not_applied_to_immutable_playlist(db):
@@ -180,7 +190,12 @@ async def test_rotation_not_applied_to_immutable_playlist(db):
     await db.replace_playlist_items(
         pid,
         [
-            {"media_type": "cm", "media_id": t, "title": t, "duration_sec": 1500}
+            {
+                "media_type": "cm",
+                "media_id": _manifest(t),
+                "title": t,
+                "duration_sec": 1500,
+            }
             for t in tokens
         ],
     )
@@ -189,7 +204,11 @@ async def test_rotation_not_applied_to_immutable_playlist(db):
     assert rotated == 0
 
     items = await db.get_saved_playlist_items(pid)
-    assert [it["media_id"] for it in items] == ["ep1", "ep2", "ep3"]
+    assert [it["media_id"] for it in items] == [
+        _manifest("ep1"),
+        _manifest("ep2"),
+        _manifest("ep3"),
+    ]
 
 
 async def test_rotation_not_applied_to_promo_pool(db):
@@ -206,7 +225,12 @@ async def test_rotation_not_applied_to_promo_pool(db):
     await db.replace_playlist_items(
         pid,
         [
-            {"media_type": "cm", "media_id": t, "title": t, "duration_sec": 30}
+            {
+                "media_type": "cm",
+                "media_id": _manifest(t),
+                "title": t,
+                "duration_sec": 30,
+            }
             for t in tokens
         ],
     )
@@ -215,7 +239,11 @@ async def test_rotation_not_applied_to_promo_pool(db):
     assert rotated == 0
 
     items = await db.get_saved_playlist_items(pid)
-    assert [it["media_id"] for it in items] == ["promo1", "promo2", "promo3"]
+    assert [it["media_id"] for it in items] == [
+        _manifest("promo1"),
+        _manifest("promo2"),
+        _manifest("promo3"),
+    ]
 
 
 async def test_rotation_multi_playlist_item(db):
@@ -230,14 +258,14 @@ async def test_rotation_multi_playlist_item(db):
     assert rotated == 2
 
     assert [it["media_id"] for it in await db.get_saved_playlist_items(pid_a)] == [
-        "a2",
-        "a3",
-        "shared",
+        _manifest("a2"),
+        _manifest("a3"),
+        _manifest("shared"),
     ]
     assert [it["media_id"] for it in await db.get_saved_playlist_items(pid_b)] == [
-        "b1",
-        "b3",
-        "shared",
+        _manifest("b1"),
+        _manifest("b3"),
+        _manifest("shared"),
     ]
 
 
@@ -257,7 +285,11 @@ async def test_completion_recorder_triggers_rotation(db):
     )
 
     items = await db.get_saved_playlist_items(pid)
-    assert [it["media_id"] for it in items] == ["ep2", "ep3", "ep1"]
+    assert [it["media_id"] for it in items] == [
+        _manifest("ep2"),
+        _manifest("ep3"),
+        _manifest("ep1"),
+    ]
 
 
 async def test_fire_after_rotation_loads_in_rotated_order(db):
@@ -287,7 +319,11 @@ async def test_fire_after_rotation_loads_in_rotated_order(db):
         ws_manager=_FakeWs(),
     )
 
-    assert [a["media_id"] for a in api.added] == ["ep2", "ep3", "ep1"]
+    assert [a["media_id"] for a in api.added] == [
+        _manifest("ep2"),
+        _manifest("ep3"),
+        _manifest("ep1"),
+    ]
 
 
 # --- CompletionRecorder threshold ----------------------------------------

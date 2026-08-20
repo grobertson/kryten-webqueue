@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [0.38.28] - 2026-08-20
+
+### Fixed
+
+- **Playlist-rotation tests exercised the wrong data shape.** The
+  `_make_mutable_playlist` test helper (and the immutable/promo rotation cases)
+  stored `saved_playlist_items.media_id` as the bare `friendly_token`, but every
+  production write path stores the full **manifest URL**. Since 0.38.21,
+  `rotate_playlist_item_to_bottom()` resolves `friendly_token → manifest_url`
+  before querying, so the token-keyed test rows never matched and four rotation
+  tests failed (while three "noop" tests passed for the wrong reason). Tests now
+  seed items with manifest URLs, matching production, and assert on manifest
+  URLs. No production code change — rotation has been correct since 0.38.21.
+
 ## [0.38.27] - 2026-08-20
 
 ### Fixed
