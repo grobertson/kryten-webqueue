@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.38.27] - 2026-08-20
+
+### Fixed
+
+- **Edit modal** uses site CSS variables throughout (supports light and dark themes).
+  The old inline `<style>` block with hardcoded hex colors has been removed.
+- **IMDB tt field** now appears in the edit modal (Core Metadata section) with client-side
+  format validation and a helper note explaining its effect on enrichment.
+
 ## [0.38.26] - 2026-08-20
 
 ### Added

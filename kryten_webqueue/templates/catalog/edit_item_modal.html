@@ -1,194 +1,120 @@
-<div id="edit-item-modal" class="modal" style="display:none;">
-    <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
-        <span class="close" onclick="closeEditModal()">&times;</span>
-        <h2>Edit Item</h2>
-        <form id="edit-item-form">
-            <input type="hidden" id="edit-token" />
-            
-            <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid #444; padding-bottom: 0.25rem;">Core Metadata</h3>
-            
-            <label for="edit-title">Title <span style="color: #ff4444;">*</span></label>
-            <input type="text" id="edit-title" class="form-control" required maxlength="500" 
-                   placeholder="Movie Title (YYYY)" />
-            
-            <label for="edit-description">Description</label>
-            <textarea id="edit-description" class="form-control" rows="6" maxlength="5000"
-                      placeholder="Synopsis, plot summary, etc."></textarea>
-            
-            <label for="edit-duration">Duration (seconds)</label>
-            <input type="number" id="edit-duration" class="form-control" min="0" 
-                   placeholder="e.g., 5400 for 90 minutes" />
-            
-            <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid #444; padding-bottom: 0.25rem;">Advanced (Enrichment State)</h3>
-            
-            <label for="edit-content-type">Content Type</label>
-            <select id="edit-content-type" class="form-control">
-                <option value="">-- Not set --</option>
-                <option value="movie">Movie</option>
-                <option value="tv_episode">TV Episode</option>
-                <option value="hosted_movie">Hosted Movie</option>
-                <option value="riffed_movie">Riffed Movie</option>
-                <option value="archive">Archive/Historical</option>
-                <option value="unknown">Unknown</option>
-            </select>
-            
-            <label for="edit-lookup-title">Lookup Title</label>
-            <input type="text" id="edit-lookup-title" class="form-control" maxlength="500"
-                   placeholder="Normalized title for TMDB/OMDB search" />
-            
-            <label for="edit-lookup-year">Lookup Year</label>
-            <input type="number" id="edit-lookup-year" class="form-control" min="1800" max="2100"
-                   placeholder="e.g., 1980" />
-            
-            <label for="edit-hosted-show">Hosted Show</label>
-            <input type="text" id="edit-hosted-show" class="form-control" maxlength="200"
-                   placeholder="e.g., Svengoolie, MST3K, JBB, TLDI" />
-            
-            <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(255,255,255,0.05); border-radius: 4px;">
-                <strong>TV Episode Fields:</strong>
-                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.5rem; margin-top: 0.5rem;">
-                    <div>
-                        <label for="edit-tv-show" style="margin-bottom: 0.25rem;">Show Name</label>
-                        <input type="text" id="edit-tv-show" class="form-control" maxlength="200"
-                               placeholder="Series name" />
-                    </div>
-                    <div>
-                        <label for="edit-tv-season" style="margin-bottom: 0.25rem;">Season</label>
-                        <input type="number" id="edit-tv-season" class="form-control" min="0" 
-                               placeholder="1" />
-                    </div>
-                    <div>
-                        <label for="edit-tv-episode" style="margin-bottom: 0.25rem;">Episode</label>
-                        <input type="number" id="edit-tv-episode" class="form-control" min="0"
-                               placeholder="1" />
+<div id="edit-item-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; overflow-y:auto; padding:2rem 1rem;">
+    <div class="modal-box" style="margin:auto; max-width:700px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:1.25rem; flex-shrink:0;">
+            <h3 style="margin:0;">Edit Item</h3>
+            <button type="button" class="btn btn-sm" onclick="closeEditModal()" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="modal-body">
+            <form id="edit-item-form">
+                <input type="hidden" id="edit-token" />
+
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:1.25rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">Core Metadata</p>
+
+                <div class="field">
+                    <label for="edit-title">Title <span style="color:var(--danger);">*</span></label>
+                    <input type="text" id="edit-title" required maxlength="500" placeholder="Movie Title (YYYY)" />
+                </div>
+
+                <div class="field">
+                    <label for="edit-imdb-tt">IMDB tt Number</label>
+                    <input type="text" id="edit-imdb-tt" maxlength="10" placeholder="e.g. tt0133093"
+                           pattern="tt\d{7,8}" title="Must be a valid IMDB tt identifier, e.g. tt0133093" />
+                    <span class="field-help">When set, the enrichment pipeline looks this title up directly on TMDB/OMDB instead of matching by name.</span>
+                </div>
+
+                <div class="field">
+                    <label for="edit-description">Description</label>
+                    <textarea id="edit-description" rows="6" maxlength="5000" placeholder="Synopsis, plot summary, etc."></textarea>
+                </div>
+
+                <div class="field">
+                    <label for="edit-duration">Duration (seconds)</label>
+                    <input type="number" id="edit-duration" min="0" placeholder="e.g. 5400 for 90 minutes" />
+                </div>
+
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:1.5rem; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">Advanced — Enrichment State</p>
+
+                <div class="field">
+                    <label for="edit-content-type">Content Type</label>
+                    <select id="edit-content-type">
+                        <option value="">-- Not set --</option>
+                        <option value="movie">Movie</option>
+                        <option value="tv_episode">TV Episode</option>
+                        <option value="hosted_movie">Hosted Movie</option>
+                        <option value="riffed_movie">Riffed Movie</option>
+                        <option value="archive">Archive / Historical</option>
+                        <option value="unknown">Unknown</option>
+                    </select>
+                </div>
+
+                <div class="field">
+                    <label for="edit-lookup-title">Lookup Title</label>
+                    <input type="text" id="edit-lookup-title" maxlength="500" placeholder="Normalized title for TMDB/OMDB search" />
+                </div>
+
+                <div class="field">
+                    <label for="edit-lookup-year">Lookup Year</label>
+                    <input type="number" id="edit-lookup-year" min="1800" max="2100" placeholder="e.g. 1980" />
+                </div>
+
+                <div class="field">
+                    <label for="edit-hosted-show">Hosted Show</label>
+                    <input type="text" id="edit-hosted-show" maxlength="200" placeholder="e.g. Svengoolie, MST3K, JBB, TLDI" />
+                </div>
+
+                <div style="padding:0.75rem; background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); margin-bottom:1rem;">
+                    <span style="font-size:0.8rem; color:var(--text-secondary);">TV Episode Fields</span>
+                    <div style="display:grid; grid-template-columns:2fr 1fr 1fr; gap:0.5rem; margin-top:0.5rem;">
+                        <div class="field" style="margin-bottom:0;">
+                            <label for="edit-tv-show">Show Name</label>
+                            <input type="text" id="edit-tv-show" maxlength="200" placeholder="Series name" />
+                        </div>
+                        <div class="field" style="margin-bottom:0;">
+                            <label for="edit-tv-season">Season</label>
+                            <input type="number" id="edit-tv-season" min="0" placeholder="1" />
+                        </div>
+                        <div class="field" style="margin-bottom:0;">
+                            <label for="edit-tv-episode">Episode</label>
+                            <input type="number" id="edit-tv-episode" min="0" placeholder="1" />
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <h3 style="margin-top: 1.5rem; margin-bottom: 0.5rem; border-bottom: 1px solid #444; padding-bottom: 0.25rem;">Options</h3>
-            
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 0.75rem;">
-                <input type="checkbox" id="edit-sync-cms" checked />
-                <span>Sync title/description to MediaCMS</span>
-            </label>
-            
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; margin-bottom: 1rem;">
-                <input type="checkbox" id="edit-re-enrich" />
-                <span>Re-enrich after save <small style="opacity: 0.7;">(runs classify, title, meta, art, tags)</small></span>
-            </label>
-            
-            <div class="modal-actions" style="display: flex; gap: 0.5rem; margin-top: 1.5rem;">
-                <button type="submit" class="btn btn-primary">Save Changes</button>
-                <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
-            </div>
-        </form>
+
+                <p style="font-size:0.8rem; color:var(--text-secondary); margin-top:1.5rem; margin-bottom:1rem; border-bottom:1px solid var(--border); padding-bottom:0.75rem;">Options</p>
+
+                <label class="check">
+                    <input type="checkbox" id="edit-sync-cms" checked />
+                    <span>Sync title / description to MediaCMS</span>
+                </label>
+
+                <label class="check">
+                    <input type="checkbox" id="edit-re-enrich" />
+                    <span>Re-enrich after save</span>
+                    <small style="color:var(--text-secondary);">(classify, title, meta, art, tags)</small>
+                </label>
+            </form>
+        </div>
+
+        <div class="modal-actions">
+            <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
+            <button type="submit" form="edit-item-form" class="btn btn-primary">Save Changes</button>
+        </div>
     </div>
 </div>
-
-<style>
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.7);
-    overflow-y: auto;
-}
-
-.modal-content {
-    background-color: #1a1a1a;
-    margin: 2rem auto;
-    padding: 2rem;
-    border: 1px solid #444;
-    border-radius: 8px;
-    position: relative;
-}
-
-.modal .close {
-    position: absolute;
-    right: 1rem;
-    top: 1rem;
-    font-size: 2rem;
-    font-weight: bold;
-    color: #aaa;
-    cursor: pointer;
-    line-height: 1;
-}
-
-.modal .close:hover {
-    color: #fff;
-}
-
-.modal .form-control {
-    width: 100%;
-    padding: 0.5rem;
-    margin-bottom: 1rem;
-    background: #2a2a2a;
-    border: 1px solid #444;
-    border-radius: 4px;
-    color: #fff;
-    font-size: 0.95rem;
-}
-
-.modal .form-control:focus {
-    outline: none;
-    border-color: #666;
-}
-
-.modal label {
-    display: block;
-    margin-bottom: 0.25rem;
-    color: #ccc;
-    font-weight: 500;
-}
-
-.modal select.form-control {
-    cursor: pointer;
-}
-
-.modal textarea.form-control {
-    font-family: inherit;
-    resize: vertical;
-}
-
-.modal-actions .btn {
-    padding: 0.6rem 1.5rem;
-    cursor: pointer;
-}
-
-.modal-actions .btn-primary {
-    background: #4a90e2;
-    color: white;
-    border: none;
-}
-
-.modal-actions .btn-primary:hover {
-    background: #357abd;
-}
-</style>
 
 <script>
 async function openEditModal(token) {
     try {
-        // Fetch item data with enrichment state from the admin API
         const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}/data`);
-        if (!resp.ok) {
-            throw new Error(`Failed to fetch item data (${resp.status})`);
-        }
+        if (!resp.ok) throw new Error(`Failed to fetch item data (${resp.status})`);
         const {item, enrichment} = await resp.json();
-        
-        // Store the token
+
         document.getElementById('edit-token').value = token;
-        
-        // Populate core catalog fields
         document.getElementById('edit-title').value = item.title || '';
+        document.getElementById('edit-imdb-tt').value = item.imdb_tt || '';
         document.getElementById('edit-description').value = item.description || '';
         document.getElementById('edit-duration').value = item.duration_sec || '';
-        
-        // Populate enrichment state fields
         document.getElementById('edit-content-type').value = enrichment.content_type || '';
         document.getElementById('edit-lookup-title').value = enrichment.lookup_title || '';
         document.getElementById('edit-lookup-year').value = enrichment.lookup_year || '';
@@ -196,11 +122,9 @@ async function openEditModal(token) {
         document.getElementById('edit-tv-show').value = enrichment.tv_show || '';
         document.getElementById('edit-tv-season').value = enrichment.tv_season || '';
         document.getElementById('edit-tv-episode').value = enrichment.tv_episode_num || '';
-        
-        // Reset checkboxes to defaults
         document.getElementById('edit-sync-cms').checked = true;
         document.getElementById('edit-re-enrich').checked = false;
-        
+
         document.getElementById('edit-item-modal').style.display = 'block';
     } catch (e) {
         showToast(`Failed to load item data: ${e.message}`, 'error');
@@ -211,17 +135,13 @@ function closeEditModal() {
     document.getElementById('edit-item-modal').style.display = 'none';
 }
 
-// Close modal when clicking outside
 window.addEventListener('click', (e) => {
     const modal = document.getElementById('edit-item-modal');
-    if (e.target === modal) {
-        closeEditModal();
-    }
+    if (e.target === modal) closeEditModal();
 });
 
 document.getElementById('edit-item-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
     const token = document.getElementById('edit-token').value;
     const payload = {
         title: document.getElementById('edit-title').value.trim(),
@@ -229,49 +149,34 @@ document.getElementById('edit-item-form').addEventListener('submit', async (e) =
         sync_to_cms: document.getElementById('edit-sync-cms').checked,
         re_enrich: document.getElementById('edit-re-enrich').checked,
     };
-    
-    // Only include duration if filled
+
+    const imdbTt = document.getElementById('edit-imdb-tt').value.trim();
+    payload.imdb_tt = imdbTt || null;
+
     const duration = document.getElementById('edit-duration').value;
-    if (duration) {
-        payload.duration_sec = parseInt(duration);
-    }
-    
-    // Only include enrichment fields if filled
+    if (duration) payload.duration_sec = parseInt(duration);
+
     const contentType = document.getElementById('edit-content-type').value;
-    if (contentType) {
-        payload.content_type = contentType;
-    }
-    
+    if (contentType) payload.content_type = contentType;
+
     const lookupTitle = document.getElementById('edit-lookup-title').value.trim();
-    if (lookupTitle) {
-        payload.lookup_title = lookupTitle;
-    }
-    
+    if (lookupTitle) payload.lookup_title = lookupTitle;
+
     const lookupYear = document.getElementById('edit-lookup-year').value;
-    if (lookupYear) {
-        payload.lookup_year = lookupYear;
-    }
-    
+    if (lookupYear) payload.lookup_year = lookupYear;
+
     const hostedShow = document.getElementById('edit-hosted-show').value.trim();
-    if (hostedShow) {
-        payload.hosted_show = hostedShow;
-    }
-    
+    if (hostedShow) payload.hosted_show = hostedShow;
+
     const tvShow = document.getElementById('edit-tv-show').value.trim();
-    if (tvShow) {
-        payload.tv_show = tvShow;
-    }
-    
+    if (tvShow) payload.tv_show = tvShow;
+
     const tvSeason = document.getElementById('edit-tv-season').value;
-    if (tvSeason) {
-        payload.tv_season = parseInt(tvSeason);
-    }
-    
+    if (tvSeason) payload.tv_season = parseInt(tvSeason);
+
     const tvEpisode = document.getElementById('edit-tv-episode').value;
-    if (tvEpisode) {
-        payload.tv_episode_num = parseInt(tvEpisode);
-    }
-    
+    if (tvEpisode) payload.tv_episode_num = parseInt(tvEpisode);
+
     try {
         const resp = await fetch(`/admin/catalog/${encodeURIComponent(token)}/edit`, {
             method: 'PATCH',
@@ -280,18 +185,12 @@ document.getElementById('edit-item-form').addEventListener('submit', async (e) =
             body: JSON.stringify(payload)
         });
         const data = await resp.json();
-        
         if (resp.ok) {
             let msg = `Item updated (${data.changes_logged} changes)`;
-            if (data.cms_synced) {
-                msg += ', synced to CMS';
-            }
-            if (data.enrich_job_id) {
-                msg += `, enrichment job #${data.enrich_job_id} started`;
-            }
+            if (data.cms_synced) msg += ', synced to CMS';
+            if (data.enrich_job_id) msg += `, enrichment job #${data.enrich_job_id} started`;
             showToast(msg);
             closeEditModal();
-            // Reload to show changes
             setTimeout(() => location.reload(), 500);
         } else {
             showToast(data.detail || `Failed to update (${resp.status})`, 'error');
