@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.38.23] - 2026-08-20
+
+### Fixed
+
+- **Admin fetch queue display.** Job history "Detail" column now shows readable
+  summaries for fetch queue jobs ("Queued 3 URLs", "1 done · 2 failed", progress
+  hostname) instead of blank or raw JSON. The detail modal renders a clean URL
+  list for add jobs and a ✅/⚠️/❌ summary for drain jobs. A **Download Queue**
+  section is now visible in the Jobs tab, showing all items with status icons,
+  error messages inline under failed items, and a × button to remove finished
+  entries. Refreshes automatically every 5 seconds with the job list.
+
 ## [0.38.22] - 2026-08-19
 
 ### Added
