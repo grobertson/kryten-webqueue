@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.38.25] - 2026-08-20
+
+### Changed
+
+- **"Clear played" button is now disabled when an item is not within the
+  active played timeout window.** Admins can now instantly see which items are
+  currently hidden from regular users (button enabled = item is hidden; button
+  grayed out = no active timeout). The button tooltip reflects the current state.
+  `browse()` and `search()` now include a `played_at` column (most recent
+  completion timestamp) so no extra queries are needed.
+
 ## [0.38.24] - 2026-08-20
 
 ### Fixed

@@ -1,5 +1,6 @@
 import logging
 import sqlite3
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -151,6 +152,14 @@ async def catalog_browse_page(
         min_duration_sec=min_duration_sec,
         max_duration_sec=max_duration_sec,
     )
+    hide_days = request.app.state.config.catalog_recently_played_hide_days
+    played_cutoff = (
+        (datetime.now(timezone.utc) - timedelta(days=hide_days)).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        if hide_days > 0
+        else None
+    )
     _decorate_placeholder_art(request, items)
     return templates.TemplateResponse(
         request,
@@ -174,6 +183,7 @@ async def catalog_browse_page(
             "sort_options": SORT_OPTIONS,
             "duration_options": DURATION_FILTER_LABELS,
             "mediacms_url": request.app.state.config.mediacms_url,
+            "played_cutoff": played_cutoff,
         },
     )
 
@@ -202,6 +212,14 @@ async def catalog_search_page(
     sort = sort if sort in _VALID_SORTS else "default"
     recently_played_days = (
         0 if is_admin else request.app.state.config.catalog_recently_played_hide_days
+    )
+    hide_days = request.app.state.config.catalog_recently_played_hide_days
+    played_cutoff = (
+        (datetime.now(timezone.utc) - timedelta(days=hide_days)).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        if hide_days > 0
+        else None
     )
     min_duration_sec, max_duration_sec = DURATION_FILTER_MAP.get(duration, (600, None))
     try:
@@ -254,6 +272,7 @@ async def catalog_search_page(
                 "duration_options": DURATION_FILTER_LABELS,
                 "mediacms_url": request.app.state.config.mediacms_url,
                 "error": "Search is temporarily unavailable. Please try again later.",
+                "played_cutoff": None,
             },
             status_code=503,
         )
@@ -287,6 +306,7 @@ async def catalog_search_page(
             "sort_options": SORT_OPTIONS,
             "duration_options": DURATION_FILTER_LABELS,
             "mediacms_url": request.app.state.config.mediacms_url,
+            "played_cutoff": played_cutoff,
         },
     )
 

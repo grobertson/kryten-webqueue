@@ -261,7 +261,8 @@ class _CatalogMixin:
         max_duration_sec: int | None = None,
     ) -> list[dict]:
         query = """
-            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url
+            SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
+                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at
             FROM catalog c
             WHERE c.friendly_token NOT IN (
                 SELECT spi.media_id FROM saved_playlist_items spi
@@ -432,6 +433,7 @@ class _CatalogMixin:
             return []
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
+                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at,
                    rank AS relevance
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid
