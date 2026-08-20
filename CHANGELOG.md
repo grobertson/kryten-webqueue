@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [0.38.21] - 2026-08-19
+
+### Fixed
+
+- **Playlist rotation never fired.** `CompletionRecorder._finalize()` passed the
+  `friendly_token` (short code) to `rotate_playlist_item_to_bottom()`, but
+  `saved_playlist_items.media_id` stores the full manifest URL. The lookup
+  always returned zero rows, so played items silently stayed at the top.
+  `rotate_playlist_item_to_bottom()` now resolves a `friendly_token` →
+  `manifest_url` via a catalog lookup before querying the playlist table.
+
+- **Queue lock gap during fallback loading.** `set_active_schedule()` (which
+  starts the immutable-event pay-to-play lock) was called only after all
+  fallback items were appended to the queue. For large fallback playlists this
+  left a gap of up to ~90 s where the pre-fire lock had expired but the event
+  lock had not yet started, allowing pay-to-play submissions during loading.
+  `set_active_schedule()` is now called immediately after the event items are
+  loaded (and `last_item_uid`/`last_item_media_id` are known), before the
+  fallback items loop.
+
+## [0.38.20] - 2026-08-19
+
+### Fixed
+
+- **YouTube download ENOENT on upload.** `download_video()` was using an
+  unfiltered `glob(f"{safe_filename}.*")` to locate the output file after
+  `yt-dlp` finished. `.fNNN.ext` format fragments (video/audio-only streams)
+  and `.part` partial-download files both sort before the final `.mp4`
+  alphabetically, so `downloaded_files[0]` would pick them. Since
+  `_cleanup_temp_fragments` immediately deletes fragments and partials, the
+  upload call received a path to a file that no longer existed, raising
+  `[Errno 2] No such file or directory`. The glob now filters out any candidate
+  whose name contains `.part` or matches `.fNNN.` (format-ID pattern). If
+  no final merged file is found after a nominally successful `yt-dlp` run, a
+  descriptive exception is raised so the retry loop handles it correctly.
+
 ## [0.38.19] - 2026-08-17
 
 ### Changed

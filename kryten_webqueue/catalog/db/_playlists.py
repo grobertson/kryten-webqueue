@@ -172,7 +172,19 @@ class _PlaylistsMixin:
         Played items sink to the bottom so the next fire always loads the
         oldest-played item last. Idempotent when the item is already at
         MAX(position). Returns the number of playlists rotated.
+
+        Accepts either the manifest URL or the friendly_token; resolves
+        friendly_token → manifest_url via the catalog so that callers using
+        the token (e.g. CompletionRecorder) match correctly against the URL
+        stored in saved_playlist_items.media_id.
         """
+        if media_type == "cm":
+            row = await self._fetch_one(
+                "SELECT manifest_url FROM catalog WHERE friendly_token = ? LIMIT 1",
+                [media_id],
+            )
+            if row and row.get("manifest_url"):
+                media_id = row["manifest_url"]
         playlists = await self._fetch_all(
             """
             SELECT spi.playlist_id

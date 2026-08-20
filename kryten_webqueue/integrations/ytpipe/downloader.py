@@ -1952,10 +1952,18 @@ class MediaDownloaderToMediaCMS:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
 
-                    # Find the downloaded file
-                    downloaded_files = list(
-                        self.download_dir.glob(f"{safe_filename}.*")
-                    )
+                    # Find the downloaded file — exclude .part files (incomplete
+                    # downloads) and .fNNN.ext fragment files (unmixed streams).
+                    # Both sorts before .mp4 alphabetically and are deleted by
+                    # _cleanup_temp_fragments, causing upload ENOENT.
+                    import re as _re
+
+                    all_candidates = list(self.download_dir.glob(f"{safe_filename}.*"))
+                    downloaded_files = [
+                        f for f in all_candidates
+                        if ".part" not in f.name
+                        and not _re.search(r"\.f\d+\.", f.name)
+                    ]
                     if downloaded_files:
                         downloaded_file = downloaded_files[0]
                         print(f"✅ SUCCESS! Downloaded: {downloaded_file}")
@@ -1964,6 +1972,12 @@ class MediaDownloaderToMediaCMS:
                         self._cleanup_temp_fragments(safe_filename)
 
                         return str(downloaded_file), info
+
+                    # yt-dlp exited cleanly but left no merged output — treat as failure
+                    stale = [f.name for f in all_candidates]
+                    raise Exception(
+                        f"yt-dlp produced no final output file (candidates: {stale})"
+                    )
 
                 except Exception as e:
                     last_error = e

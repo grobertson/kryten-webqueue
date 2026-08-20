@@ -99,6 +99,23 @@ async def fire_schedule(
             # fallback items are not part of the "scheduled event", so they do not
             # change last_item_uid (the event lock still lifts when the last EVENT
             # item begins) and they remain available for pay-to-play/search.
+
+            # Activate the event lock NOW — before fallback items are loaded — so
+            # pay-to-play is blocked during the entire fallback loading window.
+            # Previously this was called only after fallback items finished, which
+            # left a gap: the pre-fire lock expires at fire_at but the event lock
+            # didn't start until ~90 s later (for large fallback playlists).
+            now = datetime.now(UTC)
+            await db.set_active_schedule(
+                schedule_id=schedule_id,
+                playlist_id=playlist_id,
+                is_immutable=playlist.get("is_immutable", False),
+                started_at=now.isoformat(),
+                estimated_end_at=(now + timedelta(seconds=total_duration)).isoformat(),
+                last_item_uid=last_item_uid,
+                last_item_media_id=last_item_media_id,
+            )
+
             fallback_id = schedule.get("fallback_playlist_id")
             if fallback_id:
                 fallback_items = await db.get_saved_playlist_items(fallback_id)
@@ -123,19 +140,6 @@ async def fire_schedule(
                         f"Schedule {schedule_id}: appended {len(fallback_items)} fallback item(s) "
                         f"from playlist {fallback_id}"
                     )
-
-            # Update active schedule (recorded *inside* the suppression window so
-            # the event lock is live before promos resume).
-            now = datetime.now(UTC)
-            await db.set_active_schedule(
-                schedule_id=schedule_id,
-                playlist_id=playlist_id,
-                is_immutable=playlist.get("is_immutable", False),
-                started_at=now.isoformat(),
-                estimated_end_at=(now + timedelta(seconds=total_duration)).isoformat(),
-                last_item_uid=last_item_uid,
-                last_item_media_id=last_item_media_id,
-            )
 
             # Mark schedule as fired
             await db.mark_schedule_fired(schedule_id, now.isoformat())
