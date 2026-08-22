@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.40.1] - 2026-08-21
+
+### Fixed
+
+- **Admin catalog edit/re-enrich no longer 500s.** The re-enrich trigger sent
+  `steps="classify,meta,art,tags"`, a combo that is no longer in the
+  `catalog_enrich` schema (it now includes the `identify` step), so
+  `validate_params` raised `ValueError` → 500 on every edit with “Re-enrich after
+  save” enabled. Both the `/edit` and `/re-enrich` routes now send the valid
+  `classify,identify,meta,art,tags` combo, so an edited `imdb_tt` /
+  `override_artwork_tt_id` / `lookup_title` is re-resolved before meta/art.
+
 ## [0.40.0] - 2026-08-21
 
 ### Added

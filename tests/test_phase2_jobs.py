@@ -83,6 +83,19 @@ def test_validate_no_schema_returns_empty():
     assert validate_params([], {"anything": 1}) == {}
 
 
+def test_admin_edit_reenrich_steps_are_schema_valid():
+    # The admin edit/re-enrich routes hardcode this steps combo; if the schema's
+    # allowed combos change, validate_params must still accept it (regression:
+    # a stale "classify,meta,art,tags" combo previously 500'd the edit route).
+    from kryten_webqueue.jobs.tasks import CATALOG_ENRICH_SCHEMA
+
+    out = validate_params(
+        CATALOG_ENRICH_SCHEMA,
+        {"tokens": "abc", "force": "true", "steps": "classify,identify,meta,art,tags"},
+    )
+    assert out["steps"] == "classify,identify,meta,art,tags"
+
+
 # --- JobManager parameterized run ---
 
 

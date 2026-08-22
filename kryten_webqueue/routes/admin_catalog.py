@@ -161,7 +161,7 @@ async def enrich_item(
         params={
             "tokens": friendly_token,
             "force": "true",
-            "steps": "classify,meta,art,tags",
+            "steps": "classify,identify,meta,art,tags",
         },
         triggered_by=user.get("username"),
     )
@@ -306,7 +306,7 @@ async def edit_item(
             params={
                 "tokens": friendly_token,
                 "force": "true",
-                "steps": "classify,meta,art,tags",
+                "steps": "classify,identify,meta,art,tags",
             },
             triggered_by=username,
         )
