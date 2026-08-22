@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.40.4] - 2026-08-21
+
+### Added
+
+- **Keyboard pagination on browse/search pages.** The Left and Right arrow keys
+  now navigate to the previous/next page of results. Keys are ignored while
+  typing in a field or when a modal is open, and fall through to the browser's
+  default behaviour on the first/last page. Backed by a new global
+  `keybindings.js` registry (`Keybindings.register`/`unregister`) so future
+  shortcuts can be added without re-implementing the "don't steal keys while
+  typing" guard.
+
 ## [0.40.3] - 2026-08-21
 
 ### Fixed

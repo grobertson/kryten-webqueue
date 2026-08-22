@@ -168,7 +168,7 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">&larr; Prev</a>
+        <a id="pagination-prev" href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -184,7 +184,7 @@
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">Next &rarr;</a>
+        <a id="pagination-next" href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
@@ -475,6 +475,22 @@ async function clearPlayed(token) {
 }
 // queueItem / playNext / queueAsAdmin / showToast / escapeHtml are provided by /static/js/main.js
 initWatchlistButtons();
+
+// Left/Right arrows page through browse/search results. Handlers decline
+// (return false) when there's no prev/next link so the browser keeps its
+// default arrow behaviour on the first/last page.
+if (window.Keybindings) {
+    Keybindings.register('ArrowLeft', () => {
+        const prev = document.getElementById('pagination-prev');
+        if (!prev) return false;
+        window.location.href = prev.href;
+    });
+    Keybindings.register('ArrowRight', () => {
+        const next = document.getElementById('pagination-next');
+        if (!next) return false;
+        window.location.href = next.href;
+    });
+}
 </script>
 
 {% include "catalog/edit_item_modal.html" %}
