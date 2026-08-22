@@ -156,15 +156,18 @@ async def enrich_item(
     if not item:
         raise HTTPException(404, "Catalog item not found")
     job_manager = request.app.state.job_manager
-    result = await job_manager.run(
-        "catalog_enrich",
-        params={
-            "tokens": friendly_token,
-            "force": "true",
-            "steps": "classify,identify,meta,art,tags",
-        },
-        triggered_by=user.get("username"),
-    )
+    try:
+        result = await job_manager.run(
+            "catalog_enrich",
+            params={
+                "tokens": friendly_token,
+                "force": "true",
+                "steps": "classify,identify,meta,art,tags",
+            },
+            triggered_by=user.get("username"),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid enrichment request: {exc}") from exc
     return result
 
 
@@ -301,15 +304,18 @@ async def edit_item(
     # --- Optional re-enrichment trigger ---
     if body.get("re_enrich", False):
         job_manager = request.app.state.job_manager
-        result = await job_manager.run(
-            "catalog_enrich",
-            params={
-                "tokens": friendly_token,
-                "force": "true",
-                "steps": "classify,identify,meta,art,tags",
-            },
-            triggered_by=username,
-        )
+        try:
+            result = await job_manager.run(
+                "catalog_enrich",
+                params={
+                    "tokens": friendly_token,
+                    "force": "true",
+                    "steps": "classify,identify,meta,art,tags",
+                },
+                triggered_by=username,
+            )
+        except ValueError as exc:
+            raise HTTPException(400, f"Invalid enrichment request: {exc}") from exc
         enrich_job_id = result.get("run_id")
 
     return {

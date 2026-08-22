@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.40.2] - 2026-08-21
+
+### Changed
+
+- **Admin re-enrich returns `400` instead of `500` on an invalid job request.**
+  Both the `/edit` and `/re-enrich` routes now catch `ValueError` from
+  `catalog_enrich` param validation and surface it as `400 Bad Request` rather
+  than letting it become an unhandled 500 (defense against future
+  steps-schema drift).
+
 ## [0.40.1] - 2026-08-21
 
 ### Fixed
