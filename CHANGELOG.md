@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.40.3] - 2026-08-21
+
+### Fixed
+
+- **Browse/search pagination no longer bounces back to page 1 when a non-default
+  duration or sort is active.** Pagination links omitted the `duration` filter
+  (and carried a stale `hide_short=0` param), so paging landed on a URL without
+  `duration`; the client-side preference-restore then re-applied the saved filter
+  via `applyFacets()`, which rebuilds the URL without `page` — sending the user
+  to page 1. Links now carry `duration`, and `restorePreferences()` skips any URL
+  that already has a `page` param so explicit pagination is never hijacked.
+
 ## [0.40.2] - 2026-08-21
 
 ### Changed

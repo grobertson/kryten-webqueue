@@ -125,7 +125,7 @@
 </div>
 
 {% set sort_q = ('&sort=' ~ sort) if (sort and sort != 'default') else '' %}
-{% set hide_short_q = '' if hide_short else '&hide_short=0' %}
+{% set duration_q = ('&duration=' ~ duration) if (duration and duration != '10+') else '' %}
 {% set person_q = ('&person=' ~ active_person | urlencode) if active_person else '' %}
 {% set studio_q = ('&studio=' ~ active_studio | urlencode) if active_studio else '' %}
 {% if not items %}
@@ -168,7 +168,7 @@
 
 <div class="pagination">
     {% if page > 1 %}
-        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">&larr; Prev</a>
+        <a href="?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">&larr; Prev</a>
     {% endif %}
 
     {% set start_page = [1, page - 2] | max %}
@@ -177,14 +177,14 @@
         {% if p == page %}
             <span class="page-num page-current">{{ p }}</span>
         {% else %}
-            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm btn-page">{{ p }}</a>
+            <a href="?page={{ p }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm btn-page">{{ p }}</a>
         {% endif %}
     {% endfor %}
 
     <span class="page-info">of {{ total_pages }}</span>
 
     {% if page < total_pages %}
-        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ hide_short_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">Next &rarr;</a>
+        <a href="?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}{% if active_tag %}&tag={{ active_tag | urlencode }}{% endif %}{{ sort_q }}{{ duration_q }}{{ person_q }}{{ studio_q }}" class="btn btn-sm">Next &rarr;</a>
     {% endif %}
 </div>
 {% endblock %}
@@ -229,7 +229,11 @@ function applyFacets() {
     const sortSel = document.getElementById('sort-select');
     const durationSel = document.getElementById('duration-select');
     const url = new URL(window.location.href);
-    
+
+    // Never hijack an explicit paginated navigation: applyFacets() drops the
+    // page, so restoring a saved pref here would bounce the user back to page 1.
+    if (url.searchParams.has('page')) return;
+
     // Restore sort preference
     if (sortSel && !url.searchParams.has('sort')) {
         let saved = null;
