@@ -51,9 +51,13 @@ class ArtStep:
                     result.skipped += 1
                     continue
 
-                # Fetch the enrichment row to get cached poster_url
+                # Fetch the enrichment row to get cached poster_url. An artwork
+                # override must always resolve fresh, so ignore the cache for it.
                 state = await self._db.get_enrichment_state(cls.friendly_token)
-                poster_url = self._cached_poster_url(state)
+                if cls.override_artwork_tt_id:
+                    poster_url = None
+                else:
+                    poster_url = self._cached_poster_url(state)
 
                 # If not cached, query providers using lookup_title (NOT raw title)
                 if not poster_url:
@@ -117,6 +121,13 @@ class ArtStep:
 
         For TV episodes, search for the show poster (not episode-specific art).
         """
+        # Artwork-only override wins over everything: resolve the poster from the
+        # admin-set tt# without touching identity/metadata. Falls through on miss.
+        if cls.override_artwork_tt_id:
+            meta = await self._tmdb.search_by_imdb_id(cls.override_artwork_tt_id)
+            if meta.poster_url:
+                return meta.poster_url
+
         if not cls.lookup_title:
             return None
 

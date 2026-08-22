@@ -24,6 +24,13 @@
                 </div>
 
                 <div class="field">
+                    <label for="edit-art-tt">Artwork tt Override</label>
+                    <input type="text" id="edit-art-tt" maxlength="10" placeholder="e.g. tt0133093"
+                           pattern="tt\d{7,8}" title="Must be a valid IMDB tt identifier, e.g. tt0133093" />
+                    <span class="field-help">Poster-only override. Use this to fix artwork on hosted/riffed versions without changing identity or metadata. Not unique &mdash; many hosted items may share one underlying poster.</span>
+                </div>
+
+                <div class="field">
                     <label for="edit-description">Description</label>
                     <textarea id="edit-description" rows="6" maxlength="5000" placeholder="Synopsis, plot summary, etc."></textarea>
                 </div>
@@ -113,6 +120,7 @@ async function openEditModal(token) {
         document.getElementById('edit-token').value = token;
         document.getElementById('edit-title').value = item.title || '';
         document.getElementById('edit-imdb-tt').value = item.imdb_tt || '';
+        document.getElementById('edit-art-tt').value = item.override_artwork_tt_id || '';
         document.getElementById('edit-description').value = item.description || '';
         document.getElementById('edit-duration').value = item.duration_sec || '';
         document.getElementById('edit-content-type').value = enrichment.content_type || '';
@@ -152,6 +160,9 @@ document.getElementById('edit-item-form').addEventListener('submit', async (e) =
 
     const imdbTt = document.getElementById('edit-imdb-tt').value.trim();
     payload.imdb_tt = imdbTt || null;
+
+    const artTt = document.getElementById('edit-art-tt').value.trim();
+    payload.override_artwork_tt_id = artTt || null;
 
     const duration = document.getElementById('edit-duration').value;
     if (duration) payload.duration_sec = parseInt(duration);

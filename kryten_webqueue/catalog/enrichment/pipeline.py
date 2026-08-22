@@ -245,11 +245,12 @@ class CatalogEnrichmentPipeline:
                 has_real_art=(row.get("cover_art_source") or "") in ("tmdb", "omdb"),
                 imdb_tt=row.get("imdb_tt") or None,
                 tmdb_id=str(row["tmdb_id"]) if row.get("tmdb_id") else None,
+                override_artwork_tt_id=row.get("override_artwork_tt_id") or None,
                 description=row.get("description"),
                 source_url=row.get("manifest_url"),
             )
         # Fresh classification
-        return classify_item(
+        cls = classify_item(
             token,
             row["title"],
             row.get("duration_sec", 0),
@@ -259,6 +260,9 @@ class CatalogEnrichmentPipeline:
             imdb_tt=row.get("imdb_tt") or None,
             source_url=row.get("manifest_url"),
         )
+        # Artwork override is orthogonal to classification; attach it directly.
+        cls.override_artwork_tt_id = row.get("override_artwork_tt_id") or None
+        return cls
 
     async def _run_classify(
         self,

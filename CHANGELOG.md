@@ -2,6 +2,29 @@
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-08-21
+
+### Added
+
+- **Artwork-only IMDb `tt#` override (`override_artwork_tt_id`).** A new,
+  non-unique catalog column that decouples poster selection from identity. When
+  set on an item, the `art` enrichment step resolves the poster from this `tt#`
+  (via `search_by_imdb_id`) instead of `imdb_tt`/`tmdb_id`/title, and bypasses the
+  cached `poster_url` so the new art applies on the next `art` run. It is read
+  **only** by the art step — identity resolution, `imdb_tt` promotion, and metadata
+  ignore it — so hosted/riffed versions can be pointed at the correct (or official
+  riffed) poster without any risk of being misidentified as the uncut film.
+  Exposed as an “Artwork tt Override” field in the admin edit dialog; edits are
+  audit-logged. DB migration **v25** adds the column (additive, `NULL` = no change).
+
+### Fixed
+
+- **Admin catalog edit no longer 500s on a duplicate IMDb `tt#`.** Assigning an
+  `imdb_tt` already held by another item now returns `409 Conflict` naming the
+  conflicting item (title + friendly_token) instead of letting the
+  `catalog.imdb_tt` UNIQUE index raise an unhandled `IntegrityError`. A defensive
+  `IntegrityError`→409 guard also covers the write race after the pre-check.
+
 ## [0.39.0] - 2026-08-20
 
 ### Added

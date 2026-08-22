@@ -250,6 +250,8 @@ class ItemClassification:
     has_real_art: bool = False
     imdb_tt: str | None = None  # admin-set canonical IMDB tt identifier
     tmdb_id: str | None = None  # cached TMDB id from a prior identify run
+    # Artwork-only override: read solely by the art step, never by identity/meta.
+    override_artwork_tt_id: str | None = None
     description: str | None = None  # item description (scanned for an IMDb tt#)
     source_url: str | None = None  # source/manifest URL (scanned for an IMDb tt#)
 

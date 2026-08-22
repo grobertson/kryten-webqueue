@@ -1,4 +1,5 @@
 import re
+import sqlite3
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 
@@ -214,12 +215,50 @@ async def edit_item(
             )
         old_tt = item.get("imdb_tt")
         if raw_tt != old_tt:
+            # imdb_tt is UNIQUE across the catalog; reject duplicates with a
+            # clear 409 instead of letting the DB IntegrityError become a 500.
+            if raw_tt is not None:
+                conflict = await db.get_item_by_imdb_tt(raw_tt)
+                if conflict and conflict.get("friendly_token") != friendly_token:
+                    raise HTTPException(
+                        409,
+                        f"{raw_tt} is already assigned to "
+                        f"'{conflict.get('title')}' ({conflict.get('friendly_token')})",
+                    )
             catalog_fields["imdb_tt"] = raw_tt
             await db.log_item_edit(friendly_token, username, "imdb_tt", old_tt, raw_tt)
             changes_logged += 1
 
+    # override_artwork_tt_id: artwork-only tt# override. Same format check as
+    # imdb_tt but deliberately NOT unique — many hosted rows may point at one
+    # underlying/riffed poster. Read only by the art step, so it never affects
+    # identity or metadata.
+    if "override_artwork_tt_id" in body:
+        raw_art_tt = body["override_artwork_tt_id"] or None
+        if raw_art_tt is not None and not _IMDB_TT_RE.match(raw_art_tt):
+            raise HTTPException(
+                400,
+                "override_artwork_tt_id must match tt<7-8 digits> (e.g. tt0133093)",
+            )
+        old_art_tt = item.get("override_artwork_tt_id")
+        if raw_art_tt != old_art_tt:
+            catalog_fields["override_artwork_tt_id"] = raw_art_tt
+            await db.log_item_edit(
+                friendly_token,
+                username,
+                "override_artwork_tt_id",
+                old_art_tt,
+                raw_art_tt,
+            )
+            changes_logged += 1
+
     if catalog_fields:
-        await db.update_catalog(friendly_token, catalog_fields)
+        try:
+            await db.update_catalog(friendly_token, catalog_fields)
+        except sqlite3.IntegrityError as exc:
+            # Covers the imdb_tt UNIQUE index if another write won a race after
+            # the pre-check above.
+            raise HTTPException(409, f"Catalog update conflict: {exc}") from exc
 
     # --- Enrichment state fields ---
     enrichment_fields = {}

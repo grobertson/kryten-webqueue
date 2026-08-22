@@ -448,6 +448,15 @@ MIGRATIONS = [
     ALTER TABLE item_enrichment_state ADD COLUMN identify_source TEXT;
     ALTER TABLE item_enrichment_state ADD COLUMN identify_reason TEXT;
     """,
+    # v25: Artwork-only IMDB tt override. Decouples poster selection from
+    # identity: when set, the `art` enrichment step resolves the poster from
+    # this tt# instead of imdb_tt/tmdb_id/title. It is NOT unique (many hosted
+    # rows for the same film may point at one underlying/riffed poster) and is
+    # read ONLY by the art step — identity, promotion, and metadata ignore it,
+    # so hosted content can never be misidentified as the uncut film.
+    """
+    ALTER TABLE catalog ADD COLUMN override_artwork_tt_id TEXT;
+    """,
 ]
 
 

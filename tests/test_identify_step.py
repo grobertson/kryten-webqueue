@@ -51,7 +51,13 @@ def _cls(token: str, **kw) -> ItemClassification:
         lookup_title=kw.get("lookup_title", "Some Movie"),
         lookup_year=kw.get("lookup_year"),
     )
-    for k in ("description", "source_url", "imdb_tt", "tmdb_id"):
+    for k in (
+        "description",
+        "source_url",
+        "imdb_tt",
+        "tmdb_id",
+        "override_artwork_tt_id",
+    ):
         if k in kw:
             base[k] = kw[k]
     return ItemClassification(**base)
@@ -267,6 +273,23 @@ async def test_art_uses_cached_tmdb_id_no_search(db):
         await step.close()
     assert poster == "http://img/p.jpg"
     assert tmdb.by_tmdb_calls == [218]
+    assert tmdb.search_movie_calls == 0
+
+
+async def test_art_override_wins_over_identity(db):
+    # override_artwork_tt_id must be used for the poster and identity (imdb_tt)
+    # must NOT be consulted, so hosted content can never inherit uncut art/id.
+    cfg = SimpleNamespace(tmdb_api_key="", omdb_api_key="", image_dir="/tmp/imgs")
+    step = ArtStep(db=db, config=cfg)
+    tmdb = FakeTMDB(poster_url="http://img/override.jpg")
+    step._tmdb = tmdb
+    try:
+        cls = _cls("a02", imdb_tt="tt0000001", override_artwork_tt_id="tt9999999")
+        poster = await step._resolve_poster(cls)
+    finally:
+        await step.close()
+    assert poster == "http://img/override.jpg"
+    assert tmdb.by_imdb_calls == ["tt9999999"]
     assert tmdb.search_movie_calls == 0
 
 

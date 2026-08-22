@@ -905,6 +905,7 @@ class _CatalogMixin:
             "added_at",
             "synced_at",
             "imdb_tt",
+            "override_artwork_tt_id",
         }
         updates = []
         params = {"friendly_token": friendly_token}
