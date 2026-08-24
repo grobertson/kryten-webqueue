@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% block title %}Link a Device{% endblock %}
+{% block body_class %}user-page{% endblock %}
+
+{% block content %}
+<div class="link-device-page">
+    <div class="user-header">
+        <h1>Link a Device</h1>
+        <a href="/user/dashboard" class="back-link">&larr; Back to account</a>
+    </div>
+
+    <p class="link-intro">
+        Connect a Smart TV or tablet app to your account. Name the device, then
+        enter the one-time code it shows you into the app within 10 minutes.
+    </p>
+
+    <!-- Step 1: name + generate code -->
+    <div class="link-card">
+        <h2>Add a new device</h2>
+        <form id="link-form" autocomplete="off">
+            <label for="device-name">Device name</label>
+            <input type="text" id="device-name" name="device_name"
+                   maxlength="60" placeholder="Living Room TV" required>
+            <button type="submit" id="generate-btn">Generate code</button>
+        </form>
+
+        <div id="code-box" class="code-box hidden" aria-live="polite">
+            <p class="code-label">Enter this code on <span id="code-device"></span>:</p>
+            <div class="code-value" id="code-value"></div>
+            <p class="code-expiry" id="code-expiry"></p>
+        </div>
+        <p class="link-error hidden" id="link-error"></p>
+    </div>
+
+    <!-- Step 2: linked devices list -->
+    <div class="link-card">
+        <h2>Your linked devices</h2>
+        <div id="devices-list"><p class="empty-state">Loading…</p></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const listEl = document.getElementById('devices-list');
+const errEl = document.getElementById('link-error');
+const codeBox = document.getElementById('code-box');
+
+function showError(msg) {
+    errEl.textContent = msg;
+    errEl.classList.remove('hidden');
+}
+function clearError() {
+    errEl.textContent = '';
+    errEl.classList.add('hidden');
+}
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
+}
+function fmtDate(s) {
+    if (!s) return 'never';
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleString();
+}
+
+async function loadDevices() {
+    try {
+        const resp = await fetch('/user/devices', {credentials: 'same-origin'});
+        if (!resp.ok) throw new Error('load failed');
+        const data = await resp.json();
+        renderDevices(data.devices || []);
+    } catch (e) {
+        listEl.innerHTML = '<p class="empty-state">Could not load devices.</p>';
+    }
+}
+
+function renderDevices(devices) {
+    if (!devices.length) {
+        listEl.innerHTML = '<p class="empty-state">No linked devices yet.</p>';
+        return;
+    }
+    listEl.innerHTML = devices.map(d => `
+        <div class="device-row" data-id="${d.id}">
+            <div class="device-meta">
+                <span class="device-name">${escapeHtml(d.device_name)}</span>
+                <span class="device-prefix">${escapeHtml(d.key_prefix)}…</span>
+                <span class="device-dates">Added ${escapeHtml(fmtDate(d.created_at))}
+                    · Last used ${escapeHtml(fmtDate(d.last_used_at))}</span>
+            </div>
+            <button class="device-revoke" data-id="${d.id}"
+                    data-name="${escapeHtml(d.device_name)}">Revoke</button>
+        </div>
+    `).join('');
+    listEl.querySelectorAll('.device-revoke').forEach(btn => {
+        btn.addEventListener('click', () => revokeDevice(btn.dataset.id, btn.dataset.name));
+    });
+}
+
+async function revokeDevice(id, name) {
+    if (!confirm(`Revoke access for "${name}"? The device will need to be linked again.`)) {
+        return;
+    }
+    try {
+        const resp = await fetch(`/user/devices/${id}`, {
+            method: 'DELETE', credentials: 'same-origin'
+        });
+        if (!resp.ok) throw new Error('revoke failed');
+        loadDevices();
+    } catch (e) {
+        showError('Could not revoke device. Try again.');
+    }
+}
+
+document.getElementById('link-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    clearError();
+    const name = document.getElementById('device-name').value.trim();
+    if (!name) { showError('Please name the device.'); return; }
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    try {
+        const resp = await fetch('/user/devices/link-code', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({device_name: name}),
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            showError(data.detail || 'Could not generate a code.');
+            return;
+        }
+        document.getElementById('code-device').textContent = data.device_name;
+        document.getElementById('code-value').textContent = data.code;
+        const mins = Math.round((data.expires_in_sec || 600) / 60);
+        document.getElementById('code-expiry').textContent =
+            `Expires in ${mins} minutes. Enter it on your device now.`;
+        codeBox.classList.remove('hidden');
+        document.getElementById('device-name').value = '';
+        loadDevices();
+    } catch (e) {
+        showError('Could not generate a code. Try again.');
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+loadDevices();
+</script>
+{% endblock %}

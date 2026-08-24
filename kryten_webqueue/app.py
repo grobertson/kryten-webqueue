@@ -38,6 +38,8 @@ from .routes.admin_promos import router as admin_promos_router
 from .routes.admin_moderation import router as admin_moderation_router
 from .routes.feedback import router as feedback_router
 from .routes.admin_feedback import router as admin_feedback_router
+from .routes.devices import router as devices_router
+from .routes.public_api import router as public_api_router
 from .routes.pages import router as pages_router
 from .ws.handler import router as ws_router
 
@@ -100,6 +102,7 @@ async def lifespan(app: FastAPI):
     from .jobs.tasks import (
         catalog_enrich_job,
         catalog_blackout_job,
+        device_key_ban_reconcile_job,
         fetch_job,
         fetch_queue_add_job,
         fetch_queue_drain_job,
@@ -109,6 +112,7 @@ async def lifespan(app: FastAPI):
         tmdb_coverage_report_job,
         CATALOG_ENRICH_SCHEMA,
         CATALOG_BLACKOUT_SCHEMA,
+        DEVICE_KEY_BAN_RECONCILE_SCHEMA,
         FETCH_SCHEMA,
         FETCH_QUEUE_ADD_SCHEMA,
         FETCH_QUEUE_DRAIN_SCHEMA,
@@ -152,6 +156,12 @@ async def lifespan(app: FastAPI):
         schema=CATALOG_BLACKOUT_SCHEMA,
     )
     job_manager.register(
+        "device_key_ban_reconcile",
+        device_key_ban_reconcile_job,
+        label="Device Key Ban Reconcile (revoke banned users' API keys)",
+        schema=DEVICE_KEY_BAN_RECONCILE_SCHEMA,
+    )
+    job_manager.register(
         "motd_posters",
         motd_posters_job,
         label="MOTD Posters (weekend poster grid)",
@@ -181,6 +191,17 @@ async def lifespan(app: FastAPI):
 
     # Cron-based job scheduler (persists schedules to job_schedules table)
     job_scheduler = JobScheduler(db, job_manager)
+    # Seed a default schedule for the security-sensitive ban-reconcile job so it
+    # runs periodically out-of-the-box. Only seeded when absent, so an admin's
+    # cron/active changes are preserved (disable it by deactivating, not
+    # deleting — a deleted row is re-seeded on next startup).
+    if await db.get_job_schedule("device_key_ban_reconcile") is None:
+        await db.upsert_job_schedule(
+            "device_key_ban_reconcile",
+            "*/15 * * * *",
+            label="Device Key Ban Reconcile (revoke banned users' API keys)",
+            created_by="system",
+        )
     await job_scheduler.start()
     app.state.job_scheduler = job_scheduler
 
@@ -233,6 +254,13 @@ async def lifespan(app: FastAPI):
     # feedback/suggestion endpoints (per-user, namespaced keys).
     app.state.rate_limiter = RateLimiter()
     app.state.feedback_rate_limiter = RateLimiter(max_requests=12, window_seconds=300)
+    # Device linking: throttle pad generation (per user) and redemption (per IP).
+    app.state.device_link_rate_limiter = RateLimiter(
+        max_requests=10, window_seconds=600
+    )
+    app.state.device_exchange_rate_limiter = RateLimiter(
+        max_requests=10, window_seconds=600
+    )
     # Hard per-user submission quota for feedback and suggestions: 2/day, 6/week
     # (namespaced keys, checked in addition to the short-burst limiter above).
     app.state.feedback_quota_limiter = QuotaLimiter(
@@ -376,6 +404,8 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_moderation_router)
     app.include_router(feedback_router)
     app.include_router(admin_feedback_router)
+    app.include_router(devices_router)
+    app.include_router(public_api_router)
     app.include_router(ws_router)
 
     # Health check

@@ -13,6 +13,7 @@ from ._people import _PeopleMixin
 from ._enrichment import _EnrichmentMixin
 from ._fetch_queue import _FetchQueueMixin
 from ._blackouts import _BlackoutMixin
+from ._devices import _DevicesMixin
 
 
 class Database(
@@ -25,6 +26,7 @@ class Database(
     _EnrichmentMixin,
     _FetchQueueMixin,
     _BlackoutMixin,
+    _DevicesMixin,
     _DBBase,
 ):
     """Async SQLite database wrapper."""

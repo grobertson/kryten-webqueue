@@ -7,10 +7,14 @@ app config so the frontend does not need to specify it.
 
 from typing import Literal
 
+import logging
+
 from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 
 from ..auth.session import require_admin
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/moderation", tags=["admin"])
 
@@ -88,13 +92,32 @@ async def add_entry(
     user: dict = Depends(require_admin),
 ):
     """Add a moderation entry. The logged-in admin is recorded as moderator."""
-    return await _api(request).mod_add_entry(
+    result = await _api(request).mod_add_entry(
         _channel(request),
         username=body.username,
         action=body.action,
         reason=body.reason,
         moderator=user["username"],
     )
+    # A ban should also cut off any linked-device API keys the user still holds.
+    # (Only covers bans issued through webqueue; bans made directly in CyTube or
+    # by the moderator service do not reach this path.)
+    if body.action == "ban":
+        try:
+            revoked = await request.app.state.db.revoke_user_device_keys(body.username)
+            if revoked:
+                logger.info(
+                    "Revoked %d device API key(s) for banned user %s",
+                    revoked,
+                    body.username,
+                )
+        except Exception:  # noqa: BLE001 — key revocation must not fail the ban
+            logger.warning(
+                "Failed to revoke device keys for banned user %s",
+                body.username,
+                exc_info=True,
+            )
+    return result
 
 
 @router.delete("/entries/{username}")

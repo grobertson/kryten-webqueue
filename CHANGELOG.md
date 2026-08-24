@@ -2,6 +2,42 @@
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-08-24
+
+### Added
+
+- **Public API for third-party client apps (Smart TV / tablet device linking).**
+  A new key-authenticated API under `/api/public/v1` exposes the live channel
+  state so an external application can render the equivalent of the `/queue`
+  page. See [docs/PUBLIC_API.md](docs/PUBLIC_API.md) for the full contract and a
+  developer's guide.
+  - **Device linking flow.** A logged-in user visits **`/link`** ("Link a
+    Device", also reachable from the account/Z-coin dashboard), names the
+    device, and receives a **5-character, single-use, uppercase-alphanumeric
+    one-time pad** (10-minute TTL, unambiguous alphabet). The device redeems it
+    at **`POST /api/public/v1/link`** and receives a long-lived API key
+    (`Authorization: Bearer <key>`). The pad is destroyed on redemption (one key
+    per pad); a user may link multiple devices, each with its own named key.
+  - **Data endpoints (Bearer key required):** `GET /api/public/v1/current`
+    (now playing — title, synopsis, total/elapsed/remaining time),
+    `GET /api/public/v1/queue` (ordered queue with predicted start times), and
+    `GET /api/public/v1/events` (upcoming enabled scheduled playlists).
+  - **Device management.** `GET/POST/DELETE /user/devices*` (session-cookie) back
+    a dashboard list where users name, view, and **revoke** linked devices. Keys
+    are stored only as a SHA-256 hash plus a non-secret display prefix; the
+    plaintext key is returned exactly once at redemption and never again.
+  - **Revoke-on-ban.** Issuing a `ban` through the webqueue admin moderation UI
+    now also revokes that user's device keys. A scheduled
+    **`device_key_ban_reconcile`** job additionally reconciles key holders
+    against kryten-moderator's authoritative ban list (via api-gate,
+    case-insensitive) to cover bans issued directly in CyTube or by the
+    moderator service. It is seeded to run every 15 minutes by default
+    (adjustable/disable-able via the admin job scheduler; deactivate rather than
+    delete, as a deleted schedule is re-seeded on startup).
+  - **Abuse protection.** Per-user throttling on pad generation and per-IP
+    throttling on the redemption endpoint; strict code-format validation.
+  - New DB migration **v27** (`device_link_codes`, `device_api_keys`).
+
 ## [0.41.0] - 2026-08-24
 
 ### Fixed

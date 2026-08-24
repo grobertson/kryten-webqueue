@@ -362,6 +362,14 @@ async def user_dashboard_page(request: Request):
     return templates.TemplateResponse(request, "user/dashboard.html", {"user": user})
 
 
+@router.get("/link", response_class=HTMLResponse)
+async def link_device_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "user/link_device.html", {"user": user})
+
+
 @router.get("/user/my-list", response_class=HTMLResponse)
 async def my_list_page(request: Request, page: int = 1):
     user = _get_user_or_none(request)

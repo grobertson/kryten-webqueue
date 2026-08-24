@@ -738,6 +738,72 @@ async def catalog_blackout_job(params: dict, ctx) -> dict:
     }
 
 
+# ── Device-key ban reconciliation job ──────────────────────────────────────────
+
+
+DEVICE_KEY_BAN_RECONCILE_SCHEMA = [
+    {
+        "name": "dry_run",
+        "type": "bool",
+        "default": False,
+        "label": "Dry run (report only, no key revocation)",
+    },
+]
+
+
+async def device_key_ban_reconcile_job(params: dict, ctx) -> dict:
+    """Revoke public-API device keys held by currently-banned users.
+
+    Webqueue is HTTP-only, so it never sees a live "user banned" event. Bans
+    issued through the webqueue admin UI already revoke keys inline; this job
+    closes the gap for bans made directly in CyTube or by kryten-moderator by
+    reconciling against the moderator's authoritative ban list (fetched via
+    api-gate). Matching is case-insensitive.
+    """
+    dry_run = str(params.get("dry_run", "")).lower() in ("1", "true") or (
+        params.get("dry_run") is True
+    )
+
+    key_users = await ctx.db.device_key_usernames()
+    if not key_users:
+        return {
+            "key_holders": 0,
+            "banned_key_holders": 0,
+            "revoked": 0,
+            "dry_run": dry_run,
+        }
+
+    channel = ctx.config.channel
+    resp = await ctx.api_gate.mod_list_entries(channel, action_filter="ban")
+    entries = resp.get("entries") or []
+    banned_lower = {str(e["username"]).lower() for e in entries if e.get("username")}
+
+    targets = [u for u in key_users if u.lower() in banned_lower]
+
+    revoked = 0
+    for username in targets:
+        if dry_run:
+            revoked += len(await ctx.db.list_device_keys(username))
+        else:
+            revoked += await ctx.db.revoke_user_device_keys(username)
+
+    if targets:
+        logger.info(
+            "device_key_ban_reconcile: %d banned key-holder(s), %d key(s) %s (dry_run=%s)",
+            len(targets),
+            revoked,
+            "would be revoked" if dry_run else "revoked",
+            dry_run,
+        )
+    return {
+        "key_holders": len(key_users),
+        "banned_key_holders": len(targets),
+        "revoked": revoked,
+        "targets": sorted(targets),
+        "dry_run": dry_run,
+    }
+
+
 # ── Fetch queue jobs ───────────────────────────────────────────────────────────
 
 

@@ -474,6 +474,41 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_catalog_blackouts_expires ON catalog_blackouts(expires_at);
     """,
+    # v27: Device linking for the public API (Smart-TV / tablet apps).
+    #
+    # device_link_codes are short-lived, single-use one-time pads: a logged-in
+    # user names a device and receives a 5-char code (10-min TTL). The device
+    # POSTs the code to /api/public/v1/link to exchange it for an API key. The
+    # code is deleted the moment it is successfully redeemed (one key per pad).
+    #
+    # device_api_keys stores issued keys as an irreversible SHA-256 hash plus a
+    # non-secret display prefix and the user-chosen device name. The full key is
+    # returned exactly once (at exchange) and never persisted in plaintext. A
+    # user may hold many keys (one per linked device); revoking a row (via the
+    # dashboard, or automatically on ban) permanently disables that device.
+    """
+    CREATE TABLE IF NOT EXISTS device_link_codes (
+        code        TEXT PRIMARY KEY,
+        username    TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        expires_at  TIMESTAMP NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_device_link_codes_user ON device_link_codes(username);
+    CREATE INDEX IF NOT EXISTS idx_device_link_codes_expires ON device_link_codes(expires_at);
+
+    CREATE TABLE IF NOT EXISTS device_api_keys (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        username     TEXT NOT NULL,
+        device_name  TEXT NOT NULL,
+        key_prefix   TEXT NOT NULL,
+        key_hash     TEXT NOT NULL UNIQUE,
+        created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_device_api_keys_user ON device_api_keys(username);
+    CREATE INDEX IF NOT EXISTS idx_device_api_keys_hash ON device_api_keys(key_hash);
+    """,
 ]
 
 

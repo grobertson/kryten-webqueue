@@ -2006,3 +2006,101 @@ a.np-chip {
 .res-ok { color: var(--accent); border-color: var(--accent); background: rgba(108, 92, 231, 0.15); }
 .res-unresolved { color: var(--warning); border-color: var(--warning); background: rgba(253, 203, 110, 0.12); }
 
+
+/* ── Link a Device (public API device linking) ─────────────────────────── */
+.account-links {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+}
+.account-link {
+    display: inline-block;
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+}
+.account-link:hover { color: var(--accent-hover); }
+
+.link-device-page { max-width: 640px; margin: 0 auto; }
+.link-device-page .back-link {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+}
+.link-intro { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+.link-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow);
+}
+.link-card h2 { margin-top: 0; }
+.link-card label { display: block; margin-bottom: 0.35rem; font-weight: 600; }
+.link-card input[type="text"] {
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    margin-bottom: 0.75rem;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+.link-card button {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: none;
+    border-radius: var(--radius);
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.link-card button:disabled { opacity: 0.6; cursor: default; }
+
+.code-box {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border: 1px dashed var(--accent);
+    border-radius: var(--radius);
+    text-align: center;
+}
+.code-label { margin: 0 0 0.5rem; color: var(--text-secondary); }
+.code-value {
+    font-family: var(--font-mono);
+    font-size: 2.75rem;
+    letter-spacing: 0.5rem;
+    font-weight: 700;
+    color: var(--accent);
+}
+.code-expiry { margin: 0.5rem 0 0; color: var(--text-secondary); font-size: 0.85rem; }
+.link-error { color: var(--danger); margin-top: 0.75rem; }
+
+.device-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.device-row:last-child { border-bottom: none; }
+.device-meta { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.device-name { font-weight: 600; }
+.device-prefix { font-family: var(--font-mono); color: var(--text-secondary); font-size: 0.8rem; }
+.device-dates { color: var(--text-secondary); font-size: 0.8rem; }
+.device-revoke {
+    flex-shrink: 0;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+    border-radius: var(--radius);
+    padding: 0.4rem 0.8rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+.device-revoke:hover { background: var(--danger); color: #fff; }
+.hidden { display: none; }
