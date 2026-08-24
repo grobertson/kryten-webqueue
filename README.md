@@ -89,6 +89,16 @@ sudo nginx -t && sudo systemctl reload nginx
 ### WebSocket
 - `ws://host/ws` — Real-time queue updates (auth via session cookie)
 
+### Public API (third-party clients)
+- `POST /api/public/v1/link` — Exchange a one-time device code for an API key
+- `GET /api/public/v1/current` — Now playing
+- `GET /api/public/v1/queue` — Live queue with predicted start times
+- `GET /api/public/v1/events` — Upcoming scheduled events
+
+Key-authenticated (`Authorization: Bearer <key>`) endpoints for Smart TV /
+tablet apps. Users link a device at `/link`. Full contract, JSON schemas, and a
+developer's guide: [docs/PUBLIC_API.md](docs/PUBLIC_API.md).
+
 ## Dependencies
 
 - Python ≥ 3.12
