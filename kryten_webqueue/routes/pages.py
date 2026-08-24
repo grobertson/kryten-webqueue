@@ -325,11 +325,18 @@ async def catalog_item_page(request: Request, friendly_token: str):
     if not user:
         return RedirectResponse("/auth/login")
     db = request.app.state.db
-    item = await db.get_item_admin(friendly_token)
+    is_admin = (user.get("rank") or 0) >= 3
+    # Regular users must not reach reserved (immutable/promo) or blacked-out
+    # items even via a direct link; admins see everything, dimmed if blacked out.
+    if is_admin:
+        item = await db.get_item_admin(friendly_token)
+    else:
+        item = await db.get_item(friendly_token)
     if not item:
         return templates.TemplateResponse(
             request, "catalog/item_not_found.html", {"user": user}, status_code=404
         )
+    blackout_active = await db.is_blackout(friendly_token) if is_admin else False
     facets = await db.get_item_facets(friendly_token)
     return templates.TemplateResponse(
         request,
@@ -337,6 +344,7 @@ async def catalog_item_page(request: Request, friendly_token: str):
         {
             "user": user,
             "item": item,
+            "blackout_active": blackout_active,
             "categories": facets.get("categories") or [],
             "tags": facets.get("tags") or [],
             "people": facets.get("people") or {},

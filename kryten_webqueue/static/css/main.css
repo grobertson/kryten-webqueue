@@ -319,6 +319,29 @@ a:hover {
     transform: translateY(-4px);
     box-shadow: var(--shadow);
 }
+/* Admin-only: an item under an active weekend blackout. Regular users never
+   receive these rows; the dim + badge signal "a normal user would not see this". */
+.catalog-card.blacked-out {
+    position: relative;
+    opacity: 0.55;
+    filter: grayscale(0.4);
+}
+.catalog-card.blacked-out:hover {
+    opacity: 0.85;
+}
+.blackout-badge {
+    position: absolute;
+    top: 0.4rem;
+    left: 0.4rem;
+    z-index: 2;
+    padding: 0.15rem 0.4rem;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    border-radius: 3px;
+    background: #b3261e;
+    color: #fff;
+}
 .card-poster {
     aspect-ratio: 2/3;
     overflow: hidden;

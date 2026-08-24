@@ -115,6 +115,57 @@ def _hidden_exclusion(alias: str = "c") -> tuple[str, list]:
     return sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES]
 
 
+# Saved-playlist items usually store ``media_id`` as the CyTube *manifest URL*
+# (e.g. ``.../api/v1/media/cytube/<token>.json?format=json``), though some
+# legacy/admin-added rows carry the bare friendly_token. A naive
+# ``friendly_token = media_id`` compare misses the URL form, so resolve either
+# shape back to a friendly_token via the catalog to exclude reserved
+# (immutable / promo-pool) items from public results.
+def _reserved_exclusion(alias: str = "c") -> tuple[str, list]:
+    """SQL AND-fragment (+ params) excluding reserved (immutable/promo) items.
+
+    Prefixed with ``AND`` so it can be appended to an existing WHERE clause that
+    references the catalog row under ``alias``.
+    """
+    sql = f"""
+            AND {alias}.friendly_token NOT IN (
+                SELECT c2.friendly_token FROM saved_playlist_items spi
+                JOIN saved_playlists sp ON spi.playlist_id = sp.id
+                JOIN catalog c2
+                  ON c2.manifest_url = spi.media_id
+                  OR c2.friendly_token = spi.media_id
+                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL)
+                  AND spi.media_type = 'cm'
+            )
+    """
+    return sql, []
+
+
+def _blackout_exclusion(alias: str = "c") -> tuple[str, list]:
+    """SQL AND-fragment (+ params) hiding items under an active weekend blackout.
+
+    Keyed on the bare friendly_token; ``expires_at`` is compared against
+    ``datetime('now')`` (UTC). Prefixed with ``AND`` for appending to a WHERE.
+    """
+    sql = f"""
+            AND {alias}.friendly_token NOT IN (
+                SELECT friendly_token FROM catalog_blackouts
+                WHERE expires_at > datetime('now')
+            )
+    """
+    return sql, []
+
+
+# Computed SELECT column: 1 when the catalog row (alias ``c``) is under an active
+# weekend blackout. Regular users never receive these rows; it lets admin views
+# dim blacked-out items to show "a normal user would not see this".
+_BLACKOUT_ACTIVE_COL = (
+    "EXISTS (SELECT 1 FROM catalog_blackouts b "
+    "WHERE b.friendly_token = c.friendly_token "
+    "AND b.expires_at > datetime('now')) AS blackout_active"
+)
+
+
 def _promo_hidden_media_subquery() -> tuple[str, list]:
     """Subquery (+ params) yielding media_ids that are promos/bumpers.
 
@@ -262,19 +313,24 @@ class _CatalogMixin:
     ) -> list[dict]:
         query = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
-                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at
+                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at,
+                   {blackout_col}
             FROM catalog c
-            WHERE c.friendly_token NOT IN (
-                SELECT spi.media_id FROM saved_playlist_items spi
-                JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-            )
-        """
+            WHERE 1=1
+        """.format(
+            blackout_col=_BLACKOUT_ACTIVE_COL
+        )
         params: list = []
+        resv_sql, resv_params = _reserved_exclusion("c")
+        query += resv_sql
+        params.extend(resv_params)
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             query += excl_sql
             params.extend(excl_params)
+            bo_sql, bo_params = _blackout_exclusion("c")
+            query += bo_sql
+            params.extend(bo_params)
         if recently_played_days > 0:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
@@ -352,17 +408,19 @@ class _CatalogMixin:
     ) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
-            WHERE c.friendly_token NOT IN (
-                SELECT spi.media_id FROM saved_playlist_items spi
-                JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-            )
+            WHERE 1=1
         """
         params: list = []
+        resv_sql, resv_params = _reserved_exclusion("c")
+        query += resv_sql
+        params.extend(resv_params)
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             query += excl_sql
             params.extend(excl_params)
+            bo_sql, bo_params = _blackout_exclusion("c")
+            query += bo_sql
+            params.extend(bo_params)
         if recently_played_days > 0:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             query += rp_sql
@@ -434,21 +492,25 @@ class _CatalogMixin:
         sql = """
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
                    (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at,
-                   rank AS relevance
+                   rank AS relevance,
+                   {blackout_col}
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid
             WHERE catalog_fts MATCH ?
-              AND c.friendly_token NOT IN (
-                  SELECT spi.media_id FROM saved_playlist_items spi
-                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-              )
-        """
+        """.format(
+            blackout_col=_BLACKOUT_ACTIVE_COL
+        )
         params: list = [sanitized]
+        resv_sql, resv_params = _reserved_exclusion("c")
+        sql += resv_sql
+        params.extend(resv_params)
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+            bo_sql, bo_params = _blackout_exclusion("c")
+            sql += bo_sql
+            params.extend(bo_params)
         if recently_played_days > 0:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
@@ -495,17 +557,18 @@ class _CatalogMixin:
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid
             WHERE catalog_fts MATCH ?
-              AND c.friendly_token NOT IN (
-                  SELECT spi.media_id FROM saved_playlist_items spi
-                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-              )
         """
         params: list = [sanitized]
+        resv_sql, resv_params = _reserved_exclusion("c")
+        sql += resv_sql
+        params.extend(resv_params)
         if not show_hidden:
             excl_sql, excl_params = _hidden_exclusion("c")
             sql += excl_sql
             params.extend(excl_params)
+            bo_sql, bo_params = _blackout_exclusion("c")
+            sql += bo_sql
+            params.extend(bo_params)
         if recently_played_days > 0:
             rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
             sql += rp_sql
@@ -523,16 +586,10 @@ class _CatalogMixin:
         return row["cnt"] if row else 0
 
     async def get_item(self, friendly_token: str) -> dict | None:
-        sql = """
-            SELECT * FROM catalog
-            WHERE friendly_token = ?
-              AND friendly_token NOT IN (
-                  SELECT spi.media_id FROM saved_playlist_items spi
-                  JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                  WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-              )
-        """
-        return await self._fetch_one(sql, [friendly_token])
+        resv_sql, resv_params = _reserved_exclusion("catalog")
+        bo_sql, bo_params = _blackout_exclusion("catalog")
+        sql = "SELECT * FROM catalog WHERE friendly_token = ?" + resv_sql + bo_sql
+        return await self._fetch_one(sql, [friendly_token, *resv_params, *bo_params])
 
     async def get_item_admin(self, friendly_token: str) -> dict | None:
         return await self._fetch_one(
@@ -726,12 +783,18 @@ class _CatalogMixin:
         }
 
     async def is_restricted(self, friendly_token: str) -> bool:
+        # media_id holds the manifest URL (or, for legacy rows, the bare token),
+        # so resolve either shape back to a friendly_token via the catalog
+        # rather than comparing the token to a URL directly.
         sql = """
             SELECT 1 FROM saved_playlist_items spi
             JOIN saved_playlists sp ON spi.playlist_id = sp.id
+            JOIN catalog c2
+              ON c2.manifest_url = spi.media_id
+              OR c2.friendly_token = spi.media_id
             WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL)
               AND spi.media_type = 'cm'
-              AND spi.media_id = ?
+              AND c2.friendly_token = ?
             LIMIT 1
         """
         row = await self._fetch_one(sql, [friendly_token])
@@ -772,14 +835,16 @@ class _CatalogMixin:
             FROM tags t
             JOIN catalog_tags ct ON ct.tag_id = t.id
             JOIN catalog c ON ct.friendly_token = c.friendly_token
-            WHERE c.friendly_token NOT IN (
-                SELECT spi.media_id FROM saved_playlist_items spi
-                JOIN saved_playlists sp ON spi.playlist_id = sp.id
-                WHERE (sp.is_immutable = 1 OR sp.promo_type IS NOT NULL) AND spi.media_type = 'cm'
-            )
+            WHERE 1=1
         """
         params: list = []
+        resv_sql, resv_params = _reserved_exclusion("c")
+        sql += resv_sql
+        params.extend(resv_params)
         if not show_hidden:
+            bo_sql, bo_params = _blackout_exclusion("c")
+            sql += bo_sql
+            params.extend(bo_params)
             ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
             sql += f" AND t.name NOT IN ({ph})"
             params.extend(HIDDEN_TAG_NAMES)

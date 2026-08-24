@@ -27,7 +27,9 @@ async def admin_add(request: Request, user: dict = Depends(require_admin)):
     if await db.is_pre_fire_lock_active():
         raise HTTPException(423, "Queue is locked: scheduled playlist firing soon")
 
-    item = await db.get_item(friendly_token)
+    # Admins bypass catalog visibility filters (reserved/blackout) — they are
+    # in control of the catalog and may queue any item manually.
+    item = await db.get_item_admin(friendly_token)
     if not item:
         raise HTTPException(404, "Item not found in catalog")
 

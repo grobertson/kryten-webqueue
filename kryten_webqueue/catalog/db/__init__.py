@@ -12,6 +12,7 @@ from ._watchlist import _WatchlistMixin
 from ._people import _PeopleMixin
 from ._enrichment import _EnrichmentMixin
 from ._fetch_queue import _FetchQueueMixin
+from ._blackouts import _BlackoutMixin
 
 
 class Database(
@@ -23,17 +24,10 @@ class Database(
     _PeopleMixin,
     _EnrichmentMixin,
     _FetchQueueMixin,
+    _BlackoutMixin,
     _DBBase,
 ):
     """Async SQLite database wrapper."""
-
-
-__all__ = [
-    "Database",
-    "HIDDEN_ITEM_TAG",
-    "HIDDEN_CATEGORY_NAMES",
-    "HIDDEN_TAG_NAMES",
-]
 
 
 __all__ = [

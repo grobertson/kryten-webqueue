@@ -59,7 +59,9 @@
 
 <div class="catalog-grid">
     {% for item in items %}
-    <div class="catalog-card" data-token="{{ item.friendly_token }}">
+    <div class="catalog-card{% if item.blackout_active %} blacked-out{% endif %}" data-token="{{ item.friendly_token }}"
+         {% if item.blackout_active %}title="Weekend blackout — a regular user would not see this item yet"{% endif %}>
+        {% if item.blackout_active %}<span class="blackout-badge" aria-label="Blacked out">BLACKOUT</span>{% endif %}
         <a class="card-poster" href="/catalog/item/{{ item.friendly_token }}">
             {% if item.cover_art_source in ('tmdb', 'omdb') and item.cover_art_path %}
                 <img src="/images/{{ item.cover_art_path }}/400.webp"

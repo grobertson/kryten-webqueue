@@ -6,6 +6,12 @@
 <div class="item-detail">
     <a href="javascript:history.back()" class="back-link">&larr; Back</a>
 
+    {% if blackout_active %}
+    <div class="admin-hidden-notice">
+        <span><strong>Weekend blackout:</strong> a regular user would not see this item yet. It is hidden from the catalog and pay-to-play until its blackout expires.</span>
+    </div>
+    {% endif %}
+
     <div class="item-detail-layout">
         <div class="item-detail-poster">
             {% if item.cover_art_path %}

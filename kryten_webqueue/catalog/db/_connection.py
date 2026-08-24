@@ -457,6 +457,23 @@ MIGRATIONS = [
     """
     ALTER TABLE catalog ADD COLUMN override_artwork_tt_id TEXT;
     """,
+    # v26: Weekend blackout window. Items that appear in an upcoming weekend
+    # sheet (column E/F dropsugar URLs) are hidden from regular users until
+    # ``expires_at`` — set to the end of the *following* weekend so replays stay
+    # hidden through that week. Keyed on the bare friendly_token (which also
+    # sidesteps the manifest_url stored in saved_playlist_items.media_id).
+    # Populated by the standalone ``catalog_blackout`` maintenance job; admins
+    # bypass the filter but see a blackout indicator. Compared against
+    # ``datetime('now')`` (UTC); the multi-day window makes the tz offset moot.
+    """
+    CREATE TABLE IF NOT EXISTS catalog_blackouts (
+        friendly_token TEXT PRIMARY KEY,
+        reason         TEXT,
+        expires_at     TIMESTAMP NOT NULL,
+        created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_catalog_blackouts_expires ON catalog_blackouts(expires_at);
+    """,
 ]
 
 

@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
     # with a clear message rather than crashing startup.
     from .jobs.tasks import (
         catalog_enrich_job,
+        catalog_blackout_job,
         fetch_job,
         fetch_queue_add_job,
         fetch_queue_drain_job,
@@ -107,6 +108,7 @@ async def lifespan(app: FastAPI):
         tmdb_index_refresh_job,
         tmdb_coverage_report_job,
         CATALOG_ENRICH_SCHEMA,
+        CATALOG_BLACKOUT_SCHEMA,
         FETCH_SCHEMA,
         FETCH_QUEUE_ADD_SCHEMA,
         FETCH_QUEUE_DRAIN_SCHEMA,
@@ -142,6 +144,12 @@ async def lifespan(app: FastAPI):
         fetchurls_job,
         label="Fetch URLs (weekend workbook)",
         schema=FETCHURLS_SCHEMA,
+    )
+    job_manager.register(
+        "catalog_blackout",
+        catalog_blackout_job,
+        label="Catalog Blackout (hide upcoming-weekend items)",
+        schema=CATALOG_BLACKOUT_SCHEMA,
     )
     job_manager.register(
         "motd_posters",

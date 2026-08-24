@@ -2,6 +2,41 @@
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-08-24
+
+### Fixed
+
+- **Reserved (immutable / promo-pool) items were leaking into the public
+  catalog.** The browse/search/`get_item`/`is_restricted`/tag filters excluded
+  reserved items by comparing `catalog.friendly_token` against
+  `saved_playlist_items.media_id` — but `media_id` stores the CyTube **manifest
+  URL** (e.g. `.../api/v1/media/cytube/<token>.json?format=json`), never the bare
+  token, so the `NOT IN` never matched and **every** item in Friday Night /
+  Saturday / promo pools stayed visible and pay-queueable. All six filter sites
+  now resolve `media_id` (manifest URL *or* legacy bare token) back to a
+  friendly_token via the catalog before excluding. This restores the intended
+  "reserved items are hidden from browse/search and rejected by pay-to-play"
+  behaviour.
+
+### Added
+
+- **Weekend blackout window (hides upcoming-weekend items until they've aired).**
+  Items scheduled on an upcoming weekend sheet must not appear in the catalog —
+  but only the *next* weekend is ever materialised as an immutable playlist, so
+  films on later weekends (or added directly to column F) had nothing hiding
+  them. A new `catalog_blackouts` table (migration v26) hides a rehosted item
+  from regular users until the end of the **following** weekend, keeping replays
+  hidden through that week. Keyed on the bare `friendly_token`.
+  - New standalone **`catalog_blackout`** maintenance job scans the workbook's
+    current/future weekend sheets (columns **E** and **F**) for dropsugar URLs,
+    resolves them to friendly_tokens, and blacks each out. It downloads nothing;
+    it reuses the fetchurls SharePoint/local workbook source. Runnable from the
+    admin Jobs tab and schedulable via cron.
+  - Blacked-out items are hidden from browse, search, `get_item`, pay-to-play,
+    and the item detail page for regular users. **Admins** still see them (with
+    "Show hidden items" on), visually **dimmed** with a `BLACKOUT` badge, and can
+    queue them manually (`/admin/queue/add` bypasses the visibility filters).
+
 ## [0.40.4] - 2026-08-21
 
 ### Added

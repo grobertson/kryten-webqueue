@@ -668,6 +668,76 @@ async def motd_posters_job(params: dict, ctx):
     )
 
 
+# ── Catalog blackout (weekend visibility) job ──────────────────────────────────
+
+
+CATALOG_BLACKOUT_SCHEMA = [
+    {
+        "name": "dry_run",
+        "type": "bool",
+        "default": False,
+        "label": "Dry run (report only, no DB writes)",
+    },
+    {
+        "name": "workbook_path",
+        "type": "string",
+        "default": None,
+        "label": "Local workbook path (override SharePoint)",
+    },
+]
+
+
+async def catalog_blackout_job(params: dict, ctx) -> dict:
+    """Hide upcoming-weekend dropsugar items from regular users (blackout window).
+
+    Scans the workbook's current/future weekend sheets (columns E & F) for
+    dropsugar URLs, resolves them to friendly_tokens, and blacks each out until
+    the end of the *following* weekend so replays stay hidden through that week.
+    Downloads nothing — a pure catalog-visibility maintenance chore. Admins
+    still see (dimmed) blacked-out items and can queue them manually.
+    """
+    result = await _run_vendored(
+        "kryten_webqueue.integrations.cmsutils.blackout_scan",
+        params,
+        ctx,
+        deps=["openpyxl", "requests"],
+    )
+    blackouts = result.get("blackouts") or []
+    dry_run = str(params.get("dry_run", "")).lower() in ("1", "true") or (
+        params.get("dry_run") is True
+    )
+
+    applied = 0
+    if not dry_run:
+        for b in blackouts:
+            await ctx.db.upsert_blackout(
+                b["token"], reason=b["reason"], expires_at=b["expires_at"]
+            )
+            applied += 1
+    pruned = 0 if dry_run else await ctx.db.prune_expired_blackouts()
+    active = await ctx.db.count_active_blackouts()
+
+    logger.info(
+        "catalog_blackout: scanned %d sheet(s), %d token(s) found, "
+        "%d applied, %d pruned, %d active",
+        result.get("sheets_scanned", 0),
+        len(blackouts),
+        applied,
+        pruned,
+        active,
+    )
+    return {
+        "source": result.get("source"),
+        "sheets_scanned": result.get("sheets_scanned", 0),
+        "found": len(blackouts),
+        "applied": applied,
+        "pruned": pruned,
+        "active": active,
+        "dry_run": dry_run,
+        "sample": blackouts[:25],
+    }
+
+
 # ── Fetch queue jobs ───────────────────────────────────────────────────────────
 
 
