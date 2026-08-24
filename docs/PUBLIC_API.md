@@ -21,7 +21,7 @@ Keys are minted through a short, user-driven pairing flow so a device never
 handles the user's credentials.
 
 ```
-┌────────────┐   1. names device, gets code    ┌──────────────────┐
+┌────────────┐   1. names device, gets code     ┌──────────────────┐
 │  Browser   │ ───────────────────────────────▶│  queue.dropsugar │
 │ (logged in)│   GET /link  →  "AB2CD"          │      .co         │
 └────────────┘                                  └──────────────────┘
@@ -275,10 +275,12 @@ Errors use FastAPI's standard shape:
 ## 5. Client implementation notes
 
 - **Polling:** these endpoints return point-in-time snapshots. Poll `/current`
-  and `/queue` every ~10–15s; `/events` changes rarely (every few minutes is
-  plenty).
+  and `/queue` no more often than once per minute, it is advised that you
+  locally calculate time remaining and poll even less, if an item is in progress
+  the only thing that will change about it's API data is the time elapsed and
+  time remaining values; `/events` changes rarely (every 15m-1h is plenty).
 - **Countdowns:** compute live countdowns on-device from `remaining_sec` /
-  `estimated_start_in_sec` rather than re-polling every second.
+  `estimated_start_in_sec` rather than re-polling every minute.
 - **Cover art:** `cover_art_url` is absolute and ready to load. It may be
   `null`; show a placeholder.
 - **Key loss / revocation:** if requests start returning 401, the key was
