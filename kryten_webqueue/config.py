@@ -51,6 +51,26 @@ class FetchUrlsConfig(BaseModel):
     token_cache_path: str = ""  # MSAL cache file, pre-seeded out-of-band
 
 
+class FetchQueueConfig(BaseModel):
+    """Settings for the persistent fetch-queue drain job.
+
+    The drain processes queued downloads one at a time and waits a randomized
+    cooldown *between* items so it doesn't hammer the source and trip bot
+    detection (the MediaCMS encoder is the real bottleneck anyway, so a long
+    gap costs little). Each wait is drawn uniformly from
+    ``cooldown_mean_minutes ± cooldown_jitter_minutes`` (clamped at >= 0).
+
+    These are re-read from the config file before every wait, so editing the
+    config and reloading retunes a *running* drain without a restart.
+    """
+
+    # Randomized inter-item cooldown, centered on ~42 min with jitter.
+    cooldown_mean_minutes: float = 42.0
+    cooldown_jitter_minutes: float = 8.0
+    # Set false to drain back-to-back (e.g. for a one-off bulk import).
+    cooldown_enabled: bool = True
+
+
 class PresenceRefundConfig(BaseModel):
     """Settings for presence-based cancel/refund of pending paid items.
 
@@ -168,9 +188,9 @@ class Config(BaseModel):
     # Jobs (optional; jobs whose config/deps are absent fail fast at run time)
     fetch_cookies_path: str = ""  # optional yt-dlp cookies for gated sources
     fetchurls: FetchUrlsConfig = FetchUrlsConfig()
+    fetch_queue: FetchQueueConfig = FetchQueueConfig()
     emote_rehost: EmoteRehostConfig = EmoteRehostConfig()
     motd: MOTDConfig = MOTDConfig()
-
     # Presence-based cancel/refund of pending paid items
     presence_refund: PresenceRefundConfig = PresenceRefundConfig()
 
@@ -212,6 +232,23 @@ class Config(BaseModel):
             cfg = cls(**json.load(f))
         cfg._source_path = Path(path)
         return cfg
+
+    def reload_fetch_queue(self) -> "FetchQueueConfig":
+        """Re-read just the ``fetch_queue`` section from the source file.
+
+        Enables live cooldown tuning: edit the config file and the running drain
+        picks up new pacing before its next wait — no restart needed. On any
+        error (no known source path, unreadable or invalid file) falls back to
+        the section loaded at startup so the drain never breaks on a bad edit.
+        """
+        if self._source_path is None:
+            return self.fetch_queue
+        try:
+            with open(self._source_path, encoding="utf-8") as f:
+                raw = json.load(f)
+            return FetchQueueConfig(**(raw.get("fetch_queue") or {}))
+        except Exception:  # noqa: BLE001 - never let a bad edit break the drain
+            return self.fetch_queue
 
     def save(self) -> None:
         """Persist the current config back to the file it was loaded from.

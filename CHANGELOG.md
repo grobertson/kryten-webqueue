@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-08-24
+
+### Added
+
+- **Fetch-queue drain cooldown (anti-bot pacing).** The **Fetch Queue — Process**
+  job now waits a randomized cooldown *between* items instead of downloading
+  back-to-back, so it stops tripping the source's bot detection (the MediaCMS
+  encoder is the real bottleneck anyway). The wait is drawn uniformly from
+  `cooldown_mean_minutes ± cooldown_jitter_minutes` (default **42 ± 8 min**).
+  New optional `fetch_queue` config block: `cooldown_mean_minutes`,
+  `cooldown_jitter_minutes`, `cooldown_enabled`. Settings are **re-read from the
+  config file before every wait**, so editing the config retunes a *running*
+  drain — no restart needed. A `cooldown` progress heartbeat exposes the
+  remaining wait to the admin UI.
+
+### Changed
+
+- **Interrupted fetch-queue downloads now resume.** On startup any item left
+  `running` by a crash/restart is reset to `pending`, and the drain auto-starts
+  if anything is pending — so a download cut off mid-flight is re-attempted
+  without an admin re-triggering it. A drain cancelled by shutdown re-queues its
+  in-flight item (rather than marking it `failed`) for the same reason. Retries
+  re-download the whole file; a leftover yt-dlp `.part` file may let yt-dlp
+  resume where it left off.
+
 ## [0.42.0] - 2026-08-24
 
 ### Added

@@ -57,6 +57,36 @@ class _FetchQueueMixin:
         )
         await self._db.commit()
 
+    async def requeue_fetch_item(self, item_id: int) -> None:
+        """Return a single item to 'pending' (e.g. interrupted by shutdown).
+
+        Clears the run timestamps and any prior error so the drain re-attempts it
+        cleanly on the next pass.
+        """
+        await self._db.execute(
+            "UPDATE fetch_queue"
+            " SET status = 'pending', started_at = NULL, finished_at = NULL, error = NULL"
+            " WHERE id = ?",
+            [item_id],
+        )
+        await self._db.commit()
+
+    async def reset_running_fetch_items(self) -> int:
+        """Reset any 'running' items to 'pending'; return how many were reset.
+
+        Called at startup to recover from a crash or hard kill that left the
+        in-flight item marked 'running' forever (the running flag is process
+        state, not durable). Flipping it back to 'pending' lets the drain
+        re-attempt it — a fresh download, though a yt-dlp ``.part`` file left in
+        the work dir may let yt-dlp resume where it left off.
+        """
+        cursor = await self._db.execute(
+            "UPDATE fetch_queue SET status = 'pending', started_at = NULL"
+            " WHERE status = 'running'"
+        )
+        await self._db.commit()
+        return cursor.rowcount or 0
+
     async def get_fetch_queue(
         self, *, limit: int = 100, status: str | None = None
     ) -> list[dict]:

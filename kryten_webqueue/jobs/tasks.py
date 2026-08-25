@@ -15,6 +15,8 @@ import functools
 import importlib
 import json
 import logging
+import random
+import time
 
 from .manager import JobError
 
@@ -840,6 +842,41 @@ FETCH_QUEUE_ADD_SCHEMA = [
 FETCH_QUEUE_DRAIN_SCHEMA: list[dict] = []
 
 
+async def _fetch_queue_cooldown(ctx, *, processed: int, failed: int) -> None:
+    """Wait a randomized cooldown between fetch-queue downloads.
+
+    The wait is drawn uniformly from ``mean ± jitter`` minutes (clamped at >= 0)
+    so the drain doesn't hammer the source and trip bot detection. Settings are
+    re-read from the config file each call, so editing the config file (and
+    reloading) retunes a running drain without a restart. ``asyncio.sleep``
+    stays cancellable, so shutdown interrupts the wait cleanly.
+    """
+    fq = ctx.config.reload_fetch_queue()
+    if not fq.cooldown_enabled:
+        return
+    low = max(0.0, fq.cooldown_mean_minutes - fq.cooldown_jitter_minutes)
+    high = max(low, fq.cooldown_mean_minutes + fq.cooldown_jitter_minutes)
+    seconds = max(0.0, random.uniform(low, high) * 60.0)
+    if seconds <= 0:
+        return
+    await ctx.progress(
+        {
+            "status": "cooldown",
+            "processed": processed,
+            "failed": failed,
+            "cooldown_seconds": round(seconds),
+            "resume_epoch": round(time.time() + seconds),
+        }
+    )
+    logger.info(
+        "fetch_queue_drain: cooldown %.1f min before next item (processed=%d failed=%d)",
+        seconds / 60.0,
+        processed,
+        failed,
+    )
+    await asyncio.sleep(seconds)
+
+
 async def fetch_queue_add_job(params: dict, ctx) -> dict:
     """Add one or more URLs to the fetch queue and auto-start the drain if idle."""
     raw = (params.get("urls") or "").strip()
@@ -883,7 +920,17 @@ async def fetch_queue_add_job(params: dict, ctx) -> dict:
 
 
 async def fetch_queue_drain_job(params: dict, ctx) -> dict:
-    """Process all pending fetch-queue items one at a time."""
+    """Process all pending fetch-queue items one at a time.
+
+    Between items the drain waits a randomized cooldown (configurable via
+    ``fetch_queue`` in the config, centered on ~42 min with jitter) so downloads
+    don't hammer the source and trip bot detection — the MediaCMS encoder is the
+    real bottleneck anyway. Cooldown settings are re-read live before each wait.
+
+    An item interrupted by shutdown is re-queued (not failed) so it retries on
+    the next start; combined with the startup reset of orphaned 'running' items,
+    an interrupted download is always re-attempted from the top.
+    """
     processed = 0
     failed = 0
 
@@ -918,8 +965,11 @@ async def fetch_queue_drain_job(params: dict, ctx) -> dict:
             processed += 1
             logger.info("fetch_queue_drain: id=%d done", item["id"])
         except asyncio.CancelledError:
-            await ctx.db.finish_fetch_item(
-                item["id"], status="failed", error="cancelled"
+            # Interrupted by shutdown/cancel: re-queue so it retries on the next
+            # start rather than being lost as a permanent failure.
+            await ctx.db.requeue_fetch_item(item["id"])
+            logger.info(
+                "fetch_queue_drain: id=%d interrupted — re-queued for retry", item["id"]
             )
             raise
         except Exception as exc:  # noqa: BLE001
@@ -928,6 +978,10 @@ async def fetch_queue_drain_job(params: dict, ctx) -> dict:
             )
             await ctx.db.finish_fetch_item(item["id"], status="failed", error=str(exc))
             failed += 1
+
+        # Space out downloads: cooldown before the next item, unless none remain.
+        if await ctx.db.count_fetch_queue_pending() > 0:
+            await _fetch_queue_cooldown(ctx, processed=processed, failed=failed)
 
     logger.info("fetch_queue_drain: done — processed=%d failed=%d", processed, failed)
     return {"processed": processed, "failed": failed}

@@ -30,6 +30,12 @@
     "token_cache_path": "/var/lib/kryten-webqueue/.fetchurls_tokens.bin"
   },
 
+  "fetch_queue": {
+    "cooldown_mean_minutes": 42.0,
+    "cooldown_jitter_minutes": 8.0,
+    "cooldown_enabled": true
+  },
+
   "presence_refund": {
     "enabled": true,
     "on_leave": true,

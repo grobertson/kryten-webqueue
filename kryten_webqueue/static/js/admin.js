@@ -438,6 +438,13 @@ async function showRunDetail(runId) {
         bodyHtml = `<p style="color:var(--warning)">\u23f3 Download in progress</p>
             <p>Current URL: <code style="word-break:break-all">${escapeHtml(d.url || '')}</code></p>
             <p>Done: <strong>${d.processed || 0}</strong> &nbsp; Failed: <strong>${d.failed || 0}</strong></p>`;
+    } else if (d && d.status === 'cooldown') {
+        // fetch_queue_drain anti-bot cooldown between items
+        const mins = d.cooldown_seconds ? Math.round(d.cooldown_seconds / 60) : 0;
+        const resume = d.resume_epoch ? new Date(d.resume_epoch * 1000).toLocaleTimeString() : '';
+        bodyHtml = `<p style="color:var(--warning)">\u23f8\ufe0f Cooling down before the next download</p>
+            <p>Waiting <strong>~${mins} min</strong>${resume ? ` (resumes ~${escapeHtml(resume)})` : ''}.</p>
+            <p>Done: <strong>${d.processed || 0}</strong> &nbsp; Failed: <strong>${d.failed || 0}</strong></p>`;
     } else {
         // Generic / legacy format
         const raw = typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail, null, 2);
@@ -596,6 +603,11 @@ function summarizeRunDetail(detail) {
         if (d.status === 'downloading' && d.url) {
             const host = (() => { try { return new URL(d.url).hostname; } catch (e) { return d.url.slice(0, 40); } })();
             return `\u23f3 ${host} (${d.processed || 0} done)`;
+        }
+        // fetch_queue_drain cooldown between items
+        if (d.status === 'cooldown') {
+            const mins = d.cooldown_seconds ? Math.round(d.cooldown_seconds / 60) : 0;
+            return `\u23f8\ufe0f cooldown ~${mins} min (${d.processed || 0} done)`;
         }
         if (parts.length) return parts.join(' · ');
     }

@@ -189,6 +189,26 @@ async def lifespan(app: FastAPI):
     )
     app.state.job_manager = job_manager
 
+    # Recover interrupted fetch-queue downloads. Any item left 'running' was cut
+    # off by a crash/restart (the running flag isn't durable); flip it back to
+    # 'pending' so the drain re-attempts it, then auto-start the drain if
+    # anything is pending so downloads resume without an admin re-triggering it.
+    requeued = await db.reset_running_fetch_items()
+    if requeued:
+        logger.warning(
+            "Re-queued %d interrupted fetch-queue item(s) after restart", requeued
+        )
+    if await db.count_fetch_queue_pending() > 0 and not job_manager.is_running(
+        "fetch_queue_drain"
+    ):
+        try:
+            await job_manager.run("fetch_queue_drain", triggered_by="startup-recovery")
+            logger.info("Auto-started fetch_queue_drain to resume pending downloads")
+        except Exception:  # noqa: BLE001 - best-effort; admin can re-trigger
+            logger.debug(
+                "Could not auto-start fetch_queue_drain at startup", exc_info=True
+            )
+
     # Cron-based job scheduler (persists schedules to job_schedules table)
     job_scheduler = JobScheduler(db, job_manager)
     # Seed a default schedule for the security-sensitive ban-reconcile job so it
