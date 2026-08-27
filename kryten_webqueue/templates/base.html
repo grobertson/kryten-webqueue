@@ -23,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/main.css?v={{ app_version }}">
     {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -60,8 +60,8 @@
         <p>&copy; Channel-Z — Powered by <a href="https://github.com/grobertson/kryten-webqueue" target="_blank" rel="noopener">kryten-webqueue</a>{% if app_version %} <span class="footer-version">v{{ app_version }}</span>{% endif %}</p>
     </footer>
 
-    <script src="/static/js/main.js"></script>
-    <script src="/static/js/keybindings.js"></script>
+    <script src="/static/js/main.js?v={{ app_version }}"></script>
+    <script src="/static/js/keybindings.js?v={{ app_version }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>

@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **Static assets are now cache-busted by version.** JS/CSS includes gained a
+  `?v={app_version}` query string, so browsers fetch fresh assets after every
+  release instead of serving a stale cached copy. This fixes the admin Download
+  Queue rendering as empty immediately after the 0.44.0 upgrade: the new endpoint
+  returns `{items, …}` but a cached pre-0.44.0 `admin.js` read the response as a
+  bare array, so `.length` was `undefined` and it showed "Queue is empty."
+
+## [0.44.0]
+
 ### Added
 
 - **Admin Jobs tab: full-text run logs + humanized summaries.** Every background
