@@ -242,6 +242,60 @@ async function clearActiveSchedule() {
     showToast(resp.ok ? 'Active schedule cleared' : 'Failed', resp.ok ? 'success' : 'error');
 }
 
+// Render a single status badge for a run. Clickable — opens the run-detail
+// modal (humanized summary + full-text log + downloads) for that run.
+function jobStatusBadge(run) {
+    if (!run) return '<span class="job-status muted">\u2014</span>';
+    const running = !run.ended_at;
+    const label = running ? 'running\u2026' : (run.status || '');
+    const cls = running ? 'job-status-running' : `job-status-${escapeHtml(run.status || '')}`;
+    return `<button type="button" class="job-status ${cls}" title="View summary & log"
+        onclick="showRunDetail(${run.id})">${escapeHtml(label)}</button>`;
+}
+
+// Render one job row: label | run-selector dropdown | status | action buttons.
+function renderJobRow(j, runs) {
+    const hasParams = Array.isArray(j.schema) && j.schema.length;
+    const sched = SCHEDULES_CACHE[j.name];
+    const schedBadge = sched
+        ? ` <span class="job-badge" title="${escapeHtml(sched.cron_expression || '')}">${sched.is_active ? 'scheduled' : 'paused'}</span>`
+        : '';
+    // Run selector: each option is a run, labelled by its start time. The first
+    // (newest) run is selected and drives the status cell.
+    const selector = runs.length
+        ? `<select class="job-run-select" onchange="onJobRunSelect('${escapeHtml(j.name)}', this)">
+                ${runs.map((r, i) => `<option value="${r.id}"${i === 0 ? ' selected' : ''}>${escapeHtml(formatLocalDateTime(r.started_at))}</option>`).join('')}
+           </select>`
+        : '<span class="job-last-run muted">never run</span>';
+    const statusCell = `<span class="job-status-cell" id="job-status-${escapeHtml(j.name)}">${jobStatusBadge(runs[0])}</span>`;
+    // Column 2: edit an existing schedule (placeholder keeps column 3 anchored).
+    const schedEditBtn = sched
+        ? `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Edit schedule">${sched.is_active ? '\u23f0' : '\u23f8'}</button>`
+        : '<span class="job-action-empty"></span>';
+    // Column 3: toggles between "add schedule" (none) and "delete schedule".
+    const schedToggleBtn = sched
+        ? `<button class="btn btn-sm btn-danger" onclick="removeJobSchedule('${j.name}')" title="Delete schedule">\u00d7</button>`
+        : `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Add schedule">\u2295</button>`;
+    return `
+        <div class="job-row">
+            <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}${schedBadge}</span>
+            <span class="job-run-picker">${selector}</span>
+            ${statusCell}
+            <div class="job-actions">
+                <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>${j.running ? 'Running' : (hasParams ? 'Begin' : 'Run')}</button>
+                ${schedEditBtn}
+                ${schedToggleBtn}
+            </div>
+        </div>`;
+}
+
+// When a different run is picked, refresh that job's status cell to match.
+function onJobRunSelect(jobName, selectEl) {
+    const run = RUN_DETAIL_CACHE[selectEl.value];
+    const cell = document.getElementById(`job-status-${jobName}`);
+    if (cell) cell.innerHTML = jobStatusBadge(run);
+}
+
 async function loadJobs() {
     // Load job schedules first so the job row renderer can reference them.
     const schResp = await fetch('/admin/job-schedules');
@@ -256,38 +310,17 @@ async function loadJobs() {
     if (jResp.ok) {
         const jobs = await jResp.json();
         JOBS_CACHE = jobs;
+        // Pull each job's recent runs (for the run-selector dropdown) in parallel.
+        const runsByJob = {};
+        await Promise.all(jobs.map(async j => {
+            const rr = await fetch(`/admin/jobs/runs?job=${encodeURIComponent(j.name)}&limit=20`);
+            const runs = rr.ok ? await rr.json() : [];
+            runsByJob[j.name] = runs;
+            runs.forEach(r => { RUN_DETAIL_CACHE[r.id] = r; });
+        }));
         const el = document.getElementById('jobs-list');
         el.innerHTML = jobs.length
-            ? jobs.map(j => {
-                const hasParams = Array.isArray(j.schema) && j.schema.length;
-                const lr = j.last_run;
-                const summary = lr
-                    ? `<span class="job-last-run">Last Run: <span class="job-status job-status-${escapeHtml(lr.status || '')}">${escapeHtml(lr.status || '')}</span> ${formatLocalDateTime(lr.started_at)}</span>`
-                    : '<span class="job-last-run muted">never run</span>';
-                const sched = SCHEDULES_CACHE[j.name];
-                const schedBadge = sched
-                    ? ` <span class="job-badge" title="${escapeHtml(sched.cron_expression || '')}">${sched.is_active ? 'scheduled' : 'paused'}</span>`
-                    : '';
-                // Column 2: edit an existing schedule. When none exists this is an
-                // empty placeholder so the add/delete toggle stays anchored in column 3.
-                const schedEditBtn = sched
-                    ? `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Edit schedule">${sched.is_active ? '\u23f0' : '\u23f8'}</button>`
-                    : '<span class="job-action-empty"></span>';
-                // Column 3: toggles between "add schedule" (none) and "delete schedule".
-                const schedToggleBtn = sched
-                    ? `<button class="btn btn-sm btn-danger" onclick="removeJobSchedule('${j.name}')" title="Delete schedule">\u00d7</button>`
-                    : `<button class="btn btn-sm" onclick="openScheduleModal('${j.name}')" title="Add schedule">\u2295</button>`;
-                return `
-                <div class="job-row">
-                    <span class="job-label">${escapeHtml(j.label)}${hasParams ? ' <span class="job-badge">params</span>' : ''}${schedBadge}</span>
-                    ${summary}
-                    <div class="job-actions">
-                        <button class="btn btn-sm" onclick="startJob('${j.name}')" ${j.running ? 'disabled' : ''}>${j.running ? 'Running' : (hasParams ? 'Begin' : 'Run')}</button>
-                        ${schedEditBtn}
-                        ${schedToggleBtn}
-                    </div>
-                </div>`;
-            }).join('')
+            ? jobs.map(j => renderJobRow(j, runsByJob[j.name] || [])).join('')
             : '<p>No jobs registered</p>';
     }
 
@@ -330,17 +363,34 @@ async function loadJobs() {
 
 // ── Download Queue ────────────────────────────────────────────────────────────
 
+let FETCH_QUEUE_PAGE = 1;
+
+function changeFetchQueuePage(delta) {
+    FETCH_QUEUE_PAGE = Math.max(1, FETCH_QUEUE_PAGE + delta);
+    loadFetchQueue();
+}
+
 async function loadFetchQueue() {
     const el = document.getElementById('fetch-queue-list');
     if (!el) return;
-    const resp = await fetch('/admin/jobs/fetch-queue');
+    const resp = await fetch(`/admin/jobs/fetch-queue?page=${FETCH_QUEUE_PAGE}&limit=20`);
     if (!resp.ok) { el.innerHTML = '<p class="empty-state">Failed to load queue.</p>'; return; }
-    const items = await resp.json();
+    const data = await resp.json();
+    const items = data.items || [];
+    const pages = data.pages || 1;
+    if (FETCH_QUEUE_PAGE > pages) { FETCH_QUEUE_PAGE = pages; return loadFetchQueue(); }
     if (!items.length) {
         el.innerHTML = '<p class="empty-state" style="opacity:.6">Queue is empty.</p>';
         return;
     }
     const STATUS_ICON = { pending: '\u23f3', running: '\u25b6\ufe0f', done: '\u2705', failed: '\u274c' };
+    const pager = pages > 1
+        ? `<div class="fetch-queue-pager">
+                <button class="btn btn-sm" onclick="changeFetchQueuePage(-1)" ${data.page <= 1 ? 'disabled' : ''}>\u2039 Prev</button>
+                <span class="muted">Page ${data.page} of ${pages} \u00b7 ${data.total} shown</span>
+                <button class="btn btn-sm" onclick="changeFetchQueuePage(1)" ${data.page >= pages ? 'disabled' : ''}>Next \u203a</button>
+           </div>`
+        : '';
     el.innerHTML = `<table class="admin-table">
         <tr><th>#</th><th>URL</th><th>Status</th><th>Added</th><th></th></tr>
         ${items.map(item => {
@@ -362,7 +412,7 @@ async function loadFetchQueue() {
                 <td>${deleteBtn}</td>
             </tr>${errorRow}`;
         }).join('')}
-    </table>`;
+    </table>${pager}`;
 }
 
 async function deleteFetchQueueItem(id) {
@@ -374,9 +424,48 @@ async function deleteFetchQueueItem(id) {
 // Run-detail cache so we don't re-fetch on re-open.
 const RUN_DETAIL_CACHE = {};
 
+// Turn a snake_case / lowercase key into a friendly label, fixing acronyms.
+const DETAIL_ACRONYMS = {
+    id: 'ID', ids: 'IDs', url: 'URL', urls: 'URLs', tmdb: 'TMDB', imdb: 'IMDB',
+    json: 'JSON', api: 'API', css: 'CSS', motd: 'MOTD', ok: 'OK', tt: 'IMDB tt',
+    sec: 'Seconds', min: 'Minutes',
+};
+function humanizeLabel(key) {
+    return String(key).replace(/[_\-]+/g, ' ').trim().split(/\s+/)
+        .map(w => DETAIL_ACRONYMS[w.toLowerCase()] || (w.charAt(0).toUpperCase() + w.slice(1)))
+        .join(' ');
+}
+
+function humanizeValue(v) {
+    if (v === null || v === undefined) return '<span class="muted">\u2014</span>';
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    if (typeof v === 'number') return escapeHtml(v.toLocaleString());
+    return escapeHtml(String(v));
+}
+
+// Recursively render a parsed JSON detail blob as labelled rows.
+function renderHumanizedDetail(d) {
+    if (d === null || typeof d !== 'object') return `<p>${humanizeValue(d)}</p>`;
+    if (Array.isArray(d)) {
+        if (!d.length) return '<p class="muted">(none)</p>';
+        if (d.every(x => x === null || typeof x !== 'object')) {
+            return `<p>${d.map(humanizeValue).join(', ')}</p>`;
+        }
+        return d.map(x => `<div class="detail-subgroup">${renderHumanizedDetail(x)}</div>`).join('');
+    }
+    const rows = Object.keys(d).map(k => {
+        const v = d[k];
+        const cell = (v !== null && typeof v === 'object')
+            ? renderHumanizedDetail(v)
+            : humanizeValue(v);
+        return `<tr><th>${escapeHtml(humanizeLabel(k))}</th><td>${cell}</td></tr>`;
+    }).join('');
+    return `<table class="detail-table">${rows}</table>`;
+}
+
 async function showRunDetail(runId) {
     if (!RUN_DETAIL_CACHE[runId]) {
-        const resp = await fetch('/admin/jobs/runs?limit=50');
+        const resp = await fetch('/admin/jobs/runs?limit=100');
         if (resp.ok) { (await resp.json()).forEach(r => { RUN_DETAIL_CACHE[r.id] = r; }); }
     }
     const run = RUN_DETAIL_CACHE[runId];
@@ -387,78 +476,25 @@ async function showRunDetail(runId) {
 
     let d = null;
     try { d = run.detail ? JSON.parse(run.detail) : null; } catch (e) {}
-
-    let bodyHtml;
-    if (d && d.steps_run && d.steps) {
-        // Pipeline enrichment final report — render as a table
-        const dryBadge = d.dry_run
-            ? ' <span style="color:var(--warning);font-size:.8rem">(dry run \u2014 no writes)</span>' : '';
-        const elapsed = d.elapsed_sec ? ` \u00b7 ${d.elapsed_sec}s elapsed` : '';
-        const rowsHtml = d.steps_run.map(s => {
-            const r = d.steps[s];
-            if (!r) return '';
-            const errs = (r.errors || []).map(e =>
-                `<div style="font-size:.78rem;color:var(--danger);padding:.15rem 0">${escapeHtml(e)}</div>`
-            ).join('');
-            return `<tr>
-                <td><strong>${escapeHtml(s)}</strong></td>
-                <td>${r.processed}</td>
-                <td>${r.changed}</td>
-                <td>${r.skipped}</td>
-                <td style="${r.failed ? 'color:var(--danger)' : ''}">${r.failed || 0}</td>
-            </tr>${errs ? `<tr><td colspan="5" style="padding:0 0 .5rem 1.5rem">${errs}</td></tr>` : ''}`;
-        }).join('');
-        bodyHtml = `
-            <p style="margin-bottom:.75rem">
-                Steps: <strong>${escapeHtml(d.steps_run.join(' \u2192 '))}</strong>${dryBadge}<br>
-                Total items: <strong>${(d.total_items || 0).toLocaleString()}</strong>${elapsed}
-            </p>
-            <table class="admin-table">
-                <tr><th>Step</th><th>Processed</th><th>Changed</th><th>Skipped</th><th>Failed</th></tr>
-                ${rowsHtml}
-            </table>`;
-    } else if (d && d.step && typeof d.processed === 'number') {
-        // In-progress heartbeat snapshot
-        bodyHtml = `<p style="color:var(--warning)">\u23f3 Job still running — last progress snapshot:</p>
-            <pre style="white-space:pre-wrap;font-size:.82rem">${escapeHtml(JSON.stringify(d, null, 2))}</pre>`;
-    } else if (d && typeof d.queued === 'number' && Array.isArray(d.items)) {
-        // fetch_queue_add result
-        const rows = d.items.map(item =>
-            `<tr><td style="white-space:nowrap;opacity:.6">#${item.id}</td><td style="word-break:break-all">${escapeHtml(item.url)}</td></tr>`
-        ).join('');
-        bodyHtml = `<p>Queued <strong>${d.queued}</strong> URL${d.queued !== 1 ? 's' : ''} for download.</p>
-            <table class="admin-table"><tr><th>#</th><th>URL</th></tr>${rows}</table>`;
-    } else if (d && typeof d.processed === 'number' && typeof d.failed === 'number' && !d.status) {
-        // fetch_queue_drain final result
-        const icon = d.failed === 0 ? '\u2705' : d.processed === 0 ? '\u274c' : '\u26a0\ufe0f';
-        bodyHtml = `<p>${icon} Processed: <strong>${d.processed}</strong> &nbsp; Failed: <strong style="${d.failed ? 'color:var(--danger)' : ''}">${d.failed}</strong></p>
-            <p style="font-size:.85rem;opacity:.7">See the Download Queue in the Jobs tab for per-item results and error details.</p>`;
-    } else if (d && d.status === 'downloading') {
-        // fetch_queue_drain progress heartbeat
-        bodyHtml = `<p style="color:var(--warning)">\u23f3 Download in progress</p>
-            <p>Current URL: <code style="word-break:break-all">${escapeHtml(d.url || '')}</code></p>
-            <p>Done: <strong>${d.processed || 0}</strong> &nbsp; Failed: <strong>${d.failed || 0}</strong></p>`;
-    } else if (d && d.status === 'cooldown') {
-        // fetch_queue_drain anti-bot cooldown between items
-        const mins = d.cooldown_seconds ? Math.round(d.cooldown_seconds / 60) : 0;
-        const resume = d.resume_epoch ? new Date(d.resume_epoch * 1000).toLocaleTimeString() : '';
-        bodyHtml = `<p style="color:var(--warning)">\u23f8\ufe0f Cooling down before the next download</p>
-            <p>Waiting <strong>~${mins} min</strong>${resume ? ` (resumes ~${escapeHtml(resume)})` : ''}.</p>
-            <p>Done: <strong>${d.processed || 0}</strong> &nbsp; Failed: <strong>${d.failed || 0}</strong></p>`;
-    } else {
-        // Generic / legacy format
-        const raw = typeof run.detail === 'string' ? run.detail : JSON.stringify(run.detail, null, 2);
-        bodyHtml = `<pre style="white-space:pre-wrap;font-size:.82rem">${escapeHtml(raw)}</pre>`;
-    }
+    const summaryHtml = d ? renderHumanizedDetail(d) : '<p class="muted">No summary recorded.</p>';
 
     const overlay = document.createElement('div');
     overlay.id = 'run-detail-modal';
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-        <div class="modal-box" role="dialog" aria-modal="true">
+        <div class="modal-box modal-box-wide" role="dialog" aria-modal="true">
             <h3>${escapeHtml(run.job_name || 'Run')} \u2014 ${escapeHtml(run.status || '')}
                 <span style="font-size:.75rem;font-weight:400;opacity:.7">#${run.id}</span></h3>
-            <div class="modal-body">${bodyHtml}</div>
+            <div class="modal-body">
+                <div class="run-detail-actions">
+                    <a class="btn btn-sm" href="/admin/jobs/runs/${run.id}/detail/download">Download JSON</a>
+                    <a class="btn btn-sm" href="/admin/jobs/runs/${run.id}/log/download">Download Log</a>
+                </div>
+                <h4 class="run-detail-heading">Summary</h4>
+                ${summaryHtml}
+                <h4 class="run-detail-heading">Full Log</h4>
+                <div id="run-detail-log" class="run-log">Loading log\u2026</div>
+            </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" data-action="close">Close</button>
             </div>
@@ -468,6 +504,19 @@ async function showRunDetail(runId) {
             overlay.remove();
     });
     document.body.appendChild(overlay);
+
+    // Fetch the full-text log lazily so the modal opens instantly.
+    fetch(`/admin/jobs/runs/${run.id}/log`).then(async r => {
+        const logEl = document.getElementById('run-detail-log');
+        if (!logEl) return;
+        if (!r.ok) { logEl.textContent = 'Failed to load log.'; return; }
+        const lines = await r.json();
+        if (!lines.length) { logEl.innerHTML = '<span class="muted">No log lines captured.</span>'; return; }
+        logEl.innerHTML = lines.map(ln => {
+            const lvl = (ln.level || '').toLowerCase();
+            return `<div class="run-log-line run-log-${escapeHtml(lvl)}"><span class="run-log-ts">${escapeHtml(formatLocalDateTime(ln.logged_at))}</span> <span class="run-log-lvl">${escapeHtml(ln.level || '')}</span> ${escapeHtml(ln.message || '')}</div>`;
+        }).join('');
+    });
 }
 
 async function loadAdminData() {

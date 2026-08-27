@@ -64,6 +64,103 @@ async def test_requeue_fetch_item_clears_error_and_timestamps(db):
     assert row["error"] is None
 
 
+async def test_requeue_for_retry_increments_and_moves_to_back(db):
+    first = await db.enqueue_fetch(url="https://x/1")
+    second = await db.enqueue_fetch(url="https://x/2")
+    await db.claim_next_fetch_item()  # claims oldest (first) → running
+
+    attempts = await db.requeue_fetch_item_for_retry(first, error="retry 1/3")
+    assert attempts == 1
+
+    rows = await db.get_fetch_queue(limit=10)
+    row = next(r for r in rows if r["id"] == first)
+    assert row["status"] == "pending"
+    assert row["attempts"] == 1
+    assert row["started_at"] is None
+    assert row["error"] == "retry 1/3"
+
+    # Bumped added_at pushes the retry behind the still-pending second item.
+    assert await db.count_fetch_queue_pending() == 2
+    claimed = await db.claim_next_fetch_item()
+    assert claimed["id"] == second
+
+
+# --- retryable upload re-queue -------------------------------------------------
+
+
+async def test_drain_requeues_retryable_upload_until_max_attempts(db, monkeypatch):
+    await db.enqueue_fetch(url="https://x/1")
+
+    async def _always_broken(params, ctx):
+        raise tasks.RetryableUploadError("Connection broken: IncompleteRead")
+
+    async def _noop_cooldown(ctx, *, processed, failed):
+        return None
+
+    monkeypatch.setattr(tasks, "_run_single_fetch", _always_broken)
+    monkeypatch.setattr(tasks, "_fetch_queue_cooldown", _noop_cooldown)
+
+    fq = FetchQueueConfig()
+    ctx = _ctx(db, SimpleNamespace(reload_fetch_queue=lambda: fq))
+    result = await tasks.fetch_queue_drain_job({}, ctx)
+
+    # Re-queued twice, then failed on the third attempt.
+    assert result == {"processed": 0, "failed": 1}
+    row = (await db.get_fetch_queue(limit=10))[0]
+    assert row["status"] == "failed"
+    assert row["attempts"] == tasks.MAX_FETCH_UPLOAD_ATTEMPTS
+    assert "after 3 attempts" in (row["error"] or "")
+
+
+async def test_drain_retry_succeeds_on_second_attempt(db, monkeypatch):
+    await db.enqueue_fetch(url="https://x/1")
+    calls: list[int] = []
+
+    async def _fail_then_succeed(params, ctx):
+        calls.append(1)
+        if len(calls) == 1:
+            raise tasks.RetryableUploadError("Connection broken: IncompleteRead")
+        return {"ok": True}
+
+    async def _noop_cooldown(ctx, *, processed, failed):
+        return None
+
+    monkeypatch.setattr(tasks, "_run_single_fetch", _fail_then_succeed)
+    monkeypatch.setattr(tasks, "_fetch_queue_cooldown", _noop_cooldown)
+
+    fq = FetchQueueConfig()
+    ctx = _ctx(db, SimpleNamespace(reload_fetch_queue=lambda: fq))
+    result = await tasks.fetch_queue_drain_job({}, ctx)
+
+    assert result == {"processed": 1, "failed": 0}
+    row = (await db.get_fetch_queue(limit=10))[0]
+    assert row["status"] == "done"
+    assert row["attempts"] == 1  # one re-queue before the success
+
+
+async def test_drain_non_retryable_error_fails_immediately(db, monkeypatch):
+    await db.enqueue_fetch(url="https://x/1")
+
+    async def _hard_fail(params, ctx):
+        raise RuntimeError("Unsupported URL")
+
+    async def _noop_cooldown(ctx, *, processed, failed):
+        return None
+
+    monkeypatch.setattr(tasks, "_run_single_fetch", _hard_fail)
+    monkeypatch.setattr(tasks, "_fetch_queue_cooldown", _noop_cooldown)
+
+    fq = FetchQueueConfig()
+    ctx = _ctx(db, SimpleNamespace(reload_fetch_queue=lambda: fq))
+    result = await tasks.fetch_queue_drain_job({}, ctx)
+
+    # Non-upload failures are not retried — failed on the first hit.
+    assert result == {"processed": 0, "failed": 1}
+    row = (await db.get_fetch_queue(limit=10))[0]
+    assert row["status"] == "failed"
+    assert row["attempts"] == 0
+
+
 # --- live config reload --------------------------------------------------------
 
 

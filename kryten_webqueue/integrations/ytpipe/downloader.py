@@ -32,6 +32,8 @@ import requests
 import yt_dlp
 from slugify import slugify
 
+from . import RetryableUploadError
+
 
 # yt-dlp needs an external JavaScript runtime to solve YouTube's JS challenges.
 # Only "deno" is enabled by default; many hosts only have Node installed, which
@@ -2865,8 +2867,11 @@ class MediaDownloaderToMediaCMS:
         # Prepare file for upload
         file_name = os.path.basename(file_path)
 
+        # Remove Content-Type header for multipart upload
+        upload_session = requests.Session()
+        upload_session.headers.update({"Authorization": f"Token {self.api_token}"})
+
         try:
-            # First, upload the file
             with open(file_path, "rb") as video_file:
                 files = {"media_file": (file_name, video_file, "video/mp4")}
                 data = {
@@ -2880,16 +2885,45 @@ class MediaDownloaderToMediaCMS:
                     f"[DEBUG] Tags: {len(existing_tags)} via API, {len(missing_tags)} in description"
                 )
 
-                # Remove Content-Type header for multipart upload
-                upload_session = requests.Session()
-                upload_session.headers.update(
-                    {"Authorization": f"Token {self.api_token}"}
-                )
-
+                # (connect, read) timeout. The read leg is generous because
+                # MediaCMS serializes a large media object (encodings, thumbnails)
+                # into the response after accepting the file.
                 response = upload_session.post(
-                    f"{self.api_url}/media/", files=files, data=data
+                    f"{self.api_url}/media/",
+                    files=files,
+                    data=data,
+                    timeout=(30, 600),
                 )
+        except (
+            requests.exceptions.ConnectionError,
+            requests.exceptions.ChunkedEncodingError,
+            requests.exceptions.Timeout,
+        ) as e:
+            # The connection dropped mid-transfer — most often an IncompleteRead
+            # while reading MediaCMS's (large) JSON response, meaning the item was
+            # already created server-side before the socket broke. Blindly
+            # re-POSTing here would duplicate it, so try to recover the created
+            # item by its "Original URL" description marker instead.
+            print(f"[DEBUG] Upload connection error (item may already exist): {e}")
+            recovered = self.check_media_already_imported(original_url, title)
+            if recovered:
+                print(
+                    "✅ Recovered upload after broken response — already in MediaCMS: "
+                    f"{recovered.get('friendly_token', 'Unknown')}"
+                )
+                if existing_tags:
+                    media_id = recovered.get("friendly_token")
+                    if media_id:
+                        self.add_tags_to_media(media_id, existing_tags)
+                return recovered
+            # Not recoverable yet (e.g. search index lag). Surface a distinct,
+            # retryable error so the caller/queue can re-attempt later; the next
+            # attempt's up-front duplicate check will skip it if it did land.
+            raise RetryableUploadError(
+                f"Failed to upload to MediaCMS (connection broken, item not recovered): {e}"
+            ) from e
 
+        try:
             if response.status_code == 201:
                 result = response.json()
 

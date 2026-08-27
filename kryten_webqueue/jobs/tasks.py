@@ -18,9 +18,15 @@ import logging
 import random
 import time
 
+from ..integrations.ytpipe import RetryableUploadError
 from .manager import JobError
 
 logger = logging.getLogger(__name__)
+
+# Max MediaCMS upload attempts per fetch-queue item before it is failed for good.
+# A broken-connection upload (IncompleteRead) re-queues to the back of the queue;
+# after this many total attempts it is recorded as ``failed``.
+MAX_FETCH_UPLOAD_ATTEMPTS = 3
 
 
 def _require(module_name: str, *, extra: str = "jobs"):
@@ -972,6 +978,42 @@ async def fetch_queue_drain_job(params: dict, ctx) -> dict:
                 "fetch_queue_drain: id=%d interrupted — re-queued for retry", item["id"]
             )
             raise
+        except RetryableUploadError as exc:
+            # The MediaCMS upload dropped its connection (IncompleteRead). Re-queue
+            # to the back of the queue for another attempt, bounded by
+            # MAX_FETCH_UPLOAD_ATTEMPTS; the next attempt's up-front duplicate
+            # check skips it cleanly if the item actually landed server-side.
+            attempts = (item.get("attempts") or 0) + 1
+            if attempts < MAX_FETCH_UPLOAD_ATTEMPTS:
+                await ctx.db.requeue_fetch_item_for_retry(
+                    item["id"],
+                    error=f"upload retry {attempts}/{MAX_FETCH_UPLOAD_ATTEMPTS}: {exc}",
+                )
+                logger.warning(
+                    "fetch_queue_drain: id=%d (%s) upload failed (attempt %d/%d) — "
+                    "re-queued: %s",
+                    item["id"],
+                    item["url"],
+                    attempts,
+                    MAX_FETCH_UPLOAD_ATTEMPTS,
+                    exc,
+                )
+            else:
+                await ctx.db.finish_fetch_item(
+                    item["id"],
+                    status="failed",
+                    error=f"upload failed after {attempts} attempts: {exc}",
+                    bump_attempts=True,
+                )
+                failed += 1
+                logger.warning(
+                    "fetch_queue_drain: id=%d (%s) upload failed after %d attempts — "
+                    "giving up: %s",
+                    item["id"],
+                    item["url"],
+                    attempts,
+                    exc,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
                 "fetch_queue_drain: id=%d (%s) failed: %s", item["id"], item["url"], exc

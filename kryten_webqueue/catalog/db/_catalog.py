@@ -1146,6 +1146,36 @@ class _CatalogMixin:
         """Update only a running job's detail column (used for live progress)."""
         await self._execute("UPDATE job_runs SET detail=? WHERE id=?", [detail, run_id])
 
+    async def add_job_run_logs(
+        self, run_id: int, records: list[tuple[str, str, str, str]]
+    ) -> None:
+        """Bulk-append captured log lines for a run.
+
+        ``records`` is a list of ``(logged_at_iso, level, logger, message)``
+        tuples in emission order; ``seq`` is assigned from the list index so the
+        original ordering survives even when timestamps collide.
+        """
+        if not records:
+            return
+        rows = [
+            (run_id, seq, logged_at, level, logger, message)
+            for seq, (logged_at, level, logger, message) in enumerate(records)
+        ]
+        await self._db.executemany(
+            "INSERT INTO job_run_logs (run_id, seq, logged_at, level, logger, message) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+        await self._db.commit()
+
+    async def get_job_run_logs(self, run_id: int) -> list[dict]:
+        return await self._fetch_all(
+            "SELECT * FROM job_run_logs WHERE run_id=? ORDER BY seq ASC", [run_id]
+        )
+
+    async def get_job_run(self, run_id: int) -> dict | None:
+        return await self._fetch_one("SELECT * FROM job_runs WHERE id=?", [run_id])
+
     async def get_job_runs(
         self, job_name: str | None = None, limit: int = 10
     ) -> list[dict]:

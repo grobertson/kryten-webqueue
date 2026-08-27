@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Request, Depends, HTTPException
+from fastapi.responses import Response
 
 from ..auth.session import require_admin
 
@@ -27,6 +30,62 @@ async def job_runs(
     """Recent run history, optionally filtered by job name."""
     db = request.app.state.db
     return await db.get_job_runs(job_name=job, limit=limit)
+
+
+@router.get("/runs/{run_id}/log")
+async def job_run_log(
+    request: Request, run_id: int, user: dict = Depends(require_admin)
+):
+    """Return the captured full-text log lines for a single run."""
+    db = request.app.state.db
+    run = await db.get_job_run(run_id)
+    if not run:
+        raise HTTPException(404, "Unknown run")
+    return await db.get_job_run_logs(run_id)
+
+
+@router.get("/runs/{run_id}/log/download")
+async def download_job_run_log(
+    request: Request, run_id: int, user: dict = Depends(require_admin)
+):
+    """Download the run's full-text log as a plain-text file."""
+    db = request.app.state.db
+    run = await db.get_job_run(run_id)
+    if not run:
+        raise HTTPException(404, "Unknown run")
+    lines = await db.get_job_run_logs(run_id)
+    body = "\n".join(
+        f"{ln['logged_at']} {ln.get('level', ''):<8} {ln.get('logger', '')}: {ln['message']}"
+        for ln in lines
+    )
+    filename = f"{run['job_name']}-run{run_id}.log"
+    return Response(
+        content=body,
+        media_type="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/runs/{run_id}/detail/download")
+async def download_job_run_detail(
+    request: Request, run_id: int, user: dict = Depends(require_admin)
+):
+    """Download the run's JSON summary (the ``detail`` blob) as a file."""
+    db = request.app.state.db
+    run = await db.get_job_run(run_id)
+    if not run:
+        raise HTTPException(404, "Unknown run")
+    detail = run.get("detail")
+    try:
+        body = json.dumps(json.loads(detail), indent=2) if detail else "{}"
+    except (TypeError, ValueError):
+        body = detail or "{}"
+    filename = f"{run['job_name']}-run{run_id}.json"
+    return Response(
+        content=body,
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{name}/schema")
@@ -69,10 +128,33 @@ async def run_job(request: Request, name: str, user: dict = Depends(require_admi
 
 
 @router.get("/fetch-queue")
-async def get_fetch_queue(request: Request, user: dict = Depends(require_admin)):
-    """Return all fetch queue items, newest first."""
+async def get_fetch_queue(
+    request: Request,
+    user: dict = Depends(require_admin),
+    page: int = 1,
+    limit: int = 20,
+):
+    """Return a page of the download queue (newest first).
+
+    Successful downloads finished more than 24h ago are hidden from the list to
+    keep it manageable; failed / pending / running items always remain visible.
+    Rows are never deleted — this is a visibility filter only, so the full audit
+    trail is preserved. Paginated at ``limit`` items per page (default 20).
+    """
     db = request.app.state.db
-    return await db.get_fetch_queue(limit=200)
+    page = max(1, page)
+    limit = max(1, min(limit, 100))
+    offset = (page - 1) * limit
+    total = await db.count_fetch_queue(hide_expired_done=True)
+    items = await db.get_fetch_queue(limit=limit, offset=offset, hide_expired_done=True)
+    pages = max(1, (total + limit - 1) // limit)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "pages": pages,
+        "limit": limit,
+    }
 
 
 @router.delete("/fetch-queue/{item_id}")

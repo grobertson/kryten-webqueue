@@ -509,6 +509,30 @@ MIGRATIONS = [
     CREATE INDEX IF NOT EXISTS idx_device_api_keys_user ON device_api_keys(username);
     CREATE INDEX IF NOT EXISTS idx_device_api_keys_hash ON device_api_keys(key_hash);
     """,
+    # v28: Retry counter for the fetch queue. A MediaCMS upload that fails with a
+    # broken connection (IncompleteRead) is re-queued to the back of the queue up
+    # to a bounded number of attempts instead of failing permanently; this tracks
+    # how many upload attempts an item has consumed.
+    """
+    ALTER TABLE fetch_queue ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+    """,
+    # v29: Full-text run logs. Each background job run captures the Python log
+    # records it emits (scoped to the run via a contextvars filter) as one row
+    # per line, so the admin UI can show and download a complete log alongside
+    # the JSON summary. Kept in a separate, uncapped table (Postgres-friendly)
+    # rather than a column on job_runs.
+    """
+    CREATE TABLE IF NOT EXISTS job_run_logs (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id    INTEGER NOT NULL,
+        seq       INTEGER NOT NULL,
+        logged_at TIMESTAMP NOT NULL,
+        level     TEXT,
+        logger    TEXT,
+        message   TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_run_logs_run ON job_run_logs(run_id, seq);
+    """,
 ]
 
 

@@ -1308,7 +1308,7 @@ a.np-chip {
 /* Jobs */
 .jobs-list {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
     align-items: stretch;
     gap: 0.4rem 1.25rem;
     margin-bottom: 1rem;
@@ -1394,6 +1394,105 @@ a.np-chip {
 .job-status-running { color: var(--accent); }
 .job-status-cancelled { color: var(--text-secondary); }
 .job-status-interrupted { color: var(--warning); }
+
+/* Job run-selector dropdown + clickable status cell */
+.job-run-picker {
+    justify-content: flex-start;
+}
+.job-run-select {
+    max-width: 15rem;
+    padding: 0.3rem 0.5rem;
+    background: var(--bg-secondary);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-variant-numeric: tabular-nums;
+}
+.job-status-cell {
+    justify-content: center;
+    white-space: nowrap;
+}
+button.job-status {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font: inherit;
+    padding: 0.2rem 0.4rem;
+    text-transform: capitalize;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+button.job-status:hover { filter: brightness(1.2); }
+
+/* Download queue pagination controls */
+.fetch-queue-pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.6rem;
+    font-size: 0.85rem;
+}
+
+/* Humanized run-detail summary tables */
+.modal-box-wide { max-width: 760px; }
+.run-detail-actions {
+    display: flex;
+    gap: 0.6rem;
+    margin-bottom: 0.75rem;
+}
+.run-detail-heading {
+    margin: 1rem 0 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.detail-table th,
+.detail-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.3rem 0.6rem 0.3rem 0;
+    border-bottom: 1px solid var(--border);
+}
+.detail-table th {
+    color: var(--text-secondary);
+    font-weight: 600;
+    white-space: nowrap;
+    width: 1%;
+}
+.detail-subgroup {
+    padding-left: 0.75rem;
+    margin: 0.35rem 0;
+    border-left: 2px solid var(--border);
+}
+
+/* Full-text run log viewer */
+.run-log {
+    max-height: 45vh;
+    overflow-y: auto;
+    background: var(--bg-primary, #000);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.6rem 0.75rem;
+    font-family: var(--font-mono, monospace);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+.run-log-line { white-space: pre-wrap; word-break: break-word; }
+.run-log-ts { color: var(--text-secondary); }
+.run-log-lvl { font-weight: 600; }
+.run-log-warning .run-log-lvl,
+.run-log-warning { color: var(--warning); }
+.run-log-error .run-log-lvl,
+.run-log-error,
+.run-log-critical { color: var(--danger); }
+.run-log-debug { opacity: 0.7; }
 
 /* Empty state */
 .empty-state {

@@ -2,6 +2,57 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Admin Jobs tab: full-text run logs + humanized summaries.** Every background
+  job run now captures the Python log records it emits (scoped to that run via a
+  `contextvars` filter, so concurrent jobs and web requests don't bleed in) into
+  a new uncapped `job_run_logs` table (schema **v29**, forward-only migration —
+  kept as a separate table rather than a `job_runs` column so it ports cleanly to
+  Postgres). The run-detail modal now renders the JSON summary as **humanized,
+  labelled rows** (friendly `Snake Case → Title Case` labels, `Yes/No` for
+  booleans, thousands separators) instead of a raw blob, and shows the **full log**
+  beneath it. Both the JSON summary and the full-text log are **downloadable** per
+  run (`GET /admin/jobs/runs/{id}/detail/download` and `.../log/download`) for
+  offline study.
+- **Per-job run selector.** Each job row's "Last Run" text is replaced by a
+  dropdown of that job's recent runs (by start time) and a clickable status cell
+  (`completed` / `failed` / …) sitting just before the action buttons; picking a
+  run and clicking its status opens that run's summary + log.
+- **Download queue pagination + 24h success expiry.** The download-queue list is
+  paginated at **20 items/page**, and successful (`done`) downloads finished more
+  than **24h ago are hidden** to keep the list manageable. Failures and
+  pending/running items are always shown regardless of age. This is a
+  **visibility filter only** — no rows are ever deleted, so the audit trail is
+  preserved (`GET /admin/jobs/fetch-queue` now returns
+  `{items, total, page, pages, limit}`).
+
+- **Failed MediaCMS uploads are re-queued instead of lost.** When a fetch-queue
+  item's upload fails with a broken connection (`IncompleteRead`), the drain now
+  re-queues it to the **back** of the queue for another attempt (up to
+  **3 attempts** total) rather than marking it `failed` on the first hit. The
+  retry runs *after* everything else currently pending, and the existing
+  inter-item cooldown naturally spaces it out. Only the **upload stage** is
+  retried — download/validation failures still fail immediately (they need
+  case-by-case handling). A new `fetch_queue.attempts` column (schema **v28**,
+  forward-only migration) tracks attempts; the last failure is recorded as
+  `failed` with an "after N attempts" note.
+
+### Fixed
+
+- **MediaCMS upload no longer fails hard on a broken response.** The final upload
+  POST previously had **no timeout** and no handling for a dropped connection, so
+  a truncated response (`Connection broken: IncompleteRead(...)` — MediaCMS
+  serializes a large media object into the response *after* accepting the file)
+  surfaced as a permanent `Failed to upload to MediaCMS` even though the item had
+  usually already been created server-side. The POST now uses a `(connect, read)`
+  timeout of `(30, 600)`, and on a connection-broken/`IncompleteRead`/timeout it
+  attempts to **recover the just-created item** by its "Original URL" description
+  marker (applying tags to it) rather than blindly re-POSTing and creating a
+  duplicate. If it can't be recovered yet (e.g. search-index lag) it raises a
+  distinct, retryable error — the next attempt's up-front duplicate check skips it
+  if it did land.
+
 ## [0.43.0] - 2026-08-24
 
 ### Added

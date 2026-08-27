@@ -17,6 +17,8 @@ import json
 import logging
 from typing import Any, Awaitable, Callable
 
+from . import log_capture
+
 logger = logging.getLogger(__name__)
 
 # A job is an async callable taking validated params + a context, returning an
@@ -150,6 +152,7 @@ class JobManager:
         self._cover_art = cover_art
         self._jobs: dict[str, dict] = {}
         self._running: dict[str, asyncio.Task] = {}
+        log_capture.install()
 
     def register(
         self,
@@ -237,6 +240,7 @@ class JobManager:
             cover_art=getattr(self, "_cover_art", None),
             job_manager=self,
         )
+        log_buffer = log_capture.start_capture()
         try:
             result = await func(params, ctx)
             detail = json.dumps(result) if result is not None else None
@@ -278,3 +282,13 @@ class JobManager:
                 )
         finally:
             self._running.pop(name, None)
+            log_capture.stop_capture()
+            if log_buffer:
+                try:
+                    await self._db.add_job_run_logs(run_id, log_buffer)
+                except Exception:  # noqa: BLE001 - log persistence is best-effort
+                    logger.debug(
+                        "Could not persist %d captured log line(s) for job '%s'",
+                        len(log_buffer),
+                        name,
+                    )

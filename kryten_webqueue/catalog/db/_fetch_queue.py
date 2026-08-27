@@ -46,11 +46,13 @@ class _FetchQueueMixin:
         status: str,
         result_json: str | None = None,
         error: str | None = None,
+        bump_attempts: bool = False,
     ) -> None:
+        attempts_sql = ", attempts = attempts + 1" if bump_attempts else ""
         await self._db.execute(
-            """
+            f"""
             UPDATE fetch_queue
-            SET status = ?, finished_at = datetime('now'), result_json = ?, error = ?
+            SET status = ?, finished_at = datetime('now'), result_json = ?, error = ?{attempts_sql}
             WHERE id = ?
             """,
             [status, result_json, error, item_id],
@@ -71,6 +73,30 @@ class _FetchQueueMixin:
         )
         await self._db.commit()
 
+    async def requeue_fetch_item_for_retry(
+        self, item_id: int, *, error: str | None = None
+    ) -> int:
+        """Re-queue an item to the *back* of the queue for another upload attempt.
+
+        Increments ``attempts``, sets ``added_at`` strictly after every existing
+        row so it sorts last (retry after everything else currently pending), and
+        clears the run timestamps. Keeps ``error`` as a breadcrumb of why it was
+        re-queued. Returns the new ``attempts`` count.
+        """
+        await self._db.execute(
+            "UPDATE fetch_queue"
+            " SET status = 'pending', attempts = attempts + 1,"
+            " added_at = (SELECT datetime(MAX(added_at), '+1 second') FROM fetch_queue),"
+            " started_at = NULL, finished_at = NULL, error = ?"
+            " WHERE id = ?",
+            [error, item_id],
+        )
+        await self._db.commit()
+        row = await self._fetch_one(
+            "SELECT attempts FROM fetch_queue WHERE id = ?", [item_id]
+        )
+        return int(row["attempts"]) if row else 0
+
     async def reset_running_fetch_items(self) -> int:
         """Reset any 'running' items to 'pending'; return how many were reset.
 
@@ -88,16 +114,54 @@ class _FetchQueueMixin:
         return cursor.rowcount or 0
 
     async def get_fetch_queue(
-        self, *, limit: int = 100, status: str | None = None
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        status: str | None = None,
+        hide_expired_done: bool = False,
     ) -> list[dict]:
         sql = "SELECT * FROM fetch_queue"
+        where, params = self._fetch_queue_filter(status, hide_expired_done)
+        if where:
+            sql += " WHERE " + where
+        sql += " ORDER BY added_at DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+        return await self._fetch_all(sql, params)
+
+    async def count_fetch_queue(
+        self, *, status: str | None = None, hide_expired_done: bool = False
+    ) -> int:
+        """Count rows matching the same visibility filter as ``get_fetch_queue``."""
+        sql = "SELECT COUNT(*) AS c FROM fetch_queue"
+        where, params = self._fetch_queue_filter(status, hide_expired_done)
+        if where:
+            sql += " WHERE " + where
+        row = await self._fetch_one(sql, params)
+        return int(row["c"]) if row else 0
+
+    @staticmethod
+    def _fetch_queue_filter(
+        status: str | None, hide_expired_done: bool
+    ) -> tuple[str, list]:
+        """Build the shared WHERE clause for fetch-queue list/count queries.
+
+        When ``hide_expired_done`` is set, successful downloads finished more than
+        24h ago are excluded from view (rows are retained for audit — this is a
+        visibility filter only). Failed / pending / running items are never
+        hidden regardless of age.
+        """
+        clauses: list[str] = []
         params: list = []
         if status:
-            sql += " WHERE status = ?"
+            clauses.append("status = ?")
             params.append(status)
-        sql += " ORDER BY added_at DESC LIMIT ?"
-        params.append(limit)
-        return await self._fetch_all(sql, params)
+        if hide_expired_done:
+            clauses.append(
+                "NOT (status = 'done' AND finished_at IS NOT NULL "
+                "AND finished_at < datetime('now', '-24 hours'))"
+            )
+        return " AND ".join(clauses), params
 
     async def count_fetch_queue_pending(self) -> int:
         row = await self._fetch_one(
