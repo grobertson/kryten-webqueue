@@ -54,12 +54,28 @@ from . import RetryableUploadError
 _JS_RUNTIMES = {"deno": {}, "node": {}}
 _REMOTE_COMPONENTS = ["ejs:github", "ejs:npm"]
 
+# "Be gentle" defaults applied to every yt-dlp call (see subclass below). Sources
+# like Tubi soft-throttle repeat requests, surfacing as intermittent
+# "Read timed out" on the webpage/m3u8 extraction steps. Pace requests, tolerate
+# slow responses, and retry the extractor rather than hard-failing.
+_SOURCE_SOCKET_TIMEOUT = 60  # floor (yt-dlp default is 20)
+_SOURCE_SLEEP_REQUESTS = 1.0  # seconds between data-extraction HTTP requests
+_SOURCE_EXTRACTOR_RETRIES = 5  # retry a failed "Downloading webpage" step
+
 
 class _YoutubeDLWithJSRuntimes(yt_dlp.YoutubeDL):
     def __init__(self, params=None, *args, **kwargs):  # noqa: D107
         merged = dict(params or {})
         merged.setdefault("js_runtimes", dict(_JS_RUNTIMES))
         merged.setdefault("remote_components", list(_REMOTE_COMPONENTS))
+        # Enforce a socket-timeout floor (raise over-aggressive per-call values
+        # like 10s), pace extraction requests, and retry transient extractor
+        # failures. setdefault lets an explicit larger per-call value still win.
+        merged["socket_timeout"] = max(
+            int(merged.get("socket_timeout") or 0), _SOURCE_SOCKET_TIMEOUT
+        )
+        merged.setdefault("sleep_interval_requests", _SOURCE_SLEEP_REQUESTS)
+        merged.setdefault("extractor_retries", _SOURCE_EXTRACTOR_RETRIES)
         super().__init__(merged, *args, **kwargs)
 
 

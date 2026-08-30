@@ -1,6 +1,20 @@
 # Changelog
 
-## [Unreleased]
+## [0.44.2] - 2026-08-29
+
+### Changed
+
+- **Gentler source fetching (fixes intermittent Tubi "Read timed out").** Every
+  yt-dlp call now flows through a socket-timeout **floor of 60s** (raising
+  over-aggressive per-call values like 10s), paces data-extraction HTTP requests
+  (`sleep_interval_requests = 1s`), and retries a failed webpage/m3u8 extraction
+  step (`extractor_retries = 5`). Sources like Tubi soft-throttle bursts of
+  requests, which surfaced as `HTTPSConnectionPool(host='tubitv.com'): Read timed
+  out` and cascading "Requested format is not available" errors; these defaults
+  make the downloader slower-but-steadier and far less likely to trip throttling.
+  Applied centrally in the vendored downloader's `YoutubeDL` wrapper.
+
+## [0.44.1] - 2026-08-27
 
 ### Fixed
 
