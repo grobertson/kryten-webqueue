@@ -1,3 +1,6 @@
+import logging
+
+import httpx
 from fastapi import APIRouter, Request, Depends, HTTPException
 from datetime import datetime, UTC
 
@@ -5,6 +8,35 @@ from ..auth.session import get_current_user
 from ..queue.ordering import insert_pay_queue, insert_pay_playnext
 
 router = APIRouter(prefix="/queue", tags=["queue"])
+
+logger = logging.getLogger(__name__)
+
+_PRICING_UNAVAILABLE = (
+    "Pricing is temporarily unavailable. Please try again in a moment."
+)
+
+
+async def _queue_preview_or_503(
+    api_gate, *, username: str, duration_sec: int, tier: str
+) -> dict:
+    """Fetch a cost preview, degrading to HTTP 503 when economy is unreachable.
+
+    Pricing is proxied through kryten-api-gate to kryten-economy. If economy is
+    down the proxy returns a 5xx (or the call fails at the transport layer);
+    surface that as a clean 503 instead of an unhandled 500.
+    """
+    try:
+        return await api_gate.queue_preview(
+            username=username, duration_sec=duration_sec, tier=tier
+        )
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code >= 500:
+            logger.warning("queue_preview upstream error: %s", exc)
+            raise HTTPException(503, _PRICING_UNAVAILABLE)
+        raise
+    except httpx.RequestError as exc:
+        logger.warning("queue_preview transport error: %s", exc)
+        raise HTTPException(503, _PRICING_UNAVAILABLE)
 
 
 async def _pre_fire_lock_detail(db) -> str:
@@ -78,7 +110,8 @@ async def add_to_queue(request: Request, user: dict = Depends(get_current_user))
 
     # Preview cost (api-gate _unwrap strips the success envelope; raise_for_status
     # handles non-2xx, so no success check needed here)
-    preview = await api_gate.queue_preview(
+    preview = await _queue_preview_or_503(
+        api_gate,
         username=user["username"],
         duration_sec=item["duration_sec"],
         tier=tier,
@@ -135,7 +168,8 @@ async def play_next(request: Request, user: dict = Depends(get_current_user)):
 
     # Preview cost (api-gate _unwrap strips the success envelope; raise_for_status
     # handles non-2xx, so no success check needed here)
-    preview = await api_gate.queue_preview(
+    preview = await _queue_preview_or_503(
+        api_gate,
         username=user["username"],
         duration_sec=item["duration_sec"],
         tier=tier,
@@ -187,7 +221,8 @@ async def cost_preview(
     if not item:
         raise HTTPException(404, "Item not found")
 
-    preview = await api_gate.queue_preview(
+    preview = await _queue_preview_or_503(
+        api_gate,
         username=user["username"],
         duration_sec=item["duration_sec"],
         tier=tier,

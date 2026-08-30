@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.44.5] - 2026-08-30
+
+### Fixed
+
+- **Queue pricing degrades gracefully when economy is unreachable.** The
+  pay-to-play cost preview (used by `POST /queue/add`, `/queue/playnext`, and
+  `GET /queue/preview`) is proxied through kryten-api-gate to kryten-economy.
+  When economy was down the proxy returned a 5xx and webqueue surfaced an
+  unhandled **HTTP 500**. Those calls now go through `_queue_preview_or_503`,
+  which maps upstream 5xx and transport errors to a clean **HTTP 503**
+  ("Pricing is temporarily unavailable. Please try again in a moment.").
+
 ## [0.44.4] - 2026-08-30
 
 ### Added
