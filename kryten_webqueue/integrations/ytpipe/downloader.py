@@ -3101,14 +3101,25 @@ class MediaDownloaderToMediaCMS:
             # ffprobe missing/errored: don't block the upload on our own check.
             print(f"[WARN] skipping pre-upload validation (ffprobe unavailable): {e}")
             return
+        fname = os.path.basename(file_path)
         if proc.returncode != 0:
+            stderr = proc.stderr.strip()
+            if not stderr:
+                # ffprobe exited non-zero but printed nothing to stderr — common
+                # with certain TS/HLS-merged containers (e.g. Tubi AES-128).
+                # Let MediaCMS be the final arbiter rather than blocking the upload.
+                print(
+                    f"[WARN] ffprobe exited {proc.returncode} with no error output for"
+                    f" {fname}; skipping pre-upload validation"
+                )
+                return
             raise ValueError(
-                f"ffprobe could not read the file: {proc.stderr.strip()[:200]}"
+                f"ffprobe could not read the file {fname}: {stderr[:200]}"
             )
         try:
             meta = json.loads(proc.stdout or "{}")
         except ValueError:
-            raise ValueError("ffprobe returned unparseable output")
+            raise ValueError(f"ffprobe returned unparseable output for {fname}")
         has_video = any(
             s.get("codec_type") == "video" for s in meta.get("streams") or []
         )
@@ -3118,7 +3129,7 @@ class MediaDownloaderToMediaCMS:
             duration = 0.0
         if not has_video or duration <= 0:
             raise ValueError(
-                f"downloaded file is not a valid video (video_stream={has_video}, duration={duration})"
+                f"{fname} is not a valid video (video_stream={has_video}, duration={duration})"
             )
 
     def process_video(

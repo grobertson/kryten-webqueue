@@ -1,6 +1,6 @@
 [project]
 name = "kryten-webqueue"
-version = "0.44.5"
+version = "0.44.6"
 description = "Netflix/Tubi-style catalog browser and pay-to-play queue management for CyTube"
 readme = "README.md"
 license = "MIT"

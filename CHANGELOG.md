@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.44.6] - 2026-08-30
+
+### Fixed
+
+- **Tubi (AES-128 HLS) downloads no longer fail ffprobe validation.** When
+  `ffprobe` exits non-zero but writes nothing to stderr — the common outcome
+  for TS/HLS-merged containers like Tubi movies — the pre-upload check now
+  treats it as a soft skip (same behaviour as when `ffprobe` is absent) rather
+  than a hard failure. A real error (non-empty stderr) still fails fast. All
+  error messages now include the filename so the admin job history is
+  actionable.
+
 ## [0.44.5] - 2026-08-30
 
 ### Fixed
