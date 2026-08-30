@@ -1,6 +1,6 @@
 [project]
 name = "kryten-webqueue"
-version = "0.44.2"
+version = "0.44.3"
 description = "Netflix/Tubi-style catalog browser and pay-to-play queue management for CyTube"
 readme = "README.md"
 license = "MIT"
@@ -21,6 +21,9 @@ dependencies = [
     "pydantic>=2.0",
     "python-dateutil>=2.8",
     "yt-dlp>=2024.1",
+    # yt-dlp needs this to decrypt AES-128 HLS in-process (e.g. Tubi); without it
+    # it delegates to ffmpeg, whose static build segfaults on that path.
+    "pycryptodomex>=3.20",
     "openpyxl>=3.1",
     "requests>=2.31",
     "pyyaml>=6.0",

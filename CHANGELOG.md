@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.44.3] - 2026-08-29
+
+### Fixed
+
+- **Tubi (and other AES-128 HLS) downloads no longer crash ffmpeg.** Added
+  `pycryptodomex` so yt-dlp decrypts AES-128-encrypted HLS streams **in-process**.
+  Without it, yt-dlp logged `The stream has AES-128 encryption and pycryptodomex
+  is not available; extraction will be delegated to ffmpeg`, and the static ffmpeg
+  build then segfaulted (`ffmpeg exited with code -11`), failing the download.
+  This is a separate failure mode from the source-throttling read-timeouts
+  addressed in 0.44.2.
+
 ## [0.44.2] - 2026-08-29
 
 ### Changed
