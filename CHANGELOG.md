@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.44.4] - 2026-08-30
+
+### Added
+
+- **Pre-upload video validation.** After download and before uploading to
+  MediaCMS, the fetcher now runs `ffprobe` on the file and rejects it if it has
+  no video stream or zero duration. MediaCMS deletes any upload it can't identify
+  as video (its `media_init` removes the original when `ffprobe` fails), which
+  otherwise showed up as a successful `201` followed by a silently vanished item.
+  A bad download now fails fast with a clear reason instead. If `ffprobe` is
+  unavailable the check is skipped (non-fatal).
+
 ## [0.44.3] - 2026-08-29
 
 ### Fixed

@@ -22,6 +22,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -3069,6 +3070,57 @@ class MediaDownloaderToMediaCMS:
 
         return results
 
+    def _validate_downloaded_video(self, file_path: str) -> None:
+        """Reject an unreadable download before uploading.
+
+        MediaCMS runs ffprobe on every upload and *deletes* anything it can't
+        identify as video, so a truncated/invalid file would upload with a 201
+        and then silently vanish. Fail here instead, with a clear reason.
+        """
+        if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+            raise ValueError(f"downloaded file missing or empty: {file_path}")
+        try:
+            proc = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=codec_type:format=duration",
+                    "-of",
+                    "json",
+                    file_path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except (OSError, subprocess.SubprocessError) as e:
+            # ffprobe missing/errored: don't block the upload on our own check.
+            print(f"[WARN] skipping pre-upload validation (ffprobe unavailable): {e}")
+            return
+        if proc.returncode != 0:
+            raise ValueError(
+                f"ffprobe could not read the file: {proc.stderr.strip()[:200]}"
+            )
+        try:
+            meta = json.loads(proc.stdout or "{}")
+        except ValueError:
+            raise ValueError("ffprobe returned unparseable output")
+        has_video = any(
+            s.get("codec_type") == "video" for s in meta.get("streams") or []
+        )
+        try:
+            duration = float((meta.get("format") or {}).get("duration") or 0)
+        except (TypeError, ValueError):
+            duration = 0.0
+        if not has_video or duration <= 0:
+            raise ValueError(
+                f"downloaded file is not a valid video (video_stream={has_video}, duration={duration})"
+            )
+
     def process_video(
         self,
         url: str,
@@ -3132,6 +3184,9 @@ class MediaDownloaderToMediaCMS:
             print(f"Downloaded: {file_path}")
 
         try:
+            # Reject unreadable downloads before upload (MediaCMS deletes files
+            # ffprobe can't parse, which otherwise looks like a vanished upload).
+            self._validate_downloaded_video(file_path)
             # Upload to MediaCMS
             if not playlist_info:
                 print("Uploading to MediaCMS...")
