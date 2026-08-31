@@ -549,6 +549,10 @@ class _DBBase:
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA foreign_keys=ON")
+        await self._db.execute("PRAGMA synchronous=NORMAL")       # safe in WAL; faster than FULL
+        await self._db.execute("PRAGMA busy_timeout=5000")        # retry up to 5 s on lock
+        await self._db.execute("PRAGMA wal_autocheckpoint=100")   # checkpoint every 100 pages
+        await self._db.execute("PRAGMA wal_checkpoint(PASSIVE)")  # drain any stale WAL on open
 
     async def close(self):
         if self._db:

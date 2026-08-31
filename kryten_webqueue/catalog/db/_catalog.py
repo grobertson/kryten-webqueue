@@ -1042,30 +1042,22 @@ class _CatalogMixin:
         - catalog_people
         - catalog_studios
         """
-        cursor = await self._db.execute(
-            "SELECT friendly_token FROM catalog WHERE synced_at < ? OR synced_at IS NULL",
-            [sync_started_at],
-        )
-        tokens = [row[0] for row in await cursor.fetchall()]
-
-        if not tokens:
-            return 0
-
-        # Delete from FTS first (not automatically cascaded)
-        placeholders = ",".join("?" * len(tokens))
+        # Delete from FTS first (not automatically cascaded); use subquery to avoid
+        # building a potentially huge IN-list parameter list for large syncs.
         await self._db.execute(
-            f"DELETE FROM catalog_fts WHERE friendly_token IN ({placeholders})",
-            tokens,
+            "DELETE FROM catalog_fts WHERE friendly_token IN "
+            "(SELECT friendly_token FROM catalog WHERE synced_at < ? OR synced_at IS NULL)",
+            [sync_started_at],
         )
 
         # Delete from catalog (cascades to join tables via ON DELETE CASCADE)
-        await self._db.execute(
-            f"DELETE FROM catalog WHERE friendly_token IN ({placeholders})",
-            tokens,
+        cursor = await self._db.execute(
+            "DELETE FROM catalog WHERE synced_at < ? OR synced_at IS NULL",
+            [sync_started_at],
         )
-
+        count = cursor.rowcount
         await self._db.commit()
-        return len(tokens)
+        return count or 0
 
     async def find_catalog_by_title(self, title: str) -> dict | None:
         """Best-effort lookup of a catalog item whose title matches ``title``.

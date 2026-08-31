@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.44.7] - 2026-08-31
+
+### Fixed
+
+- **SQLite WAL corruption mitigation.** The catalog DB connection now sets
+  `synchronous=NORMAL` (safe in WAL mode), `busy_timeout=5000` (retry on
+  lock contention instead of failing immediately), `wal_autocheckpoint=100`
+  (checkpoint every 100 pages instead of the 1000-page default, keeping the
+  WAL small), and runs a passive checkpoint on every connect to drain any
+  stale frames left by an unclean previous run.
+- **`delete_stale_catalog_items` rewritten to use subqueries.** Previously
+  built a potentially huge `IN (?, ?, …)` parameter list (one bind for every
+  stale token) before issuing two separate bulk DELETEs. Now uses correlated
+  subqueries instead, eliminating the SELECT round-trip and the large
+  parameter list, reducing per-sync WAL pressure.
+
 ## [0.44.6] - 2026-08-30
 
 ### Fixed
