@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.45.1] - 2026-09-10
+
+### Fixed
+
+- **MOTD mystery boxes now use the branded placeholder art** the catalog browse
+  view already draws from (`placeholder_dir`, served under `/images`), picking a
+  different tape per slot the way browse varies it per tile. The 0.45.0 default
+  pointed at a `motd_boxes/mystery-box.jpg` that doesn't exist, so every
+  unresolved slot would have rendered a broken image. New
+  `motd.mystery_box_base_url` absolutizes those URLs for CyTube, which renders
+  the MOTD off-site; `motd.mystery_box_url` is now an empty-by-default fallback
+  used only when no branded placeholders are installed.
+
 ## [0.45.0] - 2026-09-10
 
 ### Added

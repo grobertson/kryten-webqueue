@@ -95,7 +95,8 @@
     "banner_url": "https://i.postimg.cc/jdr2mR8Y/1562479186-8-channel-Ztitlenew.png",
     "headline": "CHANNEL Z WEEKEND MOVIE PLAYLIST ({dates})",
     "showtime": "6pm ET",
-    "mystery_box_url": "https://www.dropsugar.co/static/motd_boxes/mystery-box.jpg",
+    "mystery_box_base_url": "https://queue.dropsugar.co",
+    "mystery_box_url": "",
     "mystery_box_href": "https://queue.dropsugar.co/",
     "upload_max_bytes": 5242880,
     "links": [

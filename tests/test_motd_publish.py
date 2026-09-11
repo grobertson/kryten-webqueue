@@ -30,6 +30,7 @@ def _config(tmp_path, **motd_kw):
         poster_dir=str(tmp_path / "boxes"),
         poster_base_url="https://cdn.example/boxes",
         output_dir=str(tmp_path / "out"),
+        mystery_box_base_url="https://queue.example",
         mystery_box_url="https://cdn.example/boxes/mystery.jpg",
         mystery_box_href="https://queue.example/",
         **motd_kw,
@@ -124,6 +125,43 @@ def test_unverifiable_title_falls_back_to_mystery(tmp_path, monkeypatch, stub_lo
     assert slot.source == "mystery"
     assert slot.title == "Some Untitled Thing"
     assert "could not be verified" in slot.note
+
+
+# --- mystery art comes from the browse view's branded placeholder pool ---
+
+
+def test_mystery_pool_absolutizes_browse_placeholders(tmp_path):
+    config = _config(tmp_path)
+    cover_art = SimpleNamespace(
+        list_placeholder_urls=lambda: ["/images/placeholders/a.webp"]
+    )
+    assert builder.mystery_pool(config, cover_art) == [
+        "https://queue.example/images/placeholders/a.webp"
+    ]
+    assert builder.mystery_pool(config, None) == []
+
+
+def test_mystery_slots_use_the_placeholder_pool(tmp_path, monkeypatch, stub_lookup):
+    _stub_workbook(monkeypatch, {})
+    week = builder.build_slots(
+        _config(tmp_path),
+        today=datetime.date(2026, 3, 4),
+        mystery_urls=["https://queue.example/images/placeholders/a.webp"],
+    )
+    assert all(
+        s.poster_url == "https://queue.example/images/placeholders/a.webp"
+        for s in week.slots
+    )
+
+
+def test_mystery_falls_back_when_no_placeholders_installed(
+    tmp_path, monkeypatch, stub_lookup
+):
+    _stub_workbook(monkeypatch, {})
+    week = builder.build_slots(
+        _config(tmp_path), today=datetime.date(2026, 3, 4), mystery_urls=[]
+    )
+    assert all(s.poster_url.endswith("mystery.jpg") for s in week.slots)
 
 
 def test_dry_run_writes_nothing(tmp_path, monkeypatch, stub_lookup):

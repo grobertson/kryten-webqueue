@@ -17,7 +17,7 @@ import datetime
 import logging
 from pathlib import Path
 
-from ..motd.builder import build_slots
+from ..motd.builder import build_slots, mystery_pool
 from ..motd.render import render_motd
 from .manager import JobError
 
@@ -140,6 +140,7 @@ async def motd_publish_job(params: dict, ctx) -> dict:
             refresh_art=refresh_art,
             dry_run=dry_run,
             week_offset=week_offset,
+            mystery_urls=mystery_pool(ctx.config, getattr(ctx, "cover_art", None)),
             emit=_emit,
         )
     except RuntimeError as exc:

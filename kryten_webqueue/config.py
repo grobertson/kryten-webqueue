@@ -47,7 +47,12 @@ class MOTDConfig(BaseModel):
     # {dates} is substituted with the weekend showtimes (e.g. "8/14 @ 6pm ET & ...").
     headline: str = "CHANNEL Z WEEKEND MOVIE PLAYLIST ({dates})"
     showtime: str = "6pm ET"
-    mystery_box_url: str = "https://www.dropsugar.co/static/motd_boxes/mystery-box.jpg"
+    # Mystery boxes are drawn from the same branded placeholder pool the browse
+    # view uses (served from the webqueue /images mount); this absolutizes them
+    # for CyTube, which renders the MOTD off-site.
+    mystery_box_base_url: str = "https://queue.dropsugar.co"
+    # Single fallback used only when no branded placeholders are installed.
+    mystery_box_url: str = ""
     mystery_box_href: str = "https://queue.dropsugar.co/"
     links: list[MOTDLink] = Field(
         default_factory=lambda: [

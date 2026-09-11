@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from pydantic import BaseModel
 
 from ..auth.session import require_admin
-from ..motd.builder import SLOT_KEY_RE, build_slots, week_context
+from ..motd.builder import SLOT_KEY_RE, build_slots, mystery_pool, week_context
 from ..motd.render import render_motd
 
 router = APIRouter(prefix="/admin/motd", tags=["admin"])
@@ -72,6 +72,9 @@ async def _build_current(request: Request, week: str = "current"):
         overrides=overrides,
         dry_run=True,
         week_offset=_week_offset(week),
+        mystery_urls=mystery_pool(
+            config, getattr(request.app.state, "cover_art", None)
+        ),
     )
 
 

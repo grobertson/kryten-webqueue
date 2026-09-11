@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import random
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -149,9 +150,28 @@ def _titles_by_night(movies_by_section: dict[str, list[str]]) -> dict[int, list[
     return by_night
 
 
-def _apply_mystery(slot: MOTDSlot, motd_cfg) -> None:
+def mystery_pool(config, cover_art) -> list[str]:
+    """Absolute URLs for the branded placeholder art the browse view uses.
+
+    ``list_placeholder_urls`` returns site-relative ``/images/...`` paths; CyTube
+    renders the MOTD off-site, so they have to be absolutized.
+    """
+    if cover_art is None:
+        return []
+    base = str(getattr(config.motd, "mystery_box_base_url", "") or "").rstrip("/")
+    if not base:
+        return []
+    return [base + url for url in cover_art.list_placeholder_urls()]
+
+
+def _apply_mystery(slot: MOTDSlot, motd_cfg, pool: list[str]) -> None:
     slot.source = "mystery"
-    slot.poster_url = getattr(motd_cfg, "mystery_box_url", "") or ""
+    # Vary the art across the grid the way browse varies it across tiles.
+    slot.poster_url = (
+        random.choice(pool)
+        if pool
+        else (getattr(motd_cfg, "mystery_box_url", "") or "")
+    )
     slot.href = getattr(motd_cfg, "mystery_box_href", "") or ""
 
 
@@ -164,6 +184,7 @@ def build_slots(
     dry_run: bool = False,
     today: datetime.date | None = None,
     week_offset: int = 0,
+    mystery_urls: list[str] | None = None,
     emit=None,
 ) -> MOTDWeek:
     """Resolve the upcoming weekend into a complete grid of poster slots.
@@ -178,6 +199,7 @@ def build_slots(
             emit(detail)
 
     overrides = overrides or {}
+    pool = mystery_urls or []
     motd_cfg = getattr(config, "motd", None)
     slot_count = int(getattr(motd_cfg, "slots", 12) or 12)
     poster_dir = Path(
@@ -234,13 +256,13 @@ def build_slots(
             continue
 
         if not slot.title:
-            _apply_mystery(slot, motd_cfg)
+            _apply_mystery(slot, motd_cfg, pool)
             slot.note = "no title on the schedule yet"
             continue
 
         info = _resolve_omdb(slot.title, api_key=omdb_key) if omdb_key else None
         if not info:
-            _apply_mystery(slot, motd_cfg)
+            _apply_mystery(slot, motd_cfg, pool)
             slot.note = "title could not be verified"
             logger.info("motd: no OMDB match for %r (%s)", slot.title, slot.slot_key)
             if override.get("href"):
@@ -266,7 +288,7 @@ def build_slots(
                 slot.poster_url = f"{poster_base_url}/{filename}"
                 slot.source = "omdb"
             else:
-                _apply_mystery(slot, motd_cfg)
+                _apply_mystery(slot, motd_cfg, pool)
                 slot.note = "poster download failed"
 
         slot.href = override.get("href") or _imdb_href(slot.imdb_id)
