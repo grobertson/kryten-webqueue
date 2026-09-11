@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.46.1] - 2026-09-10
+
+### Changed
+
+- **The grid is an even split again** (6/6 for a 12-slot Friday+Saturday
+  weekend). The 5/7 shape 0.46.0 inferred from the live MOTD was an artifact of
+  a markup bug: with the `<a>` tags left unclosed, the blank line after the
+  fifth poster looks like a night break but isn't, and most screen widths hide
+  the resulting reflow. The generated snippet closes its tags, so it renders the
+  intended 6/6.
+- A night with more scheduled titles than grid positions now records a warning
+  (job result, admin panel, and log) instead of silently dropping the extras.
+
 ## [0.46.0] - 2026-09-10
 
 ### Changed
@@ -15,6 +28,7 @@
   night is never truncated, so an over-full weekend shows every scheduled movie;
   `motd.slots` is a target the grid is only padded *up* to when the weekend is
   still thin.
+  (Reverted in 0.46.1 — the 5/7 reading was a markup artifact.)
 - **Sunday is excluded.** New `motd.nights` (default `[1, 2]`) controls which
   nights the grid covers; Sunday has no schedule yet, so its workbook titles are
   parsed but ignored. Add `3` once the scheduled-playlists feature fills that

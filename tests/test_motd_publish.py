@@ -85,32 +85,35 @@ def test_grid_pads_a_thin_weekend_to_the_target_size(
     assert len([s for s in week.slots if s.night == 2]) == 6
 
 
-def test_grid_shape_follows_the_schedule(tmp_path, monkeypatch, stub_lookup):
-    # A real 5/7 weekend renders 5/7, not an even 6/6.
+def test_grid_shape_is_an_even_split(tmp_path, monkeypatch, stub_lookup):
     _stub_workbook(
         monkeypatch,
         {
-            1: [f"Friday {n} (1980)" for n in range(5)],
-            2: [f"Saturday {n} (1980)" for n in range(7)],
+            1: [f"Friday {n} (1980)" for n in range(6)],
+            2: [f"Saturday {n} (1980)" for n in range(6)],
         },
     )
     week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
-    assert len([s for s in week.slots if s.night == 1]) == 5
-    assert len([s for s in week.slots if s.night == 2]) == 7
+    assert len([s for s in week.slots if s.night == 1]) == 6
+    assert len([s for s in week.slots if s.night == 2]) == 6
     assert all(s.resolved for s in week.slots)
+    assert not week.warnings
 
 
-def test_grid_never_truncates_an_overfull_weekend(tmp_path, monkeypatch, stub_lookup):
+def test_overfull_night_warns_instead_of_silently_dropping(
+    tmp_path, monkeypatch, stub_lookup
+):
     _stub_workbook(
         monkeypatch,
         {
             1: [f"Friday {n} (1980)" for n in range(8)],
-            2: [f"Saturday {n} (1980)" for n in range(7)],
+            2: [f"Saturday {n} (1980)" for n in range(6)],
         },
     )
     week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
-    assert len(week.slots) == 15
-    assert "Friday 7 (1980)" in [s.title for s in week.slots]
+    assert len(week.slots) == 12
+    assert any("2 scheduled title(s)" in w for w in week.warnings)
+    assert "Friday 6 (1980)" not in [s.title for s in week.slots]
 
 
 def test_sunday_titles_are_ignored(tmp_path, monkeypatch, stub_lookup):

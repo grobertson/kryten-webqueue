@@ -127,22 +127,13 @@ def _grid_nights(motd_cfg) -> tuple[int, ...]:
     return nights or _NIGHTS
 
 
-def _slot_counts(
-    titles_by_night: dict[int, list[str]], nights: tuple[int, ...], slots: int
-) -> dict[int, int]:
-    """Decide how many positions each night gets.
-
-    The schedule drives the shape — a 5/7 weekend renders 5/7, not an even 6/6 —
-    and a night is never truncated, so a scheduled movie can't be hidden. Only
-    when the weekend is still thin is the grid padded up to ``slots``, handing
-    each extra to whichever night is furthest below its even share.
-    """
-    counts = {n: len(titles_by_night.get(n, [])) for n in nights}
-    share = slots / len(nights)
-    while sum(counts.values()) < slots:
-        night = min(nights, key=lambda n: (counts[n] - share, nights.index(n)))
-        counts[night] += 1
-    return counts
+def _slot_counts(nights: tuple[int, ...], slots: int) -> dict[int, int]:
+    """Split ``slots`` evenly across ``nights``; extras go to the earlier nights."""
+    per_night, remainder = divmod(slots, len(nights))
+    return {
+        night: per_night + (1 if index <= remainder else 0)
+        for index, night in enumerate(nights, 1)
+    }
 
 
 def _blank_grid(
@@ -258,13 +249,26 @@ def build_slots(
         logger.warning("motd: workbook unavailable for %s: %s", week_key, exc)
 
     nights = _grid_nights(motd_cfg)
-    week.slots = _blank_grid(
-        friday,
-        saturday,
-        sunday,
-        _slot_counts(titles_by_night, nights, slot_count),
-        nights,
-    )
+    counts = _slot_counts(nights, slot_count)
+    week.slots = _blank_grid(friday, saturday, sunday, counts, nights)
+
+    # The grid is a fixed size, so a night with more titles than positions would
+    # silently drop the extras. Surface it instead.
+    for night in nights:
+        extra = len(titles_by_night.get(night, [])) - counts[night]
+        if extra > 0:
+            label = _NIGHT_LABELS.get(night, f"Night {night}")
+            week.warnings.append(
+                f"{label}: {extra} scheduled title(s) beyond the "
+                f"{counts[night]}-slot grid are not shown"
+            )
+            logger.warning(
+                "motd: %s has %d title(s) beyond its %d slots on %s",
+                label,
+                extra,
+                counts[night],
+                week_key,
+            )
 
     if not dry_run:
         poster_dir.mkdir(parents=True, exist_ok=True)
