@@ -35,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 SLOT_KEY_RE = re.compile(r"^night[1-3]-slot([1-9]\d{0,2})$")
 
-# Nights the grid always reserves space for, in display order.
+# Every night the workbook can describe. The grid itself covers only the nights
+# in ``motd.nights`` — Sunday has no schedule yet, so its titles are parsed but
+# never placed.
 _NIGHTS = (1, 2, 3)
 
 
@@ -118,17 +120,43 @@ def _imdb_href(imdb_id: str | None) -> str:
     return f"https://www.imdb.com/title/{imdb_id}/" if imdb_id else ""
 
 
+def _grid_nights(motd_cfg) -> tuple[int, ...]:
+    """Nights the grid reserves space for, in display order."""
+    configured = getattr(motd_cfg, "nights", None) or _NIGHTS
+    nights = tuple(int(n) for n in configured if int(n) in _NIGHTS)
+    return nights or _NIGHTS
+
+
+def _slot_counts(
+    titles_by_night: dict[int, list[str]], nights: tuple[int, ...], slots: int
+) -> dict[int, int]:
+    """Decide how many positions each night gets.
+
+    The schedule drives the shape — a 5/7 weekend renders 5/7, not an even 6/6 —
+    and a night is never truncated, so a scheduled movie can't be hidden. Only
+    when the weekend is still thin is the grid padded up to ``slots``, handing
+    each extra to whichever night is furthest below its even share.
+    """
+    counts = {n: len(titles_by_night.get(n, [])) for n in nights}
+    share = slots / len(nights)
+    while sum(counts.values()) < slots:
+        night = min(nights, key=lambda n: (counts[n] - share, nights.index(n)))
+        counts[night] += 1
+    return counts
+
+
 def _blank_grid(
-    friday: datetime.date, saturday: datetime.date, sunday: datetime.date, slots: int
+    friday: datetime.date,
+    saturday: datetime.date,
+    sunday: datetime.date,
+    counts: dict[int, int],
+    nights: tuple[int, ...],
 ) -> list[MOTDSlot]:
-    """Lay out ``slots`` positions spread evenly across the three nights."""
-    per_night = max(1, slots // len(_NIGHTS))
-    remainder = slots - per_night * len(_NIGHTS)
+    """Lay out the per-night positions in display order."""
     dates = {1: friday, 2: saturday, 3: sunday}
     grid: list[MOTDSlot] = []
-    for night in _NIGHTS:
-        count = per_night + (1 if night <= remainder else 0)
-        for position in range(1, count + 1):
+    for night in nights:
+        for position in range(1, counts[night] + 1):
             grid.append(
                 MOTDSlot(
                     slot_key=f"night{night}-slot{position}",
@@ -212,7 +240,6 @@ def build_slots(
     week_key, friday, saturday = upcoming_weekend_sheet(base_day)
     sunday = friday + datetime.timedelta(days=2)
     week = MOTDWeek(week_key=week_key, friday=friday, saturday=saturday, sunday=sunday)
-    week.slots = _blank_grid(friday, saturday, sunday, slot_count)
 
     # The workbook is best-effort: a missing sheet yields an all-mystery grid
     # rather than a failed run, so the MOTD still publishes on schedule.
@@ -229,6 +256,15 @@ def build_slots(
         week.workbook_found = False
         week.warnings.append(f"workbook unavailable: {exc}")
         logger.warning("motd: workbook unavailable for %s: %s", week_key, exc)
+
+    nights = _grid_nights(motd_cfg)
+    week.slots = _blank_grid(
+        friday,
+        saturday,
+        sunday,
+        _slot_counts(titles_by_night, nights, slot_count),
+        nights,
+    )
 
     if not dry_run:
         poster_dir.mkdir(parents=True, exist_ok=True)

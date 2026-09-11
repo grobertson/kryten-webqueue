@@ -43,6 +43,9 @@ class MOTDConfig(BaseModel):
     template: str = "channel_z.html"
     # Grid size; unresolved positions are filled with mystery boxes.
     slots: int = 12
+    # Nights the grid covers, in display order (1=Fri, 2=Sat, 3=Sun). Sunday has
+    # no schedule yet, so its workbook titles are ignored until it's added here.
+    nights: list[int] = Field(default_factory=lambda: [1, 2])
     banner_url: str = "https://i.postimg.cc/jdr2mR8Y/1562479186-8-channel-Ztitlenew.png"
     # {dates} is substituted with the weekend showtimes (e.g. "8/14 @ 6pm ET & ...").
     headline: str = "CHANNEL Z WEEKEND MOVIE PLAYLIST ({dates})"
@@ -61,11 +64,14 @@ class MOTDConfig(BaseModel):
                 url="https://www.reddit.com/r/Channel_Z/",
             ),
             MOTDLink(
-                label="See the queue and decide what's next!",
+                label="See the queue and decide what's next! Our Webqueue app is in open beta!",
                 url="https://queue.dropsugar.co/",
             ),
         ]
     )
+    # The next-event line is carried in the render context but stays hidden until
+    # it's deliberately debuted; the hand-built MOTD has no such line.
+    show_next_event: bool = False
     # Max size accepted by the admin alternate-art upload endpoint.
     upload_max_bytes: int = 5 * 1024 * 1024
 

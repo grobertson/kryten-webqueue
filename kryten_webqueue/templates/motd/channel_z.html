@@ -22,7 +22,7 @@
 {% endfor %}
 {% endfor %}
         </div>
-{% if next_event %}
+{% if show_next_event and next_event %}
         <div class="weekend-title">🟥🟧🟨🟩Up next: {{ next_event.label }}{% if next_event.starts_in %} — {{ next_event.starts_in }}{% endif %}🟩🟨🟧🟥</div>
 {% endif %}
 {% for link in links %}

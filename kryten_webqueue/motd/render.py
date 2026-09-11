@@ -73,6 +73,7 @@ def render_motd(config, week: MOTDWeek, *, next_event: dict | None = None) -> st
             for link in getattr(motd_cfg, "links", [])
         ],
         next_event=next_event,
+        show_next_event=bool(getattr(motd_cfg, "show_next_event", False)),
         week_key=week.week_key,
         generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat(
             timespec="seconds"

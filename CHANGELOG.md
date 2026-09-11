@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.46.0] - 2026-09-10
+
+### Changed
+
+- **MOTD template rebuilt from the live hand-built MOTD** (pulled from the
+  channel via api-gate) rather than the older copy in kryten-llm. Banner image,
+  headline, and both footer lines now match the real markup verbatim — including
+  the "Our Webqueue app is in open beta!" footer text that the earlier default
+  dropped. The generated snippet diffs clean against the live one apart from
+  properly closed `<a>` tags and `title`/`alt` attributes.
+- **Grid shape follows the schedule.** A 5/7 weekend now renders 5/7 instead of
+  being forced into an even 6/6, matching how the MOTD is actually built. A
+  night is never truncated, so an over-full weekend shows every scheduled movie;
+  `motd.slots` is a target the grid is only padded *up* to when the weekend is
+  still thin.
+- **Sunday is excluded.** New `motd.nights` (default `[1, 2]`) controls which
+  nights the grid covers; Sunday has no schedule yet, so its workbook titles are
+  parsed but ignored. Add `3` once the scheduled-playlists feature fills that
+  slot.
+- **The next-event line stays hidden.** It is still carried in the render
+  context, but is only emitted when `motd.show_next_event` is true (default
+  false), so the published MOTD matches the hand-built one until the feature is
+  deliberately debuted.
+
 ## [0.45.1] - 2026-09-10
 
 ### Fixed

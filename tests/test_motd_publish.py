@@ -72,12 +72,70 @@ def _stub_workbook(monkeypatch, titles_by_night):
 # --- grid layout ---
 
 
-def test_grid_is_always_full_size(tmp_path, monkeypatch, stub_lookup):
+def test_grid_pads_a_thin_weekend_to_the_target_size(
+    tmp_path, monkeypatch, stub_lookup
+):
     _stub_workbook(monkeypatch, {})
     week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
     assert len(week.slots) == 12
     assert [s.slot_key for s in week.slots[:2]] == ["night1-slot1", "night1-slot2"]
+    # Sunday has no schedule yet, so the grid is Friday + Saturday.
+    assert {s.night for s in week.slots} == {1, 2}
+    assert len([s for s in week.slots if s.night == 1]) == 6
+    assert len([s for s in week.slots if s.night == 2]) == 6
+
+
+def test_grid_shape_follows_the_schedule(tmp_path, monkeypatch, stub_lookup):
+    # A real 5/7 weekend renders 5/7, not an even 6/6.
+    _stub_workbook(
+        monkeypatch,
+        {
+            1: [f"Friday {n} (1980)" for n in range(5)],
+            2: [f"Saturday {n} (1980)" for n in range(7)],
+        },
+    )
+    week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
+    assert len([s for s in week.slots if s.night == 1]) == 5
+    assert len([s for s in week.slots if s.night == 2]) == 7
+    assert all(s.resolved for s in week.slots)
+
+
+def test_grid_never_truncates_an_overfull_weekend(tmp_path, monkeypatch, stub_lookup):
+    _stub_workbook(
+        monkeypatch,
+        {
+            1: [f"Friday {n} (1980)" for n in range(8)],
+            2: [f"Saturday {n} (1980)" for n in range(7)],
+        },
+    )
+    week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
+    assert len(week.slots) == 15
+    assert "Friday 7 (1980)" in [s.title for s in week.slots]
+
+
+def test_sunday_titles_are_ignored(tmp_path, monkeypatch, stub_lookup):
+    _stub_workbook(
+        monkeypatch,
+        {
+            1: ["Friday One (1976)"],
+            2: ["Saturday One (1980)"],
+            3: ["Sunday One (1990)"],
+        },
+    )
+    week = builder.build_slots(_config(tmp_path), today=datetime.date(2026, 3, 4))
+    titles = [s.title for s in week.slots if s.title]
+    assert "Friday One (1976)" in titles
+    assert "Saturday One (1980)" in titles
+    assert "Sunday One (1990)" not in titles
+
+
+def test_nights_config_can_re_enable_sunday(tmp_path, monkeypatch, stub_lookup):
+    _stub_workbook(monkeypatch, {3: ["Sunday One (1990)"]})
+    week = builder.build_slots(
+        _config(tmp_path, nights=[1, 2, 3]), today=datetime.date(2026, 3, 4)
+    )
     assert {s.night for s in week.slots} == {1, 2, 3}
+    assert "Sunday One (1990)" in [s.title for s in week.slots if s.title]
 
 
 def test_missing_workbook_yields_all_mystery(tmp_path, monkeypatch, stub_lookup):
@@ -241,9 +299,21 @@ def test_render_groups_by_night_and_includes_links(tmp_path, monkeypatch, stub_l
     assert "3/6 @ 6pm ET &amp; 3/7 @ 6pm ET" in html
 
 
-def test_render_includes_next_event_when_present(tmp_path, monkeypatch, stub_lookup):
+def test_next_event_is_carried_but_hidden_by_default(
+    tmp_path, monkeypatch, stub_lookup
+):
     _stub_workbook(monkeypatch, {})
     config = _config(tmp_path)
+    week = builder.build_slots(config, today=datetime.date(2026, 3, 4))
+    html = render.render_motd(
+        config, week, next_event={"label": "Saturday Night", "starts_in": "in 2h"}
+    )
+    assert "Up next" not in html
+
+
+def test_render_includes_next_event_when_enabled(tmp_path, monkeypatch, stub_lookup):
+    _stub_workbook(monkeypatch, {})
+    config = _config(tmp_path, show_next_event=True)
     week = builder.build_slots(config, today=datetime.date(2026, 3, 4))
     html = render.render_motd(
         config, week, next_event={"label": "Saturday Night", "starts_in": "in 2h"}

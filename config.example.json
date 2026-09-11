@@ -92,6 +92,7 @@
     "output_dir": "~/kryten",
     "template": "channel_z.html",
     "slots": 12,
+    "nights": [1, 2],
     "banner_url": "https://i.postimg.cc/jdr2mR8Y/1562479186-8-channel-Ztitlenew.png",
     "headline": "CHANNEL Z WEEKEND MOVIE PLAYLIST ({dates})",
     "showtime": "6pm ET",
@@ -102,10 +103,11 @@
     "links": [
       { "label": "Join us on Reddit!", "url": "https://www.reddit.com/r/Channel_Z/" },
       {
-        "label": "See the queue and decide what's next!",
+        "label": "See the queue and decide what's next! Our Webqueue app is in open beta!",
         "url": "https://queue.dropsugar.co/"
       }
-    ]
+    ],
+    "show_next_event": false
   },
 
   "prometheus_port": 28292
