@@ -2203,3 +2203,49 @@ button.job-status:hover { filter: brightness(1.2); }
 }
 .device-revoke:hover { background: var(--danger); color: #fff; }
 .hidden { display: none; }
+
+/* Admin MOTD panel */
+.motd-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.motd-night {
+    margin: 1.25rem 0 0.5rem;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.motd-slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+.motd-slot {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+}
+.motd-slot img {
+    width: 100%;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+}
+.motd-slot-mystery img { opacity: 0.55; }
+.motd-slot-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.motd-slot-title { font-weight: 600; word-break: break-word; }
+.motd-preview {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    max-height: 22rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+}

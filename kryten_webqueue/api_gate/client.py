@@ -108,6 +108,9 @@ class ApiGateClient:
         result = await self.get("/admin/motd")
         return result.get("motd", "")
 
+    async def set_motd(self, motd: str) -> dict:
+        return await self.put("/admin/motd", json={"motd": motd})
+
     # --- Economy proxy ---
 
     async def get_balance(self, username: str) -> dict:

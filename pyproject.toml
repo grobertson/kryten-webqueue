@@ -1,6 +1,6 @@
 [project]
 name = "kryten-webqueue"
-version = "0.44.7"
+version = "0.45.0"
 description = "Netflix/Tubi-style catalog browser and pay-to-play queue management for CyTube"
 readme = "README.md"
 license = "MIT"
@@ -29,6 +29,8 @@ dependencies = [
     "pyyaml>=6.0",
     "python-slugify>=8.0",
     "msal>=1.28",
+    # Multipart form parsing for the admin MOTD alternate-art upload.
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

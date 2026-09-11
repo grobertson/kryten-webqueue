@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}MOTD - Admin{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h1>Message of the Day</h1>
+    <p><a href="/admin">&larr; Back to Admin</a></p>
+
+    <div class="admin-section">
+        <div class="section-head">
+            <h2>Weekend Poster Grid</h2>
+            <div class="motd-actions">
+                <select id="week-select" title="Which weekend to build">
+                    <option value="current">This weekend</option>
+                    <option value="next">Next weekend (early debut)</option>
+                </select>
+                <button type="button" class="btn btn-sm" id="btn-reload">Refresh</button>
+                <button type="button" class="btn btn-sm" id="btn-preview">Preview HTML</button>
+                <button type="button" class="btn btn-sm btn-primary" id="btn-publish">Publish to Channel</button>
+            </div>
+        </div>
+        <p class="muted">
+            Titles come from the weekend schedule workbook. Each is resolved to an
+            IMDb link and poster art automatically; slots with no title yet, or a
+            title that can't be verified, show a mystery box. Override any slot
+            below to pin a title, upload alternate art, or point the link somewhere
+            other than IMDb. Overrides apply to the selected weekend only and
+            retire on their own once that week rolls over.
+        </p>
+        <div id="grid-status" class="muted">Loading&hellip;</div>
+        <div id="motd-grid"></div>
+    </div>
+
+    <div class="admin-section" id="preview-section" hidden>
+        <div class="section-head">
+            <h2>Rendered Snippet</h2>
+            <button type="button" class="btn btn-sm" id="btn-copy">Copy</button>
+        </div>
+        <pre id="preview-html" class="motd-preview"></pre>
+    </div>
+
+    <div class="admin-section">
+        <div class="section-head"><h2>Currently Live</h2></div>
+        <p class="muted">The MOTD the channel is showing right now.</p>
+        <pre id="current-motd" class="motd-preview">Loading&hellip;</pre>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin-motd.js?v={{ app_version }}"></script>
+{% endblock %}

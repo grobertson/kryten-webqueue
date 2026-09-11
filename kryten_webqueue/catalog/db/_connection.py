@@ -533,6 +533,25 @@ MIGRATIONS = [
     );
     CREATE INDEX IF NOT EXISTS idx_job_run_logs_run ON job_run_logs(run_id, seq);
     """,
+    # v30: Per-week MOTD slot overrides. The motd_publish job resolves the
+    # weekend line-up from the workbook automatically; a row here pins one grid
+    # position for one week (curator-supplied art, a hand-picked title, or a
+    # non-IMDb link) and always wins over the auto-resolved value. Keyed on the
+    # workbook sheet name (e.g. '8.14-8.15') plus the stable slot key
+    # ('night1-slot3'), so re-running the job is idempotent and the overrides
+    # retire naturally once that week rolls off.
+    """
+    CREATE TABLE IF NOT EXISTS motd_overrides (
+        week_key   TEXT NOT NULL,
+        slot_key   TEXT NOT NULL,
+        title      TEXT,
+        poster_url TEXT,
+        href       TEXT,
+        created_by TEXT,
+        updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (week_key, slot_key)
+    );
+    """,
 ]
 
 
@@ -549,10 +568,16 @@ class _DBBase:
         self._db.row_factory = aiosqlite.Row
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA foreign_keys=ON")
-        await self._db.execute("PRAGMA synchronous=NORMAL")       # safe in WAL; faster than FULL
-        await self._db.execute("PRAGMA busy_timeout=5000")        # retry up to 5 s on lock
-        await self._db.execute("PRAGMA wal_autocheckpoint=100")   # checkpoint every 100 pages
-        await self._db.execute("PRAGMA wal_checkpoint(PASSIVE)")  # drain any stale WAL on open
+        await self._db.execute(
+            "PRAGMA synchronous=NORMAL"
+        )  # safe in WAL; faster than FULL
+        await self._db.execute("PRAGMA busy_timeout=5000")  # retry up to 5 s on lock
+        await self._db.execute(
+            "PRAGMA wal_autocheckpoint=100"
+        )  # checkpoint every 100 pages
+        await self._db.execute(
+            "PRAGMA wal_checkpoint(PASSIVE)"
+        )  # drain any stale WAL on open
 
     async def close(self):
         if self._db:

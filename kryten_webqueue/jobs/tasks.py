@@ -521,6 +521,19 @@ async def fetchurls_job(params: dict, ctx):
             pm.get("failed", 0),
         )
 
+    # Curators fix titles in the workbook, so a fetchurls pass is exactly when a
+    # previously-unresolvable MOTD slot becomes resolvable. Best-effort: a MOTD
+    # failure must not fail the URL resolution that already succeeded.
+    if params.get("publish_motd", True) and ctx.job_manager:
+        try:
+            await ctx.job_manager.run(
+                "motd_publish", triggered_by=ctx.triggered_by or "fetchurls"
+            )
+            result["motd_publish_started"] = True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("fetchurls: could not start motd_publish: %s", exc)
+            result["motd_publish_started"] = False
+
     return result
 
 
@@ -648,6 +661,12 @@ FETCHURLS_SCHEMA = [
         "type": "string",
         "default": None,
         "label": "Local workbook path (override SharePoint)",
+    },
+    {
+        "name": "publish_motd",
+        "type": "bool",
+        "default": True,
+        "label": "Re-publish the weekend MOTD afterwards",
     },
 ]
 

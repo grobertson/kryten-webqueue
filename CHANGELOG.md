@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.45.0] - 2026-09-10
+
+### Added
+
+- **`motd_publish` job** — builds the weekend poster grid from the schedule
+  workbook and sets the channel Message of the Day through api-gate's
+  `PUT /admin/motd`. Each curator title (`Title (YYYY)`) is resolved to an IMDb
+  tt# and poster art; positions with no title yet, or a title that can't be
+  verified, render as **mystery boxes** so the grid is always complete and
+  self-heals on the next run once the title is fixed. A missing or unreadable
+  workbook degrades to an all-mystery grid rather than failing the run.
+- **Per-week MOTD slot overrides** (migration **v30**, `motd_overrides`). An
+  admin can pin a hand-picked title, curator-supplied art, or a non-IMDb link
+  for any grid position; overrides always beat the lookup and retire on their
+  own when the workbook week rolls over. New admin API under `/admin/motd`:
+  `GET` (preview the resolved grid + live MOTD), `GET /render`,
+  `PUT`/`DELETE /overrides/{slot_key}`, `POST /overrides/{slot_key}/art`
+  (alternate-art upload), and `POST /publish`.
+- **Admin MOTD page** at `/admin/motd` (linked from the admin nav): shows the
+  resolved grid night by night with a resolved/override/mystery badge per slot,
+  an override editor (title, link, poster URL, or an art upload), an
+  HTML preview, the currently-live MOTD, and a one-click publish.
+- **Early debut.** The workbook sheet rolls forward on Monday; `week=next`
+  (job param and admin query string) publishes the coming weekend's grid on
+  Sunday, while weekend traffic is still watching.
+- **`fetchurls` now chains `motd_publish`** (new `publish_motd` param, on by
+  default) — a curator's corrected title re-publishes the MOTD in the same
+  pass. Best-effort: a MOTD failure never fails URL resolution.
+- **Next-event context.** The rendered snippet carries the next armed playlist
+  schedule (`label`, `starts_in`), laying the groundwork for swapping the MOTD
+  on each scheduled playlist fire.
+- `ApiGateClient.set_motd()`; `MOTDConfig` gained `template`, `slots`,
+  `banner_url`, `headline`, `showtime`, `mystery_box_url`, `mystery_box_href`,
+  `links`, and `upload_max_bytes` (see `config.example.json`).
+
+### Security
+
+- The MOTD template renders with Jinja autoescape on and a `safe_url` filter
+  that rejects any non-`http(s)` URL, so untrusted curator titles and override
+  links can't inject markup or `javascript:` URLs into the channel MOTD. Slot
+  keys are regex-validated and art uploads are restricted by content type and
+  size.
+
 ## [0.44.7] - 2026-08-31
 
 ### Fixed

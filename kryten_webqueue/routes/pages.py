@@ -440,3 +440,11 @@ async def admin_promos_page(request: Request):
     if not user or user.get("rank", 0) < 3:
         return RedirectResponse("/auth/login")
     return templates.TemplateResponse(request, "admin/promos.html", {"user": user})
+
+
+@router.get("/admin/motd", response_class=HTMLResponse)
+async def admin_motd_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user or user.get("rank", 0) < 3:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "admin/motd.html", {"user": user})

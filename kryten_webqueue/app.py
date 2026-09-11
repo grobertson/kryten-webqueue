@@ -32,6 +32,7 @@ from .routes.admin_playlists import router as admin_playlists_router
 from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
+from .routes.admin_motd import router as admin_motd_router
 from .routes.admin_job_schedules import router as admin_job_schedules_router
 from .routes.admin_catalog import router as admin_catalog_router
 from .routes.admin_promos import router as admin_promos_router
@@ -166,6 +167,14 @@ async def lifespan(app: FastAPI):
         motd_posters_job,
         label="MOTD Posters (weekend poster grid)",
         schema=MOTD_POSTERS_SCHEMA,
+    )
+    from .jobs.motd_publish import motd_publish_job, MOTD_PUBLISH_SCHEMA
+
+    job_manager.register(
+        "motd_publish",
+        motd_publish_job,
+        label="MOTD Publish (build grid & set channel MOTD)",
+        schema=MOTD_PUBLISH_SCHEMA,
     )
     job_manager.register(
         "tmdb_index_refresh",
@@ -418,6 +427,7 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_schedules_router)
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
+    app.include_router(admin_motd_router)
     app.include_router(admin_job_schedules_router)
     app.include_router(admin_catalog_router)
     app.include_router(admin_promos_router)

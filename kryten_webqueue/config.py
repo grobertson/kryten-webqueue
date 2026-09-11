@@ -1,5 +1,5 @@
 from pathlib import Path
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, Field, PrivateAttr
 import json
 
 
@@ -21,8 +21,15 @@ class EmoteRehostConfig(BaseModel):
     inter_emote_delay_sec: float = 2.0
 
 
+class MOTDLink(BaseModel):
+    """A footer link rendered under the MOTD poster grid."""
+
+    label: str
+    url: str
+
+
 class MOTDConfig(BaseModel):
-    """Settings for the MOTD poster generator job."""
+    """Settings for the MOTD poster generator and publisher jobs."""
 
     # Filesystem path where poster images are written.
     poster_dir: str = "/home/mediacms.io/mediacms/static/motd_boxes"
@@ -30,6 +37,32 @@ class MOTDConfig(BaseModel):
     poster_base_url: str = "https://www.dropsugar.co/static/motd_boxes"
     # Directory where the generated HTML snippet is written.
     output_dir: str = "~/kryten"
+
+    # --- motd_publish ---
+    # Jinja template under kryten_webqueue/templates/motd/.
+    template: str = "channel_z.html"
+    # Grid size; unresolved positions are filled with mystery boxes.
+    slots: int = 12
+    banner_url: str = "https://i.postimg.cc/jdr2mR8Y/1562479186-8-channel-Ztitlenew.png"
+    # {dates} is substituted with the weekend showtimes (e.g. "8/14 @ 6pm ET & ...").
+    headline: str = "CHANNEL Z WEEKEND MOVIE PLAYLIST ({dates})"
+    showtime: str = "6pm ET"
+    mystery_box_url: str = "https://www.dropsugar.co/static/motd_boxes/mystery-box.jpg"
+    mystery_box_href: str = "https://queue.dropsugar.co/"
+    links: list[MOTDLink] = Field(
+        default_factory=lambda: [
+            MOTDLink(
+                label="Join us on Reddit!",
+                url="https://www.reddit.com/r/Channel_Z/",
+            ),
+            MOTDLink(
+                label="See the queue and decide what's next!",
+                url="https://queue.dropsugar.co/",
+            ),
+        ]
+    )
+    # Max size accepted by the admin alternate-art upload endpoint.
+    upload_max_bytes: int = 5 * 1024 * 1024
 
 
 class FetchUrlsConfig(BaseModel):

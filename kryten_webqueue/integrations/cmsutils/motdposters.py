@@ -225,6 +225,67 @@ def _poster_filename(date: datetime.date, movie_idx: int, night: int) -> str:
     return f"art-{date:%Y-%m-%d}-movie{movie_idx}-night{night}.jpg"
 
 
+def load_workbook_bytes(config, *, local_override: str = "", emit=None) -> bytes:
+    """Read the Channel Z workbook from SharePoint, or a local .xlsx fallback.
+
+    Mirrors ``fetchurls.run()``'s source resolution so every workbook-backed job
+    honours the same credentials and local-override precedence.
+    """
+
+    def _say(detail: dict) -> None:
+        if emit:
+            emit(detail)
+
+    fu = getattr(config, "fetchurls", None)
+    sp_tenant: str = getattr(fu, "sharepoint_tenant_id", "") if fu else ""
+    sp_client: str = getattr(fu, "sharepoint_client_id", "") if fu else ""
+    sp_share: str = getattr(fu, "sharepoint_sharing_url", "") if fu else ""
+    sp_cache: str = getattr(fu, "token_cache_path", "") if fu else ""
+    cfg_local: str = getattr(fu, "workbook_path", "") if fu else ""
+
+    if bool(sp_tenant and sp_client and sp_share) and not local_override:
+        _say({"phase": "auth"})
+        graph_token = acquire_graph_token_silent(sp_tenant, sp_client, sp_cache)
+        if not graph_token:
+            raise RuntimeError(
+                "SharePoint token unavailable — run: "
+                "python -m kryten_webqueue.jobs.fetchurls_auth"
+            )
+        _say({"phase": "download"})
+        wb_bytes, _, _ = download_sharepoint_xlsx(graph_token, sp_share)
+        return wb_bytes
+
+    workbook_path = local_override or cfg_local
+    if not workbook_path:
+        raise RuntimeError(
+            "No workbook source: configure fetchurls.sharepoint_* or "
+            "fetchurls.workbook_path"
+        )
+    wb_file = Path(workbook_path)
+    if not wb_file.exists():
+        raise RuntimeError(f"Workbook not found: {wb_file}")
+    return wb_file.read_bytes()
+
+
+def resolve_weekend_sheet(wb_bytes: bytes, sheet_name: str) -> None:
+    """Raise a helpful RuntimeError when the expected weekend sheet is absent."""
+    try:
+        import openpyxl
+    except ImportError:
+        raise RuntimeError("openpyxl is required to read the weekend workbook")
+
+    wb_peek = openpyxl.load_workbook(io.BytesIO(wb_bytes), read_only=True)
+    all_sheets = wb_peek.sheetnames
+    wb_peek.close()
+    if sheet_name in all_sheets:
+        return
+    weekend_sheets = [s for s in all_sheets if _SHEET_DATE_RE.match(s.strip())]
+    raise RuntimeError(
+        f"Weekend sheet '{sheet_name}' not found. "
+        f"Available: {', '.join(weekend_sheets or all_sheets)}"
+    )
+
+
 def _generate_html(night_entries: list[dict], poster_base_url: str) -> str:
     """Build the <div class="poster-grid"> snippet from processed entries."""
     base = poster_base_url.rstrip("/")
