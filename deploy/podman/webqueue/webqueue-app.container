@@ -7,7 +7,9 @@ ContainerName=webqueue-app
 Image=localhost/kryten-webqueue:latest
 Network=podman-webqueue
 PublishPort=2010:2010
-AddHost=host.containers.internal:host-gateway
+# Podman 4.x (this host: 4.9.3) doesn't support the `AddHost=` Quadlet key
+# (added in Podman 5.0) — fall back to a raw --add-host via PodmanArgs.
+PodmanArgs=--add-host=host.containers.internal:host-gateway
 
 EnvironmentFile=/etc/kryten/webqueue/webqueue.env
 Volume=/etc/kryten/webqueue/config.json:/etc/kryten-webqueue/config.json:ro,z
