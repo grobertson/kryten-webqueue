@@ -342,6 +342,7 @@ CREATE INDEX IF NOT EXISTS idx_fetch_queue_status ON jobs.fetch_queue(status, ad
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS users.otps (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     username   TEXT NOT NULL,
     code       TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
