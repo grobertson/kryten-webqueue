@@ -28,6 +28,9 @@ The following decisions are fixed for this sprint:
 - One PostgreSQL database named `webqueue` owns all five schemas. `tmdb` is a schema, not a
   separate database, so catalog enrichment can use relational queries when needed.
 - The application runs as a rootful Podman Quadlet service on `chandra-1`.
+- Public traffic on `https://queue.dropsugar.co/` terminates TLS at Nginx on `grindhouse.local`.
+  During cutover, Nginx on `grindhouse.local` (`/etc/nginx/sites-available/queue.conf`) is updated
+  to reverse-proxy HTTP and WebSocket (`/ws`) traffic across the local network to `http://chandra-1.local:2010`.
 - PostgreSQL is host-managed on `chandra-1`. The rootful application container connects through
   an explicitly configured host-gateway address; it must not use `localhost`.
 - The migration uses a maintenance window and a forward-fix rollback policy. There is no

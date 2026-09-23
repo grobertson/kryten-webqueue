@@ -133,18 +133,29 @@ Upon completion of Part 1, the partitioned domain model directly maps to Postgre
 - `tmdb.*` — Persistent, queryable local TMDB dump index.
 
 ```
+┌─────────────────────────────────────────┐
+│          grindhouse.local Host          │
+│                                         │
+│   ┌─────────────────────────────────┐   │
+│   │           nginx proxy           │   │
+│   │    queue.dropsugar.co (SSL)     │   │
+│   └────────────────┬────────────────┘   │
+└────────────────────┼────────────────────┘
+                     │ LAN Reverse Proxy
+                     │ http://chandra-1.local:2010
+                     ▼
 ┌────────────────────────────────────────────────────────────────────────────────────────┐
 │                                 chandra-1 Host System                                  │
 │                                                                                        │
 │  ┌──────────────────────────────────────────────────────────────────────────────────┐  │
-│  │                            Podman Pod: kryten-webqueue                           │  │
+│  │                     Podman Container: webqueue-app                               │  │
 │  │                                                                                  │  │
-│  │  ┌─────────────────────────────┐           ┌──────────────────────────────────┐  │  │
-│  │  │    kryten-webqueue-app      │           │           nginx proxy            │  │  │
-│  │  │   (FastAPI + uvicorn)       │◄─────────►│     (Reverse Proxy + SSL)        │  │  │
-│  │  │   SQLAlchemy 2.0 (asyncpg)  │           │                                  │  │  │
-│  │  └──────────────┬──────────────┘           └────────────────┬─────────────────┘  │  │
-│  └─────────────────┼───────────────────────────────────────────┼────────────────────┘  │
+│  │  ┌─────────────────────────────┐                                                 │  │
+│  │  │    kryten-webqueue-app      │                                                 │  │
+│  │  │   (FastAPI + uvicorn:2010)  │                                                 │  │
+│  │  │   SQLAlchemy 2.0 (asyncpg)  │                                                 │  │
+│  │  └──────────────┬──────────────┘                                                 │  │
+│  └─────────────────┼───────────────────────────────────────────┬────────────────────┘  │
 │                    │                                           │                       │
 │                    ▼                                           ▼                       │
 │  ┌─────────────────────────────────────┐     ┌──────────────────────────────────────┐  │
@@ -155,6 +166,11 @@ Upon completion of Part 1, the partitioned domain model directly maps to Postgre
 │  └─────────────────────────────────────┘     └──────────────────────────────────────┘  │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+The public hostname `https://queue.dropsugar.co/` terminates TLS via Let's Encrypt Nginx on
+`grindhouse.local`. During the Chandra-1 cutover, the Nginx reverse proxy configuration on
+`grindhouse.local` (`/etc/nginx/sites-available/queue.conf`) is updated to forward HTTP and
+WebSocket traffic across the local network to `http://chandra-1.local:2010`.
 
 ### 2.2 Core Technical Specifications
 

@@ -66,12 +66,19 @@ python -m kryten_webqueue.migrate_sqlite_to_pg --data-dir /path/to/sqlite/data -
 # 5. Grant runtime/pruner roles only after verification, then start the rootful Quadlet.
 sudo systemctl start webqueue-app.service
 
-# 6. Verify health and smoke test browse/search/queue/OTP/device-key/job-log paths.
+# 6. Update Nginx reverse proxy on grindhouse.local to forward across the LAN:
+#    In /etc/nginx/sites-available/queue.conf:
+#    proxy_pass http://chandra-1.local:2010; (for /ws and /)
+#    sudo nginx -t && sudo systemctl reload nginx
+
+# 7. Verify health and smoke test public HTTPS and WebSocket paths:
+curl -f https://queue.dropsugar.co/auth/login
 curl -f http://127.0.0.1:2010/api/public/v1/state
 ```
 
 If a gate fails before PostgreSQL receives production writes, restart the unchanged SQLite
-service. Once PostgreSQL accepts a write, recovery is a forward repair using request identifiers
+service and revert the Nginx proxy_pass on grindhouse.local back to http://127.0.0.1:2010.
+Once PostgreSQL accepts a write, recovery is a forward repair using request identifiers
 and audit records; the retained SQLite snapshot is not an automatic rollback target.
 
 ## 4. Implementation Plan
