@@ -107,17 +107,16 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "get_job_schedule": "jobs",
     "upsert_job_schedule": "jobs",
     "delete_job_schedule": "jobs",
-    "fetch_queue_add": "jobs",
-    "fetch_queue_get": "jobs",
-    "fetch_queue_update": "jobs",
-    "fetch_queue_delete": "jobs",
-    "fetch_queue_list": "jobs",
-    "fetch_queue_count": "jobs",
-    "fetch_queue_get_next_pending": "jobs",
-    "fetch_queue_mark_started": "jobs",
-    "fetch_queue_mark_finished": "jobs",
-    "fetch_queue_requeue": "jobs",
-    "fetch_queue_cleanup": "jobs",
+    "enqueue_fetch": "jobs",
+    "claim_next_fetch_item": "jobs",
+    "finish_fetch_item": "jobs",
+    "requeue_fetch_item": "jobs",
+    "requeue_fetch_item_for_retry": "jobs",
+    "reset_running_fetch_items": "jobs",
+    "get_fetch_queue": "jobs",
+    "count_fetch_queue": "jobs",
+    "count_fetch_queue_pending": "jobs",
+    "delete_fetch_queue_item": "jobs",
     # users
     "watchlist_add": "users",
     "watchlist_remove": "users",
@@ -303,10 +302,22 @@ class Database(
         except AttributeError:
             layout = "monolith"
 
-        if layout == "partitioned" and name in _DOMAIN_METHOD_MAP:
-            domain_name = _DOMAIN_METHOD_MAP[name]
-            domain_obj = object.__getattribute__(self, domain_name)
-            return getattr(domain_obj, name)
+        if layout == "partitioned":
+            if name in Database.__dict__ or name.startswith("_"):
+                return object.__getattribute__(self, name)
+
+            if name in _DOMAIN_METHOD_MAP:
+                domain_name = _DOMAIN_METHOD_MAP[name]
+                domain_obj = object.__getattribute__(self, domain_name)
+                return getattr(domain_obj, name)
+
+            for domain_name in ("jobs", "queue", "users", "catalog"):
+                try:
+                    domain_obj = object.__getattribute__(self, domain_name)
+                    if hasattr(domain_obj, name) and not hasattr(_DBBase, name):
+                        return getattr(domain_obj, name)
+                except AttributeError:
+                    pass
 
         return object.__getattribute__(self, name)
 
