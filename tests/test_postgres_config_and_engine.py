@@ -42,6 +42,20 @@ def test_postgres_config_dsn_env_precedence(monkeypatch):
     assert url == "postgresql+asyncpg://app_user:pw@pg-server:5432/app_db"
 
 
+def test_postgres_config_asyncpg_dsn_strips_sqlalchemy_suffix(monkeypatch):
+    monkeypatch.setenv("KRYTEN_WEBQUEUE_PG_PASSWORD", "super_secret_pw!@#")
+    cfg = PostgresConfig(
+        host="chandra-1.local",
+        port=5433,
+        user="custom_user",
+        dbname="test_db",
+    )
+    assert cfg.get_asyncpg_dsn() == (
+        "postgresql://custom_user:super_secret_pw%21%40%23@chandra-1.local:5433/test_db"
+    )
+    assert cfg.get_async_url().startswith("postgresql+asyncpg://custom_user:")
+
+
 def test_postgres_config_rejects_embedded_password_in_dsn():
     with pytest.raises(
         ValidationError,
@@ -75,3 +89,25 @@ def test_database_config_postgres_backend():
     db_cfg = DatabaseConfig(backend="postgres")
     assert db_cfg.backend == "postgres"
     assert isinstance(db_cfg.postgres, PostgresConfig)
+
+
+def test_database_initializes_postgres_schema_domains(monkeypatch):
+    monkeypatch.setenv("KRYTEN_WEBQUEUE_PG_PASSWORD", "mock_pass")
+    cfg = DatabaseConfig(backend="postgres")
+    db_module = __import__("kryten_webqueue.catalog.db", fromlist=["Database"])
+    db = db_module.Database(cfg)
+
+    assert db.db_config.backend == "postgres"
+    assert isinstance(db.catalog, db_module._PgCatalogDB)
+    assert isinstance(db.queue, db_module._PgQueueDB)
+    assert isinstance(db.jobs, db_module._PgJobsDB)
+    assert isinstance(db.users, db_module._PgUsersDB)
+    assert db.catalog.domain_name == "catalog"
+    assert db.queue.domain_name == "queue"
+    assert db.jobs.domain_name == "jobs"
+    assert db.users.domain_name == "users"
+    assert db.catalog._dsn.startswith("postgresql://")
+    # backend=="postgres" must route cross-domain facade methods (browse/search/etc.)
+    # through the domain-dispatch path even though layout defaults to "monolith" —
+    # regression guard for a bug where only layout=="partitioned" was checked.
+    assert db._domain_dispatch is True

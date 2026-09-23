@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.49.0] - 2026-09-23
+
+### Added
+
+- **Postgres repository port complete (Sortie 2/3)**: all ~140 SQLite domain methods
+  across `catalog`/`queue`/`jobs`/`users` are now implemented for the `asyncpg`/Postgres
+  backend (`_pg_catalog_db.py`, `_pg_queue_db.py`, `_pg_jobs_db.py`, `_pg_users_db.py`),
+  wired into `Database.__init__` for `database.backend == "postgres"`. `search()`/
+  `search_count()` use a hybrid `tsvector` + `pg_trgm` two-CTE query in place of SQLite's
+  FTS5. Live-tested end-to-end against a disposable `webqueue_test` database on
+  `chandra-1` (`tests/test_postgres_domain_crud.py`).
+
+### Fixed
+
+- **`Database` facade never dispatched cross-domain orchestration methods (`browse`,
+  `search`, `get_item`, `is_restricted`, etc.) for the Postgres backend** — these all
+  checked `layout == "partitioned"` only, never `backend == "postgres"`, so a Postgres
+  `Database` would silently fall through to the SQLite-monolith code path. Introduced
+  `Database._domain_dispatch` (`layout == "partitioned" or backend == "postgres"`) and
+  updated every dispatch check to use it.
+- **`rotate_playlist_item_to_bottom` silently failed on every real play completion** in
+  both partitioned SQLite and Postgres: it queried a bare `catalog` table from within the
+  `queue`-only connection/schema, which doesn't exist there (`OperationalError`/
+  `UndefinedTableError`), swallowed by a bare `except Exception` in
+  `queue/completion.py`. Added an `is_partitioned` flag to skip the same-connection
+  lookup, and a `Database.rotate_playlist_item_to_bottom` facade override that resolves
+  `friendly_token -> manifest_url` via the `catalog` domain first, mirroring the existing
+  `_get_reserved_tokens()` pattern.
+
 ## [0.48.1] - 2026-09-23
 
 ### Fixed

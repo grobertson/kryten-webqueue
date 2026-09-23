@@ -10,12 +10,26 @@ import asyncio
 import logging
 import re
 import time
+from datetime import datetime
 
 import asyncpg
 
 logger = logging.getLogger(__name__)
 
 _PLACEHOLDER_RE = re.compile(r"\?")
+
+
+def parse_dt(value: str | datetime | None) -> datetime | None:
+    """Convert an ISO-8601 string to a ``datetime`` for asyncpg's ``timestamptz`` codec.
+
+    asyncpg requires an actual ``datetime`` object for timestamptz parameters (unlike
+    aiosqlite, which stores/binds them as plain text) — this normalizes the ISO strings
+    produced by existing call sites across the app. Already-``datetime`` values and
+    ``None`` pass through unchanged.
+    """
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(value)
 
 
 def to_pg_sql(sql: str) -> str:
@@ -69,11 +83,16 @@ class _PgDomainDB:
     async def connect(self):
         schema = self._schema
 
-        async def _init_conn(conn: asyncpg.Connection):
-            await conn.execute(f"SET search_path TO {schema}, public")
-
+        # NOTE: asyncpg's pool resets session-level `SET` state (including
+        # search_path) whenever a connection is released back to the pool, so an
+        # `init=` callback that runs `SET search_path` only sticks for the very
+        # first query on each connection. `server_settings` sets it as a startup
+        # parameter instead, which the pool's reset does NOT clear.
         self._pool = await asyncpg.create_pool(
-            self._dsn, min_size=2, max_size=10, init=_init_conn
+            self._dsn,
+            min_size=2,
+            max_size=10,
+            server_settings={"search_path": f"{schema},public"},
         )
         logger.debug(
             f"Connected Postgres domain '{self._domain_name}' (schema={schema})"

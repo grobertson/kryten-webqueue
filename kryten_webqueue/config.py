@@ -204,6 +204,41 @@ class PostgresConfig(BaseModel):
             return os.getenv(self.password_env)
         return None
 
+    def get_asyncpg_dsn(self) -> str:
+        """Return the DSN accepted by asyncpg.create_pool()/connect()."""
+        if self.dsn_env:
+            env_dsn = os.getenv(self.dsn_env)
+            if env_dsn:
+                return env_dsn
+
+        password = self.get_password() or ""
+        escaped_password = urllib.parse.quote_plus(password)
+
+        if self.dsn:
+            parsed = urllib.parse.urlparse(self.dsn)
+            if parsed.password:
+                raise ValueError(
+                    "Plaintext passwords in 'database.postgres.dsn' are forbidden. "
+                    "Use 'password_env' or 'dsn_env' instead."
+                )
+            user_part = parsed.username or self.user
+            escaped_user = urllib.parse.quote_plus(user_part)
+            host_part = parsed.hostname or self.host
+            port_part = (
+                f":{parsed.port}"
+                if parsed.port
+                else (f":{self.port}" if self.port else "")
+            )
+            netloc = f"{escaped_user}:{escaped_password}@{host_part}{port_part}"
+            path = parsed.path if parsed.path else f"/{self.dbname}"
+            return f"postgresql://{netloc}{path}"
+
+        escaped_user = urllib.parse.quote_plus(self.user)
+        return (
+            f"postgresql://{escaped_user}:{escaped_password}@{self.host}:{self.port}/"
+            f"{self.dbname}"
+        )
+
     def get_async_url(self) -> str:
         # Precedence: dsn_env -> password-free dsn + password_env -> assembled components + password_env
         if self.dsn_env:

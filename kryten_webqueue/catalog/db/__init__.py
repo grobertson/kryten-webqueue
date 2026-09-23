@@ -26,6 +26,10 @@ from ._catalog_db import _CatalogDB
 from ._queue_db import _QueueDB
 from ._jobs_db import _JobsDB
 from ._users_db import _UsersDB
+from ._pg_catalog_db import _PgCatalogDB
+from ._pg_queue_db import _PgQueueDB
+from ._pg_jobs_db import _PgJobsDB
+from ._pg_users_db import _PgUsersDB
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,6 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "replace_playlist_items": "queue",
     "append_playlist_item": "queue",
     "append_playlist_items": "queue",
-    "rotate_playlist_item_to_bottom": "queue",
     "get_most_recent_playlist": "queue",
     "get_playlist_by_name": "queue",
     "get_playlist_by_name_any": "queue",
@@ -241,8 +244,21 @@ class Database(
             )
 
         self._layout = self._db_config.layout
+        # Postgres always runs the 4-schema decoupled layout (there is no
+        # "monolith Postgres" mode), so every cross-domain dispatch check below
+        # must treat backend=="postgres" the same as layout=="partitioned".
+        self._domain_dispatch = (
+            self._layout == "partitioned" or self._db_config.backend == "postgres"
+        )
 
-        if self._layout == "partitioned":
+        if self._db_config.backend == "postgres":
+            dsn = self._db_config.postgres.get_asyncpg_dsn()
+            self.catalog = _PgCatalogDB(dsn, schema="catalog", domain_name="catalog")
+            self.queue = _PgQueueDB(dsn, schema="queue", domain_name="queue")
+            self.jobs = _PgJobsDB(dsn, schema="jobs", domain_name="jobs")
+            self.users = _PgUsersDB(dsn, schema="users", domain_name="users")
+            _DBBase.__init__(self, dsn)
+        elif self._domain_dispatch:
             _DBBase.__init__(self, self._db_config.get_catalog_path())
             self.catalog = _CatalogDB(self._db_config.get_catalog_path())
             self.queue = _QueueDB(self._db_config.get_queue_path())
@@ -264,7 +280,15 @@ class Database(
         return self._db_config
 
     async def connect(self):
-        if self._layout == "partitioned":
+        if self._db_config.backend == "postgres":
+            await asyncio.gather(
+                self.catalog.connect(),
+                self.queue.connect(),
+                self.jobs.connect(),
+                self.users.connect(),
+            )
+            self._db = self.catalog._pool
+        elif self._domain_dispatch:
             await asyncio.gather(
                 self.catalog.connect(),
                 self.queue.connect(),
@@ -276,7 +300,9 @@ class Database(
             await _DBBase.connect(self)
 
     async def run_migrations(self):
-        if self._layout == "partitioned":
+        if self._db_config.backend == "postgres":
+            return
+        if self._domain_dispatch:
             await asyncio.gather(
                 self.catalog.run_migrations(),
                 self.queue.run_migrations(),
@@ -287,7 +313,15 @@ class Database(
             await _DBBase.run_migrations(self)
 
     async def close(self):
-        if self._layout == "partitioned":
+        if self._db_config.backend == "postgres":
+            await asyncio.gather(
+                self.catalog.close(),
+                self.queue.close(),
+                self.jobs.close(),
+                self.users.close(),
+            )
+            self._db = None
+        elif self._domain_dispatch:
             await asyncio.gather(
                 self.catalog.close(),
                 self.queue.close(),
@@ -300,11 +334,11 @@ class Database(
 
     def __getattribute__(self, name: str) -> Any:
         try:
-            layout = object.__getattribute__(self, "_layout")
+            domain_dispatch = object.__getattribute__(self, "_domain_dispatch")
         except AttributeError:
-            layout = "monolith"
+            domain_dispatch = False
 
-        if layout == "partitioned":
+        if domain_dispatch:
             if name in Database.__dict__ or name.startswith("_"):
                 return object.__getattribute__(self, name)
 
@@ -324,7 +358,7 @@ class Database(
         return object.__getattribute__(self, name)
 
     def __getattr__(self, name: str) -> Any:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             for domain in (self.catalog, self.queue, self.jobs, self.users):
                 if hasattr(domain, name):
                     return getattr(domain, name)
@@ -333,6 +367,28 @@ class Database(
         )
 
     # --- Decoupled Cross-Domain Orchestrations ---
+
+    async def rotate_playlist_item_to_bottom(
+        self, media_id: str, media_type: str = "cm"
+    ) -> int:
+        """Move a played item to the end of every mutable playlist containing it.
+
+        In decoupled (partitioned SQLite / Postgres) mode, ``media_id`` must be
+        resolved from a bare friendly_token to its manifest_url here (via the
+        catalog domain) before delegating to the queue domain \u2014 that connection
+        cannot see the catalog table/schema directly.
+        """
+        if self._domain_dispatch and media_type == "cm":
+            item = await self.catalog.get_item(media_id, is_partitioned=True)
+            if item and item.get("manifest_url"):
+                media_id = item["manifest_url"]
+            return await self.queue.rotate_playlist_item_to_bottom(
+                media_id, media_type, is_partitioned=True
+            )
+
+        return await _PlaylistsMixin.rotate_playlist_item_to_bottom(
+            self, media_id, media_type
+        )
 
     async def _get_reserved_tokens(self) -> set[str]:
         """Reserved (immutable/promo) media_ids resolved to friendly_tokens.
@@ -361,7 +417,7 @@ class Database(
         exclude_tokens: set[str] | list[str] | None = None,
         **kwargs: Any,
     ) -> list[dict]:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             exclude_set = set(exclude_tokens) if exclude_tokens else set()
             if recently_played_days > 0:
                 hidden = await self.queue.get_active_hidden_media_ids(
@@ -429,7 +485,7 @@ class Database(
         exclude_tokens: set[str] | list[str] | None = None,
         **kwargs: Any,
     ) -> int:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             exclude_set = set(exclude_tokens) if exclude_tokens else set()
             if recently_played_days > 0:
                 hidden = await self.queue.get_active_hidden_media_ids(
@@ -487,7 +543,7 @@ class Database(
         exclude_tokens: set[str] | list[str] | None = None,
         **kwargs: Any,
     ) -> list[dict]:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             exclude_set = set(exclude_tokens) if exclude_tokens else set()
             if recently_played_days > 0:
                 hidden = await self.queue.get_active_hidden_media_ids(
@@ -558,7 +614,7 @@ class Database(
         exclude_tokens: set[str] | list[str] | None = None,
         **kwargs: Any,
     ) -> int:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             exclude_set = set(exclude_tokens) if exclude_tokens else set()
             if recently_played_days > 0:
                 hidden = await self.queue.get_active_hidden_media_ids(
@@ -603,7 +659,7 @@ class Database(
     async def watchlist_get(
         self, username: str, *, page: int = 1, per_page: int = 24
     ) -> list[dict]:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             entries = await self.users.get_user_watchlist_tokens(
                 username, limit=per_page, offset=(page - 1) * per_page
             )
@@ -632,7 +688,7 @@ class Database(
         max_duration_sec: int | None = None,
         **kwargs: Any,
     ) -> list[dict]:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             exclude_set: set[str] = await self._get_reserved_tokens()
             if not show_hidden:
                 blackouts = await self.queue.get_active_blackout_tokens()
@@ -656,7 +712,7 @@ class Database(
         )
 
     async def get_item(self, friendly_token: str) -> dict | None:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             item = await self.catalog.get_item(friendly_token, is_partitioned=True)
             if not item:
                 return None
@@ -670,7 +726,7 @@ class Database(
         return await _CatalogMixin.get_item(self, friendly_token)
 
     async def is_restricted(self, friendly_token: str) -> bool:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             item = await self.catalog.get_item(friendly_token, is_partitioned=True)
             if not item:
                 return False
@@ -680,7 +736,7 @@ class Database(
         return await _CatalogMixin.is_restricted(self, friendly_token)
 
     async def purge_promo_hide_state(self) -> dict:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             promo_pool = await self.queue.get_promo_pool_media_ids()
             cat_tags = await self.catalog.get_hidden_category_and_tag_tokens()
             all_media = promo_pool | cat_tags
@@ -690,7 +746,7 @@ class Database(
         return await _CatalogMixin.purge_promo_hide_state(self)
 
     async def get_recently_played_debug(self, days: int) -> dict:
-        if self._layout == "partitioned":
+        if self._domain_dispatch:
             completions = await self.queue.get_recently_played_completions(days)
             tokens = [c["media_id"] for c in completions]
             items = await self.catalog.get_items_by_tokens(tokens)

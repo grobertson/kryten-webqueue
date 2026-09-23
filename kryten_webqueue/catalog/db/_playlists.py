@@ -165,7 +165,7 @@ class _PlaylistsMixin:
         return added
 
     async def rotate_playlist_item_to_bottom(
-        self, media_id: str, media_type: str = "cm"
+        self, media_id: str, media_type: str = "cm", *, is_partitioned: bool = False
     ) -> int:
         """Move a played item to the end of every mutable playlist containing it.
 
@@ -176,9 +176,13 @@ class _PlaylistsMixin:
         Accepts either the manifest URL or the friendly_token; resolves
         friendly_token → manifest_url via the catalog so that callers using
         the token (e.g. CompletionRecorder) match correctly against the URL
-        stored in saved_playlist_items.media_id.
+        stored in saved_playlist_items.media_id. In partitioned/Postgres mode
+        catalog lives in a separate database/schema, so that resolution is
+        done by the ``Database`` facade beforehand and ``is_partitioned=True``
+        skips this same-connection lookup (it would otherwise hard-fail —
+        there is no ``catalog`` table reachable from this connection).
         """
-        if media_type == "cm":
+        if media_type == "cm" and not is_partitioned:
             row = await self._fetch_one(
                 "SELECT manifest_url FROM catalog WHERE friendly_token = ? LIMIT 1",
                 [media_id],
