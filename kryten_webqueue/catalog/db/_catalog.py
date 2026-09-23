@@ -310,31 +310,55 @@ class _CatalogMixin:
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
         max_duration_sec: int | None = None,
+        exclude_tokens: set[str] | list[str] | None = None,
+        is_partitioned: bool = False,
     ) -> list[dict]:
-        query = """
+        if is_partitioned:
+            played_col = "NULL AS played_at"
+            blackout_col = "0 AS blackout_active"
+        else:
+            played_col = "(SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at"
+            blackout_col = _BLACKOUT_ACTIVE_COL
+
+        query = f"""
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
-                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at,
+                   {played_col},
                    {blackout_col}
             FROM catalog c
             WHERE 1=1
-        """.format(
-            blackout_col=_BLACKOUT_ACTIVE_COL
-        )
+        """
         params: list = []
-        resv_sql, resv_params = _reserved_exclusion("c")
-        query += resv_sql
-        params.extend(resv_params)
-        if not show_hidden:
-            excl_sql, excl_params = _hidden_exclusion("c")
-            query += excl_sql
-            params.extend(excl_params)
-            bo_sql, bo_params = _blackout_exclusion("c")
-            query += bo_sql
-            params.extend(bo_params)
-        if recently_played_days > 0:
-            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
-            query += rp_sql
-            params.extend(rp_params)
+        if not is_partitioned:
+            resv_sql, resv_params = _reserved_exclusion("c")
+            query += resv_sql
+            params.extend(resv_params)
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                query += excl_sql
+                params.extend(excl_params)
+                bo_sql, bo_params = _blackout_exclusion("c")
+                query += bo_sql
+                params.extend(bo_params)
+            if recently_played_days > 0:
+                rp_sql, rp_params = _recently_played_exclusion(
+                    "c", recently_played_days
+                )
+                query += rp_sql
+                params.extend(rp_params)
+        else:
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                query += excl_sql
+                params.extend(excl_params)
+
+        if exclude_tokens:
+            tokens_list = [t for t in exclude_tokens if t]
+            for i in range(0, len(tokens_list), 500):
+                chunk = tokens_list[i : i + 500]
+                ph = ",".join("?" * len(chunk))
+                query += f" AND c.friendly_token NOT IN ({ph}) "
+                params.extend(chunk)
+
         if min_duration_sec > 0 or max_duration_sec is not None:
             dur_sql, dur_params = _duration_range_filter(
                 "c", min_duration_sec or None, max_duration_sec
@@ -405,26 +429,45 @@ class _CatalogMixin:
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
         max_duration_sec: int | None = None,
+        exclude_tokens: set[str] | list[str] | None = None,
+        is_partitioned: bool = False,
     ) -> int:
         query = """
             SELECT COUNT(*) as cnt FROM catalog c
             WHERE 1=1
         """
         params: list = []
-        resv_sql, resv_params = _reserved_exclusion("c")
-        query += resv_sql
-        params.extend(resv_params)
-        if not show_hidden:
-            excl_sql, excl_params = _hidden_exclusion("c")
-            query += excl_sql
-            params.extend(excl_params)
-            bo_sql, bo_params = _blackout_exclusion("c")
-            query += bo_sql
-            params.extend(bo_params)
-        if recently_played_days > 0:
-            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
-            query += rp_sql
-            params.extend(rp_params)
+        if not is_partitioned:
+            resv_sql, resv_params = _reserved_exclusion("c")
+            query += resv_sql
+            params.extend(resv_params)
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                query += excl_sql
+                params.extend(excl_params)
+                bo_sql, bo_params = _blackout_exclusion("c")
+                query += bo_sql
+                params.extend(bo_params)
+            if recently_played_days > 0:
+                rp_sql, rp_params = _recently_played_exclusion(
+                    "c", recently_played_days
+                )
+                query += rp_sql
+                params.extend(rp_params)
+        else:
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                query += excl_sql
+                params.extend(excl_params)
+
+        if exclude_tokens:
+            tokens_list = [t for t in exclude_tokens if t]
+            for i in range(0, len(tokens_list), 500):
+                chunk = tokens_list[i : i + 500]
+                ph = ",".join("?" * len(chunk))
+                query += f" AND c.friendly_token NOT IN ({ph}) "
+                params.extend(chunk)
+
         if min_duration_sec > 0 or max_duration_sec is not None:
             dur_sql, dur_params = _duration_range_filter(
                 "c", min_duration_sec or None, max_duration_sec
@@ -485,36 +528,61 @@ class _CatalogMixin:
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
         max_duration_sec: int | None = None,
+        exclude_tokens: set[str] | list[str] | None = None,
+        is_partitioned: bool = False,
     ) -> list[dict]:
         sanitized = _sanitize_fts_query(query_text)
         if not sanitized:
             return []
-        sql = """
+
+        if is_partitioned:
+            played_col = "NULL AS played_at"
+            blackout_col = "0 AS blackout_active"
+        else:
+            played_col = "(SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at"
+            blackout_col = _BLACKOUT_ACTIVE_COL
+
+        sql = f"""
             SELECT c.friendly_token, c.title, c.duration_sec, c.cover_art_path, c.cover_art_source, c.thumbnail_url, c.manifest_url,
-                   (SELECT MAX(pc.completed_at) FROM play_completions pc WHERE pc.media_id = c.friendly_token AND pc.media_type = 'cm') AS played_at,
+                   {played_col},
                    rank AS relevance,
                    {blackout_col}
             FROM catalog_fts fts
             JOIN catalog c ON c.rowid = fts.rowid
             WHERE catalog_fts MATCH ?
-        """.format(
-            blackout_col=_BLACKOUT_ACTIVE_COL
-        )
+        """
         params: list = [sanitized]
-        resv_sql, resv_params = _reserved_exclusion("c")
-        sql += resv_sql
-        params.extend(resv_params)
-        if not show_hidden:
-            excl_sql, excl_params = _hidden_exclusion("c")
-            sql += excl_sql
-            params.extend(excl_params)
-            bo_sql, bo_params = _blackout_exclusion("c")
-            sql += bo_sql
-            params.extend(bo_params)
-        if recently_played_days > 0:
-            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
-            sql += rp_sql
-            params.extend(rp_params)
+        if not is_partitioned:
+            resv_sql, resv_params = _reserved_exclusion("c")
+            sql += resv_sql
+            params.extend(resv_params)
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                sql += excl_sql
+                params.extend(excl_params)
+                bo_sql, bo_params = _blackout_exclusion("c")
+                sql += bo_sql
+                params.extend(bo_params)
+            if recently_played_days > 0:
+                rp_sql, rp_params = _recently_played_exclusion(
+                    "c", recently_played_days
+                )
+                sql += rp_sql
+                params.extend(rp_params)
+        else:
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                sql += excl_sql
+                params.extend(excl_params)
+
+        if exclude_tokens:
+            tokens_list = [t for t in exclude_tokens if t]
+            for i in range(0, len(tokens_list), 500):
+                chunk = tokens_list[i : i + 500]
+                ph = ",".join("?" * len(chunk))
+                sql += f" AND c.friendly_token NOT IN ({ph}) "
+                params.extend(chunk)
+
         if min_duration_sec > 0 or max_duration_sec is not None:
             dur_sql, dur_params = _duration_range_filter(
                 "c", min_duration_sec or None, max_duration_sec
@@ -548,6 +616,8 @@ class _CatalogMixin:
         recently_played_days: int = 0,
         min_duration_sec: int = 0,
         max_duration_sec: int | None = None,
+        exclude_tokens: set[str] | list[str] | None = None,
+        is_partitioned: bool = False,
     ) -> int:
         sanitized = _sanitize_fts_query(query_text)
         if not sanitized:
@@ -559,20 +629,36 @@ class _CatalogMixin:
             WHERE catalog_fts MATCH ?
         """
         params: list = [sanitized]
-        resv_sql, resv_params = _reserved_exclusion("c")
-        sql += resv_sql
-        params.extend(resv_params)
-        if not show_hidden:
-            excl_sql, excl_params = _hidden_exclusion("c")
-            sql += excl_sql
-            params.extend(excl_params)
-            bo_sql, bo_params = _blackout_exclusion("c")
-            sql += bo_sql
-            params.extend(bo_params)
-        if recently_played_days > 0:
-            rp_sql, rp_params = _recently_played_exclusion("c", recently_played_days)
-            sql += rp_sql
-            params.extend(rp_params)
+        if not is_partitioned:
+            resv_sql, resv_params = _reserved_exclusion("c")
+            sql += resv_sql
+            params.extend(resv_params)
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                sql += excl_sql
+                params.extend(excl_params)
+                bo_sql, bo_params = _blackout_exclusion("c")
+                sql += bo_sql
+                params.extend(bo_params)
+            if recently_played_days > 0:
+                rp_sql, rp_params = _recently_played_exclusion(
+                    "c", recently_played_days
+                )
+                sql += rp_sql
+                params.extend(rp_params)
+        else:
+            if not show_hidden:
+                excl_sql, excl_params = _hidden_exclusion("c")
+                sql += excl_sql
+                params.extend(excl_params)
+
+        if exclude_tokens:
+            tokens_list = [t for t in exclude_tokens if t]
+            for i in range(0, len(tokens_list), 500):
+                chunk = tokens_list[i : i + 500]
+                ph = ",".join("?" * len(chunk))
+                sql += f" AND c.friendly_token NOT IN ({ph}) "
+                params.extend(chunk)
         if min_duration_sec > 0 or max_duration_sec is not None:
             dur_sql, dur_params = _duration_range_filter(
                 "c", min_duration_sec or None, max_duration_sec
@@ -585,7 +671,12 @@ class _CatalogMixin:
         row = await self._fetch_one(sql, params)
         return row["cnt"] if row else 0
 
-    async def get_item(self, friendly_token: str) -> dict | None:
+    async def get_item(
+        self, friendly_token: str, is_partitioned: bool = False
+    ) -> dict | None:
+        if is_partitioned:
+            sql = "SELECT * FROM catalog WHERE friendly_token = ?"
+            return await self._fetch_one(sql, [friendly_token])
         resv_sql, resv_params = _reserved_exclusion("catalog")
         bo_sql, bo_params = _blackout_exclusion("catalog")
         sql = "SELECT * FROM catalog WHERE friendly_token = ?" + resv_sql + bo_sql
@@ -941,7 +1032,13 @@ class _CatalogMixin:
             VALUES (:friendly_token, :title, :description, :duration_sec,
                     :manifest_url, :thumbnail_url, :added_at, :synced_at)
         """
-        row = {"added_at": row.get("synced_at"), **row}
+        defaults = {
+            "description": "",
+            "duration_sec": 0,
+            "thumbnail_url": "",
+            "added_at": row.get("synced_at"),
+        }
+        row = {**defaults, **row}
         await self._db.execute(sql, row)
         # Update FTS index
         await self._db.execute(

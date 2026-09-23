@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.47.0] - 2026-09-23
+
+### Added
+
+- **SQLite Domain Partitioning (`sqlite-domain-separation`)**:
+  - Split database architecture isolating heavy background write jobs from real-time pollers across 4 discrete SQLite databases:
+    - `catalog.sqlite3` — Catalog items, FTS5 index, categories, tags, people, studios, enrichment state, MOTD overrides.
+    - `queue.sqlite3` — Queue shadow, spend requests, queue history, saved playlists, schedules, play completions, blackouts.
+    - `jobs.sqlite3` — Background job runs, per-line job run logs, schedules, and fetch queue.
+    - `users.sqlite3` — OTPs, device link codes, device API keys, watchlists, feedback, title suggestions.
+  - Multi-database connection facade (`Database`) managing domain sub-connections (`self.catalog`, `self.queue`, `self.jobs`, `self.users`) with independent WAL, checkpoints, and busy timeouts.
+  - Configurable `DatabaseConfig` supporting `layout="monolith"` and `layout="partitioned"` with safe path resolution and guards against accidental silent bypass of existing monolith databases.
+  - Automated database migration ETL script `scripts/split_databases.py` (`kryten-webqueue-split-db`) with checkpoint-safe reading, foreign key verification, and deterministic SHA-256 data parity validation.
+  - Concurrency stress test suite (`tests/test_concurrency_split.py`) verifying zero cross-domain lock contention between high-frequency queue polling, burst job logging, and web browse requests.
+
+### Changed
+
+- Decoupled cross-domain SQL queries:
+  - User watchlist ("My List") queries `users.sqlite3` for ordered tokens and hydrates item metadata from `catalog.sqlite3`.
+  - Recently-played hiding and weekend blackout exclusions resolved across domain boundaries without cross-file SQL joins.
+  - Promo-pool hide state purge orchestrated across `queue.sqlite3` and `catalog.sqlite3`.
+
 ## [0.46.1] - 2026-09-10
 
 ### Changed

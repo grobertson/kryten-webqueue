@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     config: Config = app.state.config
 
     # Database
-    db = Database(config.db_path)
+    db = Database(config)
     await db.connect()
     await db.run_migrations()
     # Self-heal: purge any recently-played hide state recorded for promos/bumpers

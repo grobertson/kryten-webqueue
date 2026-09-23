@@ -1,5 +1,6 @@
 from pathlib import Path
-from pydantic import BaseModel, Field, PrivateAttr
+from typing import Any, Literal
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 import json
 
 
@@ -183,6 +184,62 @@ class PromoConfig(BaseModel):
     }
 
 
+class DatabaseConfig(BaseModel):
+    """Database layout and path configuration."""
+
+    layout: Literal["monolith", "partitioned"] = "monolith"
+    data_dir: str = "./data"
+    catalog_db_path: str | None = None
+    queue_db_path: str | None = None
+    jobs_db_path: str | None = None
+    users_db_path: str | None = None
+    db_path: str = "/var/lib/kryten-webqueue/webqueue.db"
+
+    def get_catalog_path(self) -> str:
+        return self.catalog_db_path or str(Path(self.data_dir) / "catalog.sqlite3")
+
+    def get_queue_path(self) -> str:
+        return self.queue_db_path or str(Path(self.data_dir) / "queue.sqlite3")
+
+    def get_jobs_path(self) -> str:
+        return self.jobs_db_path or str(Path(self.data_dir) / "jobs.sqlite3")
+
+    def get_users_path(self) -> str:
+        return self.users_db_path or str(Path(self.data_dir) / "users.sqlite3")
+
+    @model_validator(mode="after")
+    def validate_layout(self) -> "DatabaseConfig":
+        if self.layout == "monolith":
+            if not self.db_path or not self.db_path.strip():
+                raise ValueError(
+                    "Monolith database layout requires a non-empty 'db_path'"
+                )
+        elif self.layout == "partitioned":
+            domain_paths = [
+                self.catalog_db_path,
+                self.queue_db_path,
+                self.jobs_db_path,
+                self.users_db_path,
+            ]
+            any_domain_path = any(p is not None for p in domain_paths)
+            all_domain_paths = all(p is not None for p in domain_paths)
+            if any_domain_path and not all_domain_paths and not self.data_dir:
+                raise ValueError(
+                    "Partitioned layout with explicit domain paths requires all 4 paths "
+                    "(catalog_db_path, queue_db_path, jobs_db_path, users_db_path) or a base 'data_dir'"
+                )
+            # Guard against silently bypassing an existing monolithic database:
+            if self.db_path and Path(self.db_path).is_file():
+                catalog_path = Path(self.get_catalog_path())
+                if not catalog_path.is_file():
+                    raise ValueError(
+                        f"Legacy monolith database exists at '{self.db_path}', but partitioned "
+                        f"database '{catalog_path}' does not exist. Run split_databases.py "
+                        "before switching database layout to 'partitioned' to prevent starting with an empty database."
+                    )
+        return self
+
+
 class Config(BaseModel):
     """Application configuration loaded from JSON file."""
 
@@ -242,7 +299,30 @@ class Config(BaseModel):
     promos: PromoConfig = PromoConfig()
 
     # Database
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     db_path: str = "/var/lib/kryten-webqueue/webqueue.db"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _sync_db_config_before(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "db_path" in data:
+                if "database" not in data:
+                    data["database"] = {"db_path": data["db_path"]}
+                elif (
+                    isinstance(data["database"], dict)
+                    and "db_path" not in data["database"]
+                ):
+                    data["database"]["db_path"] = data["db_path"]
+            elif "database" in data and isinstance(data["database"], dict):
+                if "db_path" in data["database"]:
+                    data["db_path"] = data["database"]["db_path"]
+        return data
+
+    @model_validator(mode="after")
+    def _sync_db_config_after(self) -> "Config":
+        self.db_path = self.database.db_path
+        return self
 
     # Images
     image_dir: str = "/var/lib/kryten-webqueue/images"

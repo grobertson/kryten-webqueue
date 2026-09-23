@@ -62,6 +62,15 @@
     }
   },
 
+  "database": {
+    "layout": "monolith",
+    "db_path": "/var/lib/kryten-webqueue/webqueue.db",
+    "data_dir": "/var/lib/kryten-webqueue/data",
+    "catalog_db_path": null,
+    "queue_db_path": null,
+    "jobs_db_path": null,
+    "users_db_path": null
+  },
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",
 
   "image_dir": "/var/lib/kryten-webqueue/images",

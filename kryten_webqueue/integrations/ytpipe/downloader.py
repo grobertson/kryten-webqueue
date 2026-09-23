@@ -3113,9 +3113,7 @@ class MediaDownloaderToMediaCMS:
                     f" {fname}; skipping pre-upload validation"
                 )
                 return
-            raise ValueError(
-                f"ffprobe could not read the file {fname}: {stderr[:200]}"
-            )
+            raise ValueError(f"ffprobe could not read the file {fname}: {stderr[:200]}")
         try:
             meta = json.loads(proc.stdout or "{}")
         except ValueError:
