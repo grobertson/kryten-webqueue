@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.48.0] - 2026-09-23
+
+### Added
+
+- **PostgreSQL & Chandra-1 Podman Migration Foundations (`postgres-migration`)**:
+  - Added PostgreSQL backend support and configuration in `kryten_webqueue/config.py` with `PostgresConfig` and `DatabaseConfig(backend="sqlite"|"postgres")`.
+  - Added SQLAlchemy 2.0 async engine and session factory builder in `kryten_webqueue/catalog/db/engine.py` (`create_pg_engine`) utilizing `asyncpg` with connection pooling (`pool_size=10`, `max_overflow=20`, `pool_pre_ping=True`).
+  - Added schema DDL `kryten_webqueue/catalog/db/sql/001_initial_schema.sql` defining 40 tables across 5 logical schemas (`catalog`, `queue`, `jobs`, `users`, `tmdb`), English `tsvector` generated search vector, and `pg_trgm` fuzzy trigram matching.
+  - Implemented automated 30-day job run log pruning task (`job_log_prune_job`) in `kryten_webqueue/jobs/tasks.py` and `kryten_webqueue/catalog/db/_jobs_db.py` with strict exemptions for financial, chat, feedback, and audit history.
+  - Implemented one-shot ETL streaming script `kryten_webqueue/migrate_sqlite_to_pg.py` (`kryten-webqueue-migrate-pg`) with batched row streaming, identity sequence synchronization (`setval`), type normalization, and verification reporting.
+  - Added rootful Podman Quadlet specifications (`deploy/podman/webqueue/webqueue.network` and `webqueue-app.container`) and Containerfile for deployment on `chandra-1`.
+  - Added comprehensive operational cutover runbook `docs/postgres-cutover.md`.
+
 ## [0.47.0] - 2026-09-23
 
 ### Added

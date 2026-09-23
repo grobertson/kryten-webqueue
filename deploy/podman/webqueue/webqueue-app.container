@@ -1,0 +1,24 @@
+[Unit]
+Description=kryten-webqueue - CyTube Queue Management (FastAPI app)
+After=network-online.target
+
+[Container]
+ContainerName=webqueue-app
+Image=localhost/kryten-webqueue:latest
+Network=podman-webqueue
+PublishPort=2010:2010
+AddHost=host.containers.internal:host-gateway
+
+EnvironmentFile=/etc/kryten/webqueue/webqueue.env
+Volume=/etc/kryten/webqueue/config.json:/etc/kryten-webqueue/config.json:ro,z
+Volume=/var/lib/kryten/media:/var/lib/kryten-webqueue:Z
+Volume=/var/log/kryten/webqueue:/var/log/kryten-webqueue:Z
+
+Exec=uvicorn kryten_webqueue.app:app --host 0.0.0.0 --port 2010
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target default.target

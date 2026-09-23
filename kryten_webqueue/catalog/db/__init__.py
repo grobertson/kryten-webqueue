@@ -107,6 +107,7 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "get_job_schedule": "jobs",
     "upsert_job_schedule": "jobs",
     "delete_job_schedule": "jobs",
+    "prune_job_run_logs": "jobs",
     "enqueue_fetch": "jobs",
     "claim_next_fetch_item": "jobs",
     "finish_fetch_item": "jobs",

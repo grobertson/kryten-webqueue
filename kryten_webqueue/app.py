@@ -111,6 +111,7 @@ async def lifespan(app: FastAPI):
         motd_posters_job,
         tmdb_index_refresh_job,
         tmdb_coverage_report_job,
+        job_log_prune_job,
         CATALOG_ENRICH_SCHEMA,
         CATALOG_BLACKOUT_SCHEMA,
         DEVICE_KEY_BAN_RECONCILE_SCHEMA,
@@ -121,6 +122,7 @@ async def lifespan(app: FastAPI):
         MOTD_POSTERS_SCHEMA,
         TMDB_INDEX_REFRESH_SCHEMA,
         TMDB_COVERAGE_REPORT_SCHEMA,
+        JOB_LOG_PRUNE_SCHEMA,
     )
 
     job_manager.register(
@@ -167,6 +169,12 @@ async def lifespan(app: FastAPI):
         motd_posters_job,
         label="MOTD Posters (weekend poster grid)",
         schema=MOTD_POSTERS_SCHEMA,
+    )
+    job_manager.register(
+        "job_log_prune",
+        job_log_prune_job,
+        label="Job Run Log Pruner (30-day retention)",
+        schema=JOB_LOG_PRUNE_SCHEMA,
     )
     from .jobs.motd_publish import motd_publish_job, MOTD_PUBLISH_SCHEMA
 

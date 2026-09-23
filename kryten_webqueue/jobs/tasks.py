@@ -1046,3 +1046,30 @@ async def fetch_queue_drain_job(params: dict, ctx) -> dict:
 
     logger.info("fetch_queue_drain: done — processed=%d failed=%d", processed, failed)
     return {"processed": processed, "failed": failed}
+
+
+JOB_LOG_PRUNE_SCHEMA = [
+    {
+        "name": "retention_days",
+        "type": "int",
+        "default": 30,
+        "label": "Retention Days (logs older than this will be deleted)",
+    }
+]
+
+
+async def job_log_prune_job(params: dict, ctx) -> dict:
+    """Prune job_run_logs older than retention_days (default 30).
+
+    CRITICAL COMPLIANCE CONSTRAINT:
+    This operation executes strictly against `job_run_logs`.
+    Under no circumstances does it touch chat, economy, purchase, feedback,
+    or audit tables.
+    """
+    days = int(params.get("retention_days", 30))
+    if days < 1:
+        raise ValueError("Retention days must be at least 1")
+
+    deleted = await ctx.db.prune_job_run_logs(retention_days=days)
+    logger.info("job_log_prune: deleted %d log rows older than %d days", deleted, days)
+    return {"retention_days": days, "deleted_logs": deleted}

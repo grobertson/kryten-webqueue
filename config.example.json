@@ -63,13 +63,25 @@
   },
 
   "database": {
+    "backend": "sqlite",
     "layout": "monolith",
     "db_path": "/var/lib/kryten-webqueue/webqueue.db",
     "data_dir": "/var/lib/kryten-webqueue/data",
     "catalog_db_path": null,
     "queue_db_path": null,
     "jobs_db_path": null,
-    "users_db_path": null
+    "users_db_path": null,
+    "postgres": {
+      "host": "host.containers.internal",
+      "port": 5432,
+      "user": "kryten",
+      "dbname": "webqueue",
+      "password_env": "KRYTEN_WEBQUEUE_PG_PASSWORD",
+      "dsn_env": null,
+      "dsn": null,
+      "pool_size": 10,
+      "max_overflow": 20
+    }
   },
   "db_path": "/var/lib/kryten-webqueue/webqueue.db",
 

@@ -1,7 +1,9 @@
+import json
+import os
 from pathlib import Path
 from typing import Any, Literal
+import urllib.parse
 from pydantic import BaseModel, Field, PrivateAttr, model_validator
-import json
 
 
 class EmoteRehostConfig(BaseModel):
@@ -184,9 +186,74 @@ class PromoConfig(BaseModel):
     }
 
 
+class PostgresConfig(BaseModel):
+    """PostgreSQL connection configuration."""
+
+    dsn_env: str | None = None
+    dsn: str | None = None
+    host: str = "host.containers.internal"
+    port: int = 5432
+    user: str = "kryten"
+    dbname: str = "webqueue"
+    password_env: str | None = "KRYTEN_WEBQUEUE_PG_PASSWORD"
+    pool_size: int = 10
+    max_overflow: int = 20
+
+    def get_password(self) -> str | None:
+        if self.password_env:
+            return os.getenv(self.password_env)
+        return None
+
+    def get_async_url(self) -> str:
+        # Precedence: dsn_env -> password-free dsn + password_env -> assembled components + password_env
+        if self.dsn_env:
+            env_dsn = os.getenv(self.dsn_env)
+            if env_dsn:
+                if env_dsn.startswith("postgresql://"):
+                    return env_dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
+                return env_dsn
+
+        password = self.get_password() or ""
+        escaped_password = urllib.parse.quote_plus(password)
+
+        if self.dsn:
+            parsed = urllib.parse.urlparse(self.dsn)
+            if parsed.password:
+                raise ValueError(
+                    "Plaintext passwords in 'database.postgres.dsn' are forbidden. "
+                    "Use 'password_env' or 'dsn_env' instead."
+                )
+            user_part = parsed.username or self.user
+            escaped_user = urllib.parse.quote_plus(user_part)
+            host_part = parsed.hostname or self.host
+            port_part = (
+                f":{parsed.port}"
+                if parsed.port
+                else (f":{self.port}" if self.port else "")
+            )
+            netloc = f"{escaped_user}:{escaped_password}@{host_part}{port_part}"
+            path = parsed.path if parsed.path else f"/{self.dbname}"
+            return f"postgresql+asyncpg://{netloc}{path}"
+
+        escaped_user = urllib.parse.quote_plus(self.user)
+        return f"postgresql+asyncpg://{escaped_user}:{escaped_password}@{self.host}:{self.port}/{self.dbname}"
+
+    @model_validator(mode="after")
+    def validate_postgres(self) -> "PostgresConfig":
+        if self.dsn:
+            parsed = urllib.parse.urlparse(self.dsn)
+            if parsed.password:
+                raise ValueError(
+                    "Plaintext passwords in 'database.postgres.dsn' are forbidden. "
+                    "Use 'password_env' or 'dsn_env' instead."
+                )
+        return self
+
+
 class DatabaseConfig(BaseModel):
     """Database layout and path configuration."""
 
+    backend: Literal["sqlite", "postgres"] = "sqlite"
     layout: Literal["monolith", "partitioned"] = "monolith"
     data_dir: str = "./data"
     catalog_db_path: str | None = None
@@ -194,6 +261,7 @@ class DatabaseConfig(BaseModel):
     jobs_db_path: str | None = None
     users_db_path: str | None = None
     db_path: str = "/var/lib/kryten-webqueue/webqueue.db"
+    postgres: PostgresConfig = Field(default_factory=PostgresConfig)
 
     def get_catalog_path(self) -> str:
         return self.catalog_db_path or str(Path(self.data_dir) / "catalog.sqlite3")
@@ -209,34 +277,35 @@ class DatabaseConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_layout(self) -> "DatabaseConfig":
-        if self.layout == "monolith":
-            if not self.db_path or not self.db_path.strip():
-                raise ValueError(
-                    "Monolith database layout requires a non-empty 'db_path'"
-                )
-        elif self.layout == "partitioned":
-            domain_paths = [
-                self.catalog_db_path,
-                self.queue_db_path,
-                self.jobs_db_path,
-                self.users_db_path,
-            ]
-            any_domain_path = any(p is not None for p in domain_paths)
-            all_domain_paths = all(p is not None for p in domain_paths)
-            if any_domain_path and not all_domain_paths and not self.data_dir:
-                raise ValueError(
-                    "Partitioned layout with explicit domain paths requires all 4 paths "
-                    "(catalog_db_path, queue_db_path, jobs_db_path, users_db_path) or a base 'data_dir'"
-                )
-            # Guard against silently bypassing an existing monolithic database:
-            if self.db_path and Path(self.db_path).is_file():
-                catalog_path = Path(self.get_catalog_path())
-                if not catalog_path.is_file():
+        if self.backend == "sqlite":
+            if self.layout == "monolith":
+                if not self.db_path or not self.db_path.strip():
                     raise ValueError(
-                        f"Legacy monolith database exists at '{self.db_path}', but partitioned "
-                        f"database '{catalog_path}' does not exist. Run split_databases.py "
-                        "before switching database layout to 'partitioned' to prevent starting with an empty database."
+                        "Monolith database layout requires a non-empty 'db_path'"
                     )
+            elif self.layout == "partitioned":
+                domain_paths = [
+                    self.catalog_db_path,
+                    self.queue_db_path,
+                    self.jobs_db_path,
+                    self.users_db_path,
+                ]
+                any_domain_path = any(p is not None for p in domain_paths)
+                all_domain_paths = all(p is not None for p in domain_paths)
+                if any_domain_path and not all_domain_paths and not self.data_dir:
+                    raise ValueError(
+                        "Partitioned layout with explicit domain paths requires all 4 paths "
+                        "(catalog_db_path, queue_db_path, jobs_db_path, users_db_path) or a base 'data_dir'"
+                    )
+                # Guard against silently bypassing an existing monolithic database:
+                if self.db_path and Path(self.db_path).is_file():
+                    catalog_path = Path(self.get_catalog_path())
+                    if not catalog_path.is_file():
+                        raise ValueError(
+                            f"Legacy monolith database exists at '{self.db_path}', but partitioned "
+                            f"database '{catalog_path}' does not exist. Run split_databases.py "
+                            "before switching database layout to 'partitioned' to prevent starting with an empty database."
+                        )
         return self
 
 

@@ -1,6 +1,6 @@
 [project]
 name = "kryten-webqueue"
-version = "0.47.0"
+version = "0.48.0"
 description = "Netflix/Tubi-style catalog browser and pay-to-play queue management for CyTube"
 readme = "README.md"
 license = "MIT"
@@ -13,6 +13,9 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "httpx>=0.27",
     "aiosqlite>=0.20",
+    "sqlalchemy>=2.0.30",
+    "asyncpg>=0.29.0",
+    "greenlet>=3.0",
     "pyjwt>=2.8",
     "pillow>=10.0",
     "apscheduler>=3.10",
@@ -47,6 +50,7 @@ dev = [
 kryten-webqueue = "kryten_webqueue.__main__:main"
 kryten-webqueue-fetchurls-auth = "kryten_webqueue.jobs.fetchurls_auth:main"
 kryten-webqueue-split-db = "kryten_webqueue.scripts.split_databases:main"
+kryten-webqueue-migrate-pg = "kryten_webqueue.migrate_sqlite_to_pg:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -1331,6 +1331,30 @@ class _CatalogMixin:
     async def delete_job_schedule(self, job_name: str) -> None:
         await self._execute("DELETE FROM job_schedules WHERE job_name=?", [job_name])
 
+    async def prune_job_run_logs(
+        self, retention_days: int = 30, batch_size: int = 5000
+    ) -> int:
+        total_deleted = 0
+        cutoff = f"-{int(retention_days)} days"
+        while True:
+            cursor = await self._db.execute(
+                """
+                DELETE FROM job_run_logs
+                WHERE id IN (
+                    SELECT id FROM job_run_logs
+                    WHERE logged_at < datetime('now', ?)
+                    LIMIT ?
+                )
+                """,
+                [cutoff, batch_size],
+            )
+            await self._db.commit()
+            count = cursor.rowcount or 0
+            total_deleted += count
+            if count < batch_size:
+                break
+        return total_deleted
+
     # --- OTP ---
 
     async def store_otp(self, username: str, code: str, expires_at: str):
