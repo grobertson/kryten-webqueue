@@ -62,9 +62,13 @@ class PlaylistScheduler:
         logger.info("PlaylistScheduler stopped")
 
     @staticmethod
-    def _parse_fire_at(value: str) -> datetime:
-        """Parse a stored fire_at ISO string into a UTC-aware datetime."""
-        dt = datetime.fromisoformat(value)
+    def _parse_fire_at(value: str | datetime) -> datetime:
+        """Parse a stored fire_at value into a UTC-aware datetime.
+
+        SQLite stores this as an ISO string; asyncpg/Postgres returns an
+        already-parsed ``datetime`` for the native ``timestamptz`` column.
+        """
+        dt = value if isinstance(value, datetime) else datetime.fromisoformat(value)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         return dt

@@ -49,7 +49,7 @@ async def _pre_fire_lock_detail(db) -> str:
         return "Queue is locked: a scheduled playlist is firing soon."
     label = lock.get("label") or "a scheduled event"
     try:
-        fire_at = datetime.fromisoformat(lock["fire_at"])
+        fire_at = datetime.fromisoformat(str(lock["fire_at"]))
         if fire_at.tzinfo is None:
             fire_at = fire_at.replace(tzinfo=UTC)
         minutes = max(0, round((fire_at - datetime.now(UTC)).total_seconds() / 60))
