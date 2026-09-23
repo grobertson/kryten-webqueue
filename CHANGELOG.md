@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.48.1] - 2026-09-23
+
+### Fixed
+
+- **Production 500 on `/catalog/browse` in partitioned SQLite mode**: `get_tags()` (facet
+  counts) unconditionally ran the monolith reserved-item exclusion subquery referencing
+  `saved_playlist_items`/`saved_playlists`, tables that live in `queue.sqlite3`, not
+  `catalog.sqlite3`. Every browse/search page load crashed with
+  `sqlite3.OperationalError: no such table: saved_playlist_items` once the site was
+  cut over to `layout="partitioned"`. `get_tags` now accepts `exclude_tokens`/
+  `is_partitioned`, and the `Database` facade resolves reserved/blackout exclusions via
+  the `queue` domain before calling it, matching the existing `browse`/`search` pattern.
+- **Reserved-item exclusion leak in partitioned mode**: `queue.get_reserved_media_ids()`
+  returns raw `media_id` values, which are usually CyTube manifest URLs, not bare
+  `friendly_token`s. `browse`, `browse_count`, `search`, and `search_count` were comparing
+  these raw values directly against `catalog.friendly_token`, so immutable/promo-pool
+  items whose playlist entry stored a manifest URL were **not excluded** from public
+  results. Added `catalog.resolve_friendly_tokens()` to resolve either shape back to
+  `friendly_token`, and all four call sites now use it via a shared
+  `Database._get_reserved_tokens()` helper.
+
 ## [0.48.0] - 2026-09-23
 
 ### Added

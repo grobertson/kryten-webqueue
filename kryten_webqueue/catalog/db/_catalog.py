@@ -916,6 +916,8 @@ class _CatalogMixin:
         show_hidden: bool = False,
         min_duration_sec: int = 0,
         max_duration_sec: int | None = None,
+        exclude_tokens: set[str] | list[str] | None = None,
+        is_partitioned: bool = False,
     ) -> list[dict]:
         """Most-used tags that have at least one catalog item, for facets.
 
@@ -929,16 +931,25 @@ class _CatalogMixin:
             WHERE 1=1
         """
         params: list = []
-        resv_sql, resv_params = _reserved_exclusion("c")
-        sql += resv_sql
-        params.extend(resv_params)
+        if not is_partitioned:
+            resv_sql, resv_params = _reserved_exclusion("c")
+            sql += resv_sql
+            params.extend(resv_params)
+            if not show_hidden:
+                bo_sql, bo_params = _blackout_exclusion("c")
+                sql += bo_sql
+                params.extend(bo_params)
         if not show_hidden:
-            bo_sql, bo_params = _blackout_exclusion("c")
-            sql += bo_sql
-            params.extend(bo_params)
             ph = ",".join("?" * len(HIDDEN_TAG_NAMES))
             sql += f" AND t.name NOT IN ({ph})"
             params.extend(HIDDEN_TAG_NAMES)
+        if exclude_tokens:
+            tokens_list = [t for t in exclude_tokens if t]
+            for i in range(0, len(tokens_list), 500):
+                chunk = tokens_list[i : i + 500]
+                ph = ",".join("?" * len(chunk))
+                sql += f" AND c.friendly_token NOT IN ({ph}) "
+                params.extend(chunk)
         if min_duration_sec > 0 or max_duration_sec is not None:
             dur_sql, dur_params = _duration_range_filter(
                 "c", min_duration_sec or None, max_duration_sec

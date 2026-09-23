@@ -55,3 +55,27 @@ class _CatalogDB(_CatalogMixin, _PeopleMixin, _EnrichmentMixin, _MOTDMixin, _Dom
         """
         rows = await self._fetch_all(sql, [*HIDDEN_CATEGORY_NAMES, *HIDDEN_TAG_NAMES])
         return {r["friendly_token"] for r in rows if r.get("friendly_token")}
+
+    async def resolve_friendly_tokens(
+        self, identifiers: list[str] | set[str]
+    ) -> set[str]:
+        """Resolve a mix of bare friendly_tokens and manifest URLs to friendly_tokens.
+
+        queue.db stores playlist item media_id as either shape; this maps both
+        back to the canonical friendly_token so cross-domain exclusion filters
+        (reserved/promo items) match regardless of which shape was recorded.
+        """
+        ids = [i for i in identifiers if i]
+        if not ids:
+            return set()
+        tokens: set[str] = set()
+        for i in range(0, len(ids), 500):
+            chunk = ids[i : i + 500]
+            ph = ",".join("?" * len(chunk))
+            rows = await self._fetch_all(
+                f"SELECT friendly_token FROM catalog "
+                f"WHERE friendly_token IN ({ph}) OR manifest_url IN ({ph})",
+                [*chunk, *chunk],
+            )
+            tokens.update(r["friendly_token"] for r in rows if r.get("friendly_token"))
+        return tokens

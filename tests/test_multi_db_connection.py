@@ -195,3 +195,65 @@ async def test_partitioned_is_restricted_decoupling(partitioned_db):
 
     # Now is_restricted is True
     assert await partitioned_db.is_restricted("tok_restricted") is True
+
+
+async def test_partitioned_get_tags_decoupled(partitioned_db):
+    """Regression test: get_tags must not reference saved_playlist_items in catalog.db.
+
+    Previously crashed with 'sqlite3.OperationalError: no such table:
+    saved_playlist_items' because get_tags ran the monolith reserved-item
+    exclusion subquery unconditionally, even in partitioned mode.
+    """
+    for i in range(1, 4):
+        token = f"tag_movie_{i}"
+        await partitioned_db.catalog.insert_catalog(
+            {
+                "friendly_token": token,
+                "title": f"Tag Movie {i}",
+                "manifest_url": f"https://dropsugar.com/cytube/{token}.json",
+                "synced_at": "2026-01-01T00:00:00Z",
+            }
+        )
+        tag_id = await partitioned_db.upsert_tag("actionpacked")
+        await partitioned_db.set_catalog_tags(token, [tag_id])
+
+    tags = await partitioned_db.get_tags()
+    assert any(t["name"] == "actionpacked" for t in tags)
+
+
+async def test_partitioned_reserved_exclusion_resolves_manifest_url(partitioned_db):
+    """Regression test: reserved-item exclusion must resolve queue.db media_id
+    (usually a manifest URL) back to friendly_token before filtering catalog.db,
+    or immutable/promo-pool items leak into public browse/search/tags.
+    """
+    manifest_url = "https://dropsugar.com/cytube/reserved_by_url.json"
+    await partitioned_db.catalog.insert_catalog(
+        {
+            "friendly_token": "tok_reserved_by_url",
+            "title": "Reserved By URL",
+            "manifest_url": manifest_url,
+            "synced_at": "2026-01-01T00:00:00Z",
+        }
+    )
+    await partitioned_db.catalog.insert_catalog(
+        {
+            "friendly_token": "tok_public",
+            "title": "Public Item",
+            "manifest_url": "https://dropsugar.com/cytube/public.json",
+            "synced_at": "2026-01-01T00:00:00Z",
+        }
+    )
+
+    pl_id = await partitioned_db.queue.create_saved_playlist(
+        name="Immutable Event", description=None, is_immutable=True, created_by="admin"
+    )
+    # media_id stored as the manifest URL, the common real-world shape.
+    await partitioned_db.queue.append_playlist_items(
+        pl_id,
+        [{"media_type": "cm", "media_id": manifest_url, "title": "Reserved By URL"}],
+    )
+
+    items = await partitioned_db.browse(show_hidden=False)
+    tokens = [i["friendly_token"] for i in items]
+    assert "tok_public" in tokens
+    assert "tok_reserved_by_url" not in tokens

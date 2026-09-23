@@ -182,6 +182,7 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "get_item_edit_history": "catalog",
     "get_items_by_tokens": "catalog",
     "get_hidden_category_and_tag_tokens": "catalog",
+    "resolve_friendly_tokens": "catalog",
     "get_people": "catalog",
     "get_studios": "catalog",
     "upsert_person": "catalog",
@@ -333,6 +334,16 @@ class Database(
 
     # --- Decoupled Cross-Domain Orchestrations ---
 
+    async def _get_reserved_tokens(self) -> set[str]:
+        """Reserved (immutable/promo) media_ids resolved to friendly_tokens.
+
+        queue.db stores media_id as either a bare token or a manifest URL, so
+        the raw values must be resolved through catalog.db before comparing
+        against friendly_token.
+        """
+        raw = await self.queue.get_reserved_media_ids()
+        return await self.catalog.resolve_friendly_tokens(raw)
+
     async def browse(
         self,
         *,
@@ -357,7 +368,7 @@ class Database(
                     recently_played_days
                 )
                 exclude_set.update(hidden)
-            reserved = await self.queue.get_reserved_media_ids()
+            reserved = await self._get_reserved_tokens()
             exclude_set.update(reserved)
             blackouts = await self.queue.get_active_blackout_tokens()
             if not show_hidden:
@@ -425,7 +436,7 @@ class Database(
                     recently_played_days
                 )
                 exclude_set.update(hidden)
-            reserved = await self.queue.get_reserved_media_ids()
+            reserved = await self._get_reserved_tokens()
             exclude_set.update(reserved)
             if not show_hidden:
                 blackouts = await self.queue.get_active_blackout_tokens()
@@ -483,7 +494,7 @@ class Database(
                     recently_played_days
                 )
                 exclude_set.update(hidden)
-            reserved = await self.queue.get_reserved_media_ids()
+            reserved = await self._get_reserved_tokens()
             exclude_set.update(reserved)
             blackouts = await self.queue.get_active_blackout_tokens()
             if not show_hidden:
@@ -554,7 +565,7 @@ class Database(
                     recently_played_days
                 )
                 exclude_set.update(hidden)
-            reserved = await self.queue.get_reserved_media_ids()
+            reserved = await self._get_reserved_tokens()
             exclude_set.update(reserved)
             if not show_hidden:
                 blackouts = await self.queue.get_active_blackout_tokens()
@@ -610,6 +621,38 @@ class Database(
 
         return await _WatchlistMixin.watchlist_get(
             self, username, page=page, per_page=per_page
+        )
+
+    async def get_tags(
+        self,
+        *,
+        limit: int = 100,
+        show_hidden: bool = False,
+        min_duration_sec: int = 0,
+        max_duration_sec: int | None = None,
+        **kwargs: Any,
+    ) -> list[dict]:
+        if self._layout == "partitioned":
+            exclude_set: set[str] = await self._get_reserved_tokens()
+            if not show_hidden:
+                blackouts = await self.queue.get_active_blackout_tokens()
+                exclude_set.update(blackouts)
+            return await self.catalog.get_tags(
+                limit=limit,
+                show_hidden=show_hidden,
+                min_duration_sec=min_duration_sec,
+                max_duration_sec=max_duration_sec,
+                exclude_tokens=exclude_set,
+                is_partitioned=True,
+            )
+
+        return await _CatalogMixin.get_tags(
+            self,
+            limit=limit,
+            show_hidden=show_hidden,
+            min_duration_sec=min_duration_sec,
+            max_duration_sec=max_duration_sec,
+            is_partitioned=False,
         )
 
     async def get_item(self, friendly_token: str) -> dict | None:
