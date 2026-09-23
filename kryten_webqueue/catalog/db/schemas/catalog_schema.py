@@ -78,7 +78,7 @@ CATALOG_MIGRATIONS: list[str] = [
     CREATE INDEX IF NOT EXISTS idx_people_name ON people(name);
 
     CREATE TABLE IF NOT EXISTS catalog_people (
-        friendly_token TEXT NOT NULL REFERENCES catalog(friendly_token) ON DELETE CASCADE,
+        friendly_token TEXT NOT NULL,
         person_id      INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
         role           TEXT NOT NULL,
         position       INTEGER NOT NULL DEFAULT 0,
@@ -93,14 +93,14 @@ CATALOG_MIGRATIONS: list[str] = [
     );
 
     CREATE TABLE IF NOT EXISTS catalog_studios (
-        friendly_token TEXT NOT NULL REFERENCES catalog(friendly_token) ON DELETE CASCADE,
+        friendly_token TEXT NOT NULL,
         studio_id      INTEGER NOT NULL REFERENCES studios(id) ON DELETE CASCADE,
         PRIMARY KEY (friendly_token, studio_id)
     );
     CREATE INDEX IF NOT EXISTS idx_catalog_studios_token ON catalog_studios(friendly_token);
 
     CREATE TABLE IF NOT EXISTS item_enrichment_state (
-        friendly_token     TEXT PRIMARY KEY REFERENCES catalog(friendly_token) ON DELETE CASCADE,
+        friendly_token     TEXT PRIMARY KEY,
         content_type       TEXT,
         hosted_show        TEXT,
         lookup_title       TEXT,
