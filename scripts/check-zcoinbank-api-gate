@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Verify that Podman's published API-gate port is usable from the host.
+# If Netavark has retained a stale DNAT target, restart via the Quadlet-managed
+# systemd unit so its normal stop/start cleanup runs.
+set -euo pipefail
+
+readonly health_url='http://127.0.0.1:28288/docs'
+
+healthy() {
+    /usr/bin/curl --fail --silent --show-error --max-time 3 "$health_url" >/dev/null
+}
+
+if healthy; then
+    exit 0
+fi
+
+/usr/bin/logger -t zcoinbank-api-gate-health \
+    'API gate published port is unavailable; restarting the Quadlet service'
+/usr/bin/systemctl restart zcoinbank-api-gate.service
+
+for _attempt in {1..15}; do
+    if healthy; then
+        /usr/bin/logger -t zcoinbank-api-gate-health \
+            'API gate published port recovered after Quadlet restart'
+        exit 0
+    fi
+    /usr/bin/sleep 2
+done
+
+/usr/bin/logger -t zcoinbank-api-gate-health \
+    'API gate published port is still unavailable after Quadlet restart'
+exit 1

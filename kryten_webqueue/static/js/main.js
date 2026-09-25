@@ -375,3 +375,22 @@ function fmtDur(sec) {
     const s = Math.round(sec % 60);
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
+// Before retrying an authenticated WebSocket, verify that the HTTP session is
+// still usable. A rejected upgrade doesn't expose its HTTP 403 to browser JS,
+// so blindly reconnecting otherwise creates an endless retry loop after a JWT
+// expires or its signing key rotates.
+async function scheduleAuthenticatedWebSocketReconnect(connect, delay = 3000) {
+    try {
+        const response = await fetch('/auth/me', {
+            credentials: 'same-origin',
+            cache: 'no-store',
+        });
+        if (response.status === 401) {
+            window.location.assign('/auth/login');
+            return null;
+        }
+    } catch (error) {
+        // A network outage should remain recoverable via the normal retry.
+    }
+    return setTimeout(connect, delay);
+}

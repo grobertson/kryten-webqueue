@@ -4,6 +4,7 @@
   "port": 2010,
   "secret_key": "CHANGE_ME_long_random_string",
   "session_ttl_hours": 24,
+  "session_previous_secret_keys": [],
 
   "log_level": "INFO",
   "promo_log_level": "DEBUG",
@@ -11,7 +12,7 @@
   "api_gate_url": "https://www.dropsugar.co:8443/",
   "api_gate_token": "CHANGE_ME",
 
-  "mediacms_url": "https://www.dropsugar.com",
+  "mediacms_url": "https://www.dropsugar.co",
   "mediacms_token": "CHANGE_ME",
   "mediacms_manage_all_media": false,
 
@@ -99,9 +100,11 @@
   "emote_rehost": {
     "enabled": true,
     "rehost_domain": "dropsugar.co",
-    "static_dir": "/home/mediacms.io/mediacms/static/emotes",
-    "base_url": "https://www.dropsugar.co/static/emotes",
-    "backup_dir": "/home/kryten/emote_backups",
+    "static_dir": "/var/lib/kryten-webqueue/emotes/images",
+    "base_url": "https://queue.dropsugar.co/emotes/images",
+    "manifest_path": "/var/lib/kryten-webqueue/emotes/emotes.json",
+    "sync_disk_manifest": true,
+    "backup_dir": "/var/lib/kryten-webqueue/emotes/backups",
     "check_interval_hours": 24.0,
     "download_max_retries": 5,
     "inter_emote_delay_sec": 2.0

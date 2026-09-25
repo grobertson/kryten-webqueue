@@ -62,6 +62,12 @@ class CatalogSync:
         log_id = await self._db.start_sync_log()
         stats = {"seen": 0, "new": 0, "updated": 0, "errors": 0, "deleted": 0}
         sync_started_at = datetime.now(UTC).isoformat()
+        # ``manage_media`` can legally return only the token owner's subset.
+        # Never turn such a partial response into a destructive mirror update.
+        # A healthy full catalog has thousands of rows, so this guard leaves
+        # normal deletion reconciliation available while rejecting a sudden,
+        # implausibly large shrink.
+        catalog_count_before = await self._db.browse_count(show_hidden=True)
 
         # Pull every item's tags/categories in a few paginated calls up front so
         # per-item facet sync needs no HTTP (falls back to detail fetch on miss).
@@ -114,7 +120,34 @@ class CatalogSync:
                     f"Catalog sync page {page}: seen={stats['seen']} next={next_url!r}"
                 )
 
-            # Remove items deleted from MediaCMS (not seen during this sync)
+            # Only prune after a successful, non-empty complete pass.  A failed
+            # request (or an unexpected empty API response) must never make the
+            # existing catalog look stale and wipe it wholesale.
+            if stats["errors"] or not stats["seen"]:
+                logger.error(
+                    "Catalog sync incomplete; preserving existing catalog: %s "
+                    "(%d pages)",
+                    stats,
+                    page,
+                )
+                await self._db.finish_sync_log(log_id, stats, "error")
+                return
+
+            if (
+                catalog_count_before >= 100
+                and stats["seen"] < catalog_count_before * 0.75
+            ):
+                logger.error(
+                    "Catalog sync returned only %d of %d existing items; "
+                    "refusing stale-item prune",
+                    stats["seen"],
+                    catalog_count_before,
+                )
+                stats["errors"] += 1
+                await self._db.finish_sync_log(log_id, stats, "error")
+                return
+
+            # Remove items deleted from MediaCMS (not seen during this sync).
             deleted_count = await self._db.delete_stale_catalog_items(sync_started_at)
             stats["deleted"] = deleted_count
             if deleted_count > 0:

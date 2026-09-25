@@ -112,7 +112,7 @@
             <button class="btn btn-sm" onclick="addToPlaylist('{{ item.friendly_token }}')">Add to playlist</button>
             <button class="btn btn-sm" onclick="addToRecentPlaylist('{{ item.friendly_token }}')">+ Recent</button>
             <button class="btn btn-sm" onclick="markPlayed('{{ item.friendly_token }}')" title="Simulate a play-completion so this item hides from regular users (testing)">Mark played</button>
-            {% set is_played = played_cutoff and item.played_at and item.played_at >= played_cutoff %}
+            {% set is_played = played_after_cutoff(item.played_at, played_cutoff) %}
             <button class="btn btn-sm" onclick="clearPlayed('{{ item.friendly_token }}')"
                     {% if not is_played %}disabled{% endif %}
                     title="{% if is_played %}Clear recently-played hide state so this item reappears for regular users{% else %}Not currently hidden by played timeout{% endif %}">Clear played</button>

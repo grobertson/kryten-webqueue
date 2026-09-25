@@ -13,11 +13,16 @@ class EmoteRehostConfig(BaseModel):
     # Emotes whose image URL contains this string are considered already rehosted.
     rehost_domain: str = "dropsugar.co"
     # Local directory where rehosted image files are written.
-    static_dir: str = "/home/mediacms.io/mediacms/static/emotes"
+    static_dir: str = "/var/lib/kryten-webqueue/emotes/images"
     # Public base URL served from static_dir; final URL: {base_url}/{bare_name}{ext}
-    base_url: str = "https://www.dropsugar.co/static/emotes"
+    base_url: str = "https://queue.dropsugar.co/emotes/images"
+    # Disk-derived export (``[{\"name\": \"#emote\", \"image\": \"...\"}]``)
+    # used to restore the channel emote list after a service migration.
+    manifest_path: str = "/var/lib/kryten-webqueue/emotes/emotes.json"
+    # Replace CyTube's emote list from the disk-derived manifest on each run.
+    sync_disk_manifest: bool = True
     # Directory for timestamped backup JSON files (created if absent).
-    backup_dir: str = "/home/kryten/emote_backups"
+    backup_dir: str = "/var/lib/kryten-webqueue/emotes/backups"
     # Background check interval in hours; 0 disables the periodic loop.
     check_interval_hours: float = 24.0
     download_max_retries: int = 5
@@ -357,6 +362,9 @@ class Config(BaseModel):
     port: int = 2010
     secret_key: str
     session_ttl_hours: int = 24
+    # Old JWT signing keys accepted only for verification during a key rotation.
+    # New sessions are always signed with ``secret_key``.
+    session_previous_secret_keys: list[str] = Field(default_factory=list)
 
     # Logging
     # Root application log level for the ``kryten_webqueue`` logger hierarchy.
@@ -374,7 +382,7 @@ class Config(BaseModel):
     api_gate_token: str
 
     # MediaCMS
-    mediacms_url: str = "https://www.dropsugar.com"
+    mediacms_url: str = "https://www.dropsugar.co"
     mediacms_token: str
     # Set true when the token can tag any media (manager/superuser on a CMS whose
     # bulk_actions is patched to allow it); pushes derived tags for all items.

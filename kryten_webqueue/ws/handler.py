@@ -2,7 +2,10 @@ import json
 import logging
 import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi.encoders import jsonable_encoder
 import jwt
+
+from ..auth.session import decode_session_token
 
 logger = logging.getLogger(__name__)
 
@@ -15,14 +18,18 @@ async def websocket_endpoint(ws: WebSocket):
     # Authenticate from cookie
     token = ws.cookies.get("session")
     if not token:
+        logger.info("WS rejected: session cookie missing")
         await ws.close(code=4001, reason="Not authenticated")
         return
 
     config = ws.app.state.config
     try:
-        payload = jwt.decode(token, config.secret_key, algorithms=["HS256"])
+        payload = decode_session_token(
+            token, config.secret_key, config.session_previous_secret_keys
+        )
         username = payload["sub"]
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as exc:
+        logger.info("WS rejected: invalid session (%s)", type(exc).__name__)
         await ws.close(code=4001, reason="Invalid session")
         return
 
@@ -35,7 +42,12 @@ async def websocket_endpoint(ws: WebSocket):
     # Send current queue state on connect
     try:
         state = shadow.get_queue_state()
-        await ws.send_text(json.dumps({"type": "queue_state", "data": state}))
+        # PostgreSQL returns timestamp columns as datetime objects.  Unlike
+        # broadcasts (which are encoded by WebSocketManager), this initial
+        # state goes straight to the socket, so encode it here as well.
+        await ws.send_text(
+            json.dumps(jsonable_encoder({"type": "queue_state", "data": state}))
+        )
     except Exception:
         await manager.disconnect(username)
         return

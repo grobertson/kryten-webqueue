@@ -42,6 +42,71 @@ _USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
 ]
 
+_EMOTE_EXTENSIONS = frozenset({".gif", ".webp"})
+
+
+def normalize_emote_name(value: str) -> str:
+    """Return the canonical bare emote name used for both file and URL.
+
+    Channel emotes are named ``#foo_bar-baz`` while static assets must be
+    addressable from a stable filename.  The hash is never stored in a
+    filename, and underscores/dashes are deliberately removed.
+    """
+    bare = value.lstrip("#").replace("_", "").replace("-", "").lower()
+    if not bare or "/" in bare or "\\" in bare:
+        raise ValueError(f"Invalid emote name: {value!r}")
+    return bare
+
+
+def unique_emote_filename(
+    source: Path, destination: Path, used_names: set[str]
+) -> Path:
+    """Choose a collision-free destination using a numeric suffix.
+
+    The initial migration imports reactions first, so their canonical names
+    remain unchanged.  A distinct emote with the same canonical name becomes
+    ``name2``, then ``name3``, and so on.  Identical bytes are deduplicated by
+    the migration caller before this function is used.
+    """
+    bare = normalize_emote_name(source.stem)
+    suffix = source.suffix.lower()
+    candidate = bare
+    index = 2
+    while candidate.casefold() in used_names:
+        candidate = f"{bare}{index}"
+        index += 1
+    used_names.add(candidate.casefold())
+    return destination / f"{candidate}{suffix}"
+
+
+def build_emote_manifest(static_dir: Path, base_url: str) -> list[dict[str, str]]:
+    """Build a restorable API-gate emote export from GIF/WebP files on disk."""
+    emotes: dict[str, dict[str, str]] = {}
+    for path in sorted(static_dir.iterdir() if static_dir.exists() else []):
+        if not path.is_file() or path.suffix.lower() not in _EMOTE_EXTENSIONS:
+            continue
+        bare = normalize_emote_name(path.stem)
+        name = f"#{bare}"
+        if name in emotes:
+            raise ValueError(
+                f"Emote filename collision for {name}: {emotes[name]['image']} and {path.name}"
+            )
+        emotes[name] = {
+            "name": name,
+            "image": f"{base_url.rstrip('/')}/{bare}{path.suffix.lower()}",
+        }
+    return list(emotes.values())
+
+
+def write_emote_manifest(
+    static_dir: Path, base_url: str, manifest_path: Path
+) -> list[dict[str, str]]:
+    """Atomically refresh and return the restorable emote export."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    manifest = build_emote_manifest(static_dir, base_url)
+    _write_json(manifest_path, manifest)
+    return manifest
+
 
 def _detect_ext(url: str, content_type: str | None) -> str:
     """Determine file extension from Content-Type or URL path; default .gif."""
@@ -183,6 +248,24 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
     """Rehost externally-hosted channel emotes to dropsugar.co."""
     cfg = ctx.config.emote_rehost
     api = ctx.api_gate
+    static_dir = Path(cfg.static_dir)
+    manifest_path = Path(cfg.manifest_path)
+    await asyncio.to_thread(static_dir.mkdir, parents=True, exist_ok=True)
+    try:
+        manifest = await asyncio.to_thread(
+            write_emote_manifest, static_dir, cfg.base_url, manifest_path
+        )
+    except ValueError as exc:
+        raise JobError(f"Could not build emote manifest: {exc}") from exc
+    manifest_count = len(manifest)
+
+    manifest_pushed = 0
+    if cfg.sync_disk_manifest:
+        try:
+            await api.replace_emotes(manifest)
+            manifest_pushed = manifest_count
+        except Exception as exc:
+            raise JobError(f"Could not replace CyTube emotes from disk manifest: {exc}") from exc
 
     try:
         emotes = await api.get_emotes()
@@ -198,6 +281,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "failed": 0,
             "pushed": 0,
             "failed_emotes": [],
+            "manifest_path": str(manifest_path),
+            "manifest_count": manifest_count,
+            "manifest_pushed": manifest_pushed,
         }
 
     backup_dir = Path(cfg.backup_dir)
@@ -236,6 +322,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
                 "pushed": 0,
                 "failed_emotes": [],
                 "log": str(log_path),
+                "manifest_path": str(manifest_path),
+                "manifest_count": manifest_count,
+                "manifest_pushed": manifest_pushed,
             }
             await ctx.progress({"step": "complete", **result})
             return result
@@ -247,9 +336,6 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             cfg.rehost_domain,
         )
 
-        static_dir = Path(cfg.static_dir)
-        await asyncio.to_thread(static_dir.mkdir, parents=True, exist_ok=True)
-
         succeeded: list[str] = []
         failed: list[str] = []
         removed: list[str] = []
@@ -258,7 +344,7 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
         for i, emote in enumerate(to_rehost, 1):
             name = emote["name"]
             url = emote["image"]
-            bare = name.lstrip("#")
+            bare = normalize_emote_name(name)
 
             logger.info("[%d/%d] downloading %s from %s", i, len(to_rehost), name, url)
             t0 = time.perf_counter()
@@ -330,6 +416,13 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             backup_dir / f"emotes-{stamp}-after.json",
             list(updated.values()),
         )
+        manifest = await asyncio.to_thread(
+            write_emote_manifest, static_dir, cfg.base_url, manifest_path
+        )
+        manifest_count = len(manifest)
+        if cfg.sync_disk_manifest:
+            await api.replace_emotes(manifest)
+            manifest_pushed = manifest_count
 
         logger.info(
             "Done: %d/%d succeeded, %d removed (dead), %d failed",
@@ -354,6 +447,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "failed_emotes": failed,
             "removed_emotes": removed,
             "log": str(log_path),
+            "manifest_path": str(manifest_path),
+            "manifest_count": manifest_count,
+            "manifest_pushed": manifest_pushed,
         }
         await ctx.progress({"step": "complete", **result})
         return result

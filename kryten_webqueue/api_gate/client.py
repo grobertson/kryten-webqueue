@@ -203,6 +203,10 @@ class ApiGateClient:
         """Update a single emote URL. name may include the '#' prefix."""
         return await self.put(f"/emotes/{quote(name, safe='')}", json={"image": image})
 
+    async def replace_emotes(self, emotes: list[dict]) -> dict:
+        """Atomically replace CyTube's emote list from a complete manifest."""
+        return await self.post("/emotes/replace", json={"emotes": emotes})
+
     async def remove_emote(self, name: str) -> dict:
         """Delete an emote by name. name may include the '#' prefix."""
         return await self.delete(f"/emotes/{quote(name, safe='')}")

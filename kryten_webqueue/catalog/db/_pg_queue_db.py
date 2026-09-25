@@ -8,6 +8,15 @@ from ._pg_base_domain import _PgDomainDB, parse_dt
 logger = logging.getLogger(__name__)
 
 
+def _sqlite_timestamp_text(value: datetime | str) -> str:
+    """Return a timestamp in the text shape exposed by the SQLite backend."""
+    if not isinstance(value, datetime):
+        return str(value)
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 class _PgQueueDB(_PgDomainDB):
     """Postgres implementation of the queue domain (schema ``queue``)."""
 
@@ -430,6 +439,10 @@ class _PgQueueDB(_PgDomainDB):
         )
 
     async def update_schedule(self, schedule_id: int, **kwargs):
+        # The admin form sends fire_at as an ISO-8601 string.  asyncpg's
+        # timestamptz codec, unlike SQLite, requires a native datetime.
+        if "fire_at" in kwargs:
+            kwargs["fire_at"] = parse_dt(kwargs["fire_at"])
         sets = ", ".join(f"{k}=?" for k in kwargs.keys())
         await self._execute(
             f"UPDATE playlist_schedules SET {sets} WHERE id=?",
@@ -509,21 +522,18 @@ class _PgQueueDB(_PgDomainDB):
         # fire_at is a native timestamptz here (unlike SQLite's ISO-string column),
         # so plain `fire_at > now()` comparisons work without any datetime()-style
         # wrapping. The interval arithmetic still needs an explicit cast.
-        row = await self._fetch_one(
-            """
+        row = await self._fetch_one("""
             SELECT 1 FROM playlist_schedules
             WHERE is_active = true
               AND lock_disabled = 0
               AND (fire_at - (pre_fire_lock_minutes::text || ' minutes')::interval) <= now()
               AND fire_at > now()
             LIMIT 1
-        """
-        )
+        """)
         return row is not None
 
     async def get_active_pre_fire_lock(self) -> dict | None:
-        return await self._fetch_one(
-            """
+        return await self._fetch_one("""
             SELECT * FROM playlist_schedules
             WHERE is_active = true
               AND lock_disabled = 0
@@ -531,20 +541,17 @@ class _PgQueueDB(_PgDomainDB):
               AND fire_at > now()
             ORDER BY fire_at
             LIMIT 1
-        """
-        )
+        """)
 
     async def disable_active_pre_fire_locks(self) -> int:
-        result = await self._execute(
-            """
+        result = await self._execute("""
             UPDATE playlist_schedules
             SET lock_disabled = 1
             WHERE is_active = true
               AND lock_disabled = 0
               AND (fire_at - (pre_fire_lock_minutes::text || ' minutes')::interval) <= now()
               AND fire_at > now()
-        """
-        )
+        """)
         return result.rowcount or 0
 
     async def get_next_schedule(self) -> dict | None:
@@ -622,7 +629,14 @@ class _PgQueueDB(_PgDomainDB):
             GROUP BY media_id
         """
         rows = await self._fetch_all(sql, tokens)
-        return {r["media_id"]: r["played_at"] for r in rows if r.get("media_id")}
+        # SQLite returns its datetime() result as text, and catalog templates
+        # compare it lexically to the recently-played cutoff.  Keep this
+        # cross-domain contract stable instead of leaking asyncpg datetimes.
+        return {
+            r["media_id"]: _sqlite_timestamp_text(r["played_at"])
+            for r in rows
+            if r.get("media_id") and r.get("played_at") is not None
+        }
 
     async def get_promo_pool_media_ids(self) -> set[str]:
         """Media IDs of promo items in promo playlists."""

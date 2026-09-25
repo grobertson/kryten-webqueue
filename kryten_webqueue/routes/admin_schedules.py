@@ -95,6 +95,27 @@ async def update_schedule(
     await scheduler.remove_schedule(schedule_id)
     if updated and updated.get("is_active"):
         fire_at = scheduler._parse_fire_at(updated["fire_at"])
+        # Enabling an existing recurring schedule may happen long after its
+        # stored anchor time.  Re-arm it to its next occurrence immediately;
+        # otherwise the UI reports "Saved" but APScheduler has no job.
+        if (
+            fire_at <= datetime.now(UTC)
+            and updated.get("is_recurring")
+            and updated.get("rrule")
+        ):
+            from ..playlists.scheduler import _next_occurrence
+
+            next_fire_at = _next_occurrence(
+                updated["rrule"], fire_at, datetime.now(UTC)
+            )
+            if next_fire_at:
+                fire_at = next_fire_at.astimezone(UTC)
+                await db.update_schedule(
+                    schedule_id,
+                    fire_at=fire_at.isoformat(),
+                    fired_at=None,
+                    lock_disabled=0,
+                )
         if fire_at > datetime.now(UTC):
             await scheduler.add_schedule(schedule_id, fire_at)
 

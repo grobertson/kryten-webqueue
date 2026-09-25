@@ -580,8 +580,10 @@ function connectAdminWebSocket() {
             loadJobs();
         }
     };
-    adminWs.onclose = () => {
-        adminWsReconnect = setTimeout(connectAdminWebSocket, 3000);
+    adminWs.onclose = async () => {
+        adminWsReconnect = await scheduleAuthenticatedWebSocketReconnect(
+            connectAdminWebSocket
+        );
     };
     setInterval(() => {
         if (adminWs && adminWs.readyState === WebSocket.OPEN) {

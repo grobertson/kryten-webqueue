@@ -462,4 +462,11 @@ def create_app(config: Config) -> FastAPI:
     image_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/images", StaticFiles(directory=str(image_dir)), name="images")
 
+    # Rehosted channel emotes live on the persistent data volume rather than in
+    # the immutable image.  They are intentionally served by this app so the
+    # public HTTPS nginx proxy remains the only internet-facing endpoint.
+    emote_dir = Path(config.emote_rehost.static_dir)
+    emote_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/emotes/images", StaticFiles(directory=str(emote_dir)), name="emotes")
+
     return app

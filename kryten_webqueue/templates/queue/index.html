@@ -62,11 +62,13 @@ function connectWebSocket() {
         el.textContent = '● Live';
     };
 
-    ws.onclose = () => {
+    ws.onclose = async () => {
         const el = document.getElementById('ws-status');
         el.className = 'ws-disconnected';
         el.textContent = '● Disconnected';
-        reconnectTimer = setTimeout(connectWebSocket, 3000);
+        reconnectTimer = await scheduleAuthenticatedWebSocketReconnect(
+            connectWebSocket
+        );
     };
 
     ws.onmessage = (event) => {

@@ -97,7 +97,7 @@ async def catalog_enrich_job(params: dict, ctx) -> dict:
     """Unified catalog enrichment pipeline.
 
     params:
-      steps     comma-separated list or "all" (default)
+      steps     comma-separated list; defaults to enrichment-only (no sync)
       tokens    comma-separated friendly_tokens or "all" (default)
       force     "1"|"true" — bypass cached state
       dry_run   "1"|"true" — preview without writing
@@ -111,7 +111,10 @@ async def catalog_enrich_job(params: dict, ctx) -> dict:
         config=ctx.config,
         cover_art=getattr(ctx, "cover_art", None),
     )
-    step_param = params.get("steps", "all")
+    # Sync is a destructive mirror operation and belongs to the separate
+    # explicit Catalog Sync control.  An enrichment run must never prune the
+    # catalog merely because its caller omitted a steps choice.
+    step_param = params.get("steps", "classify,identify,title,meta,art,tags,categories")
     steps = None if step_param == "all" else [s.strip() for s in step_param.split(",")]
     token_param = (params.get("tokens") or "").strip()
     tokens = (
@@ -137,7 +140,7 @@ CATALOG_ENRICH_SCHEMA = [
         "name": "steps",
         "label": "Pipeline steps",
         "type": "enum",
-        "default": "all",
+        "default": "classify,identify,title,meta,art,tags,categories",
         "required": False,
         "options": [
             {
@@ -175,7 +178,7 @@ CATALOG_ENRICH_SCHEMA = [
                 "label": "Classify only — detect hosted shows, TV episodes, etc.",
             },
         ],
-        "help": "Choose which parts of the pipeline to run. 'Full pipeline' is the normal nightly run.",
+        "help": "Defaults to enrichment only. Sync is a separate explicit operation because it reconciles the catalog mirror.",
     },
     {
         "name": "tokens",

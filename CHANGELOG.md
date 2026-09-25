@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.50.0] - 2026-09-24
+
+### Added
+
+- **Persistent emote rehosting:** channel emotes are downloaded to the
+  persistent media volume, served through `/emotes/images`, and can be restored
+  from a disk-derived manifest after migration. Includes asset-migration and
+  api-gate health-check utilities.
+- **Catalog recovery utility** for restoring the catalog domain from a
+  monolithic SQLite backup without overwriting live queue, jobs, or user data.
+
+### Fixed
+
+- **Catalog browsing no longer returns 500 when Postgres supplies a native
+  `played_at` timestamp.** The admin “Clear played” control now compares
+  SQLite text and Postgres `datetime` values through a storage-neutral helper.
+
 ## [0.49.4] - 2026-09-24
 
 ### Fixed

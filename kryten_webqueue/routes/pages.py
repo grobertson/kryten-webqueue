@@ -46,6 +46,24 @@ SORT_OPTIONS = [
 _VALID_SORTS = {key for key, _ in SORT_OPTIONS}
 
 
+def _played_after_cutoff(played_at: object, cutoff: datetime | None) -> bool:
+    """Return whether a completion falls within the recently-played window.
+
+    SQLite returns ``played_at`` as text while asyncpg returns a ``datetime``.
+    Keep the template independent of that storage detail during the migration.
+    """
+    if not played_at or not cutoff:
+        return False
+    if isinstance(played_at, datetime):
+        if played_at.tzinfo is None:
+            played_at = played_at.replace(tzinfo=timezone.utc)
+        return played_at >= cutoff
+    return str(played_at) >= cutoff.strftime("%Y-%m-%d %H:%M:%S")
+
+
+templates.env.globals["played_after_cutoff"] = _played_after_cutoff
+
+
 def _decorate_placeholder_art(request: Request, items: list[dict]) -> None:
     """Assign a random branded placeholder URL to tiles lacking real poster art.
 
@@ -67,11 +85,12 @@ def _get_user_or_none(request: Request) -> dict | None:
     token = request.cookies.get("session")
     if not token:
         return None
-    import jwt
-
     try:
-        payload = jwt.decode(
-            token, request.app.state.config.secret_key, algorithms=["HS256"]
+        from ..auth.session import decode_session_token
+
+        config = request.app.state.config
+        payload = decode_session_token(
+            token, config.secret_key, config.session_previous_secret_keys
         )
         return {"username": payload["sub"], "rank": payload["rank"]}
     except Exception:
@@ -154,9 +173,7 @@ async def catalog_browse_page(
     )
     hide_days = request.app.state.config.catalog_recently_played_hide_days
     played_cutoff = (
-        (datetime.now(timezone.utc) - timedelta(days=hide_days)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        datetime.now(timezone.utc) - timedelta(days=hide_days)
         if hide_days > 0
         else None
     )
@@ -215,9 +232,7 @@ async def catalog_search_page(
     )
     hide_days = request.app.state.config.catalog_recently_played_hide_days
     played_cutoff = (
-        (datetime.now(timezone.utc) - timedelta(days=hide_days)).strftime(
-            "%Y-%m-%d %H:%M:%S"
-        )
+        datetime.now(timezone.utc) - timedelta(days=hide_days)
         if hide_days > 0
         else None
     )
