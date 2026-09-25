@@ -55,6 +55,14 @@ from . import RetryableUploadError
 _JS_RUNTIMES = {"deno": {}, "node": {}}
 _REMOTE_COMPONENTS = ["ejs:github", "ejs:npm"]
 
+# Tubi intermittently returns a geo-restricted ``window.__data`` payload to
+# yt-dlp's default browser-like User-Agent. Its extractor subsequently fails
+# with ``KeyError(video_id)`` because the requested video is absent from that
+# payload. A generic UA consistently receives the expected data. yt-dlp builds
+# its request handlers during ``YoutubeDL`` construction, so it must be set as
+# a wrapper default rather than only when a Tubi URL is extracted.
+_TUBI_USER_AGENT = "Mozilla/5.0"
+
 # "Be gentle" defaults applied to every yt-dlp call (see subclass below). Sources
 # like Tubi soft-throttle repeat requests, surfacing as intermittent
 # "Read timed out" on the webpage/m3u8 extraction steps. Pace requests, tolerate
@@ -67,6 +75,9 @@ _SOURCE_EXTRACTOR_RETRIES = 5  # retry a failed "Downloading webpage" step
 class _YoutubeDLWithJSRuntimes(yt_dlp.YoutubeDL):
     def __init__(self, params=None, *args, **kwargs):  # noqa: D107
         merged = dict(params or {})
+        headers = dict(merged.get("http_headers") or {})
+        headers.setdefault("User-Agent", _TUBI_USER_AGENT)
+        merged["http_headers"] = headers
         merged.setdefault("js_runtimes", dict(_JS_RUNTIMES))
         merged.setdefault("remote_components", list(_REMOTE_COMPONENTS))
         # Enforce a socket-timeout floor (raise over-aggressive per-call values

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.49.3] - 2026-09-24
+
+### Fixed
+
+- **Tubi downloads no longer fail with `KeyError(video_id)`.** The embedded
+  yt-dlp wrapper now sends Tubi the generic `Mozilla/5.0` User-Agent that
+  returns the complete video payload. It is configured before yt-dlp constructs
+  request handlers and never overrides an explicitly supplied User-Agent.
+
 ## [0.49.0] - 2026-09-23
 
 ### Added
