@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,10 @@ class WebSocketManager:
 
     async def broadcast(self, message: dict):
         """Broadcast a message to all connected clients."""
-        data = json.dumps(message)
+        # PostgreSQL returns timestamp columns as ``datetime`` objects while
+        # SQLite returns strings.  Encode at this transport boundary so either
+        # backend can safely contribute values to a WebSocket payload.
+        data = json.dumps(jsonable_encoder(message))
         async with self._lock:
             stale = []
             for username, ws in self._connections.items():
@@ -48,7 +52,7 @@ class WebSocketManager:
             ws = self._connections.get(username)
         if ws:
             try:
-                await ws.send_text(json.dumps(message))
+                await ws.send_text(json.dumps(jsonable_encoder(message)))
             except Exception:
                 await self.disconnect(username)
 

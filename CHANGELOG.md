@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.49.4] - 2026-09-24
+
+### Fixed
+
+- **Postgres queue polls no longer fail during WebSocket broadcast.** Database
+  timestamps are native `datetime` objects under Postgres; the WebSocket
+  transport now JSON-encodes them before broadcasting queue state.
+
 ## [0.49.3] - 2026-09-24
 
 ### Fixed
