@@ -1,0 +1,33 @@
+# Normalise line endings to LF in the repository; check out per-platform.
+#
+# Without this, a Windows clone (core.autocrlf=true) rewrites LF->CRLF in the
+# working tree, so every tracked file shows as modified and shell scripts
+# checked out on Linux fail with "bad interpreter: /bin/bash^M".
+#
+# This produced a 98-file phantom diff in kryten-llm on 2026-09-26.
+* text=auto eol=lf
+
+# Windows-native scripts keep CRLF; PowerShell tooling assumes it.
+*.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Binaries - never translate.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.whl binary
+*.onnx binary
+*.bin binary
+*.xlsx binary
+*.db binary
+*.sqlite binary
+*.sqlite3 binary
+*.ckpt.json text eol=lf
