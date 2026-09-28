@@ -6,13 +6,18 @@ After=network-online.target
 ContainerName=webqueue-app
 Image=localhost/kryten-webqueue:latest
 Network=podman-webqueue
+# Join the API-gate network directly.  This avoids routing an in-host API call
+# through the public reverse proxy and gives the client stable service-name DNS.
+Network=podman-zcoinbank
 PublishPort=2010:2010
 # Podman 4.x (this host: 4.9.3) doesn't support the `AddHost=` Quadlet key
 # (added in Podman 5.0) — fall back to a raw --add-host via PodmanArgs.
 PodmanArgs=--add-host=host.containers.internal:host-gateway
 
 EnvironmentFile=/etc/kryten/webqueue/webqueue.env
-Volume=/etc/kryten/webqueue/config.json:/etc/kryten-webqueue/config.json:ro,z
+# Mount the directory, not the individual config file. Atomic config saves use
+# rename(2), which cannot replace a file that is itself a bind-mount target.
+Volume=/etc/kryten/webqueue:/etc/kryten-webqueue:Z
 Volume=/var/lib/kryten/media:/var/lib/kryten-webqueue:Z
 Volume=/var/log/kryten/webqueue:/var/log/kryten-webqueue:Z
 
