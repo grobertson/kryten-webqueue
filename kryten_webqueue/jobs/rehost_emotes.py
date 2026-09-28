@@ -265,7 +265,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             await api.replace_emotes(manifest)
             manifest_pushed = manifest_count
         except Exception as exc:
-            raise JobError(f"Could not replace CyTube emotes from disk manifest: {exc}") from exc
+            raise JobError(
+                f"Could not replace CyTube emotes from disk manifest: {exc}"
+            ) from exc
 
     try:
         emotes = await api.get_emotes()

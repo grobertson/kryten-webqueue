@@ -99,6 +99,11 @@ class PromoDirector:
         self._last_general_at: datetime | None = None
         self._last_clip_token: dict[str, str] = {}  # promo_type -> last clip media_id
         self._seq_index: dict[str, int] = {}  # promo_type -> next sequential index
+        # If CyTube accepted an add but api-gate could not identify its UID, we
+        # cannot mark the item in the shadow. Continuing would retry that same
+        # insertion on every poll, producing an all-promo loop. Fail closed for
+        # the rest of this process instead.
+        self._untracked_insert_blocked: bool = False
 
         # Suppression guard. Held (re-entrantly) by bulk live-queue loaders
         # (schedule fire, playlist import) so promos are never inserted *into* a
@@ -367,6 +372,8 @@ class PromoDirector:
         lead_in: bool,
         pool: list[dict] | None = None,
     ) -> int | None:
+        if self._untracked_insert_blocked:
+            return None
         tc = self._config.types.get(promo_type)
         if not tc or not tc.enabled:
             return None
@@ -405,12 +412,13 @@ class PromoDirector:
             # spamming the queue.
             logger.error(
                 "Promo add for %s (media_id=%s) returned success but NO uid; "
-                "cannot track in shadow (result=%r). Skipping shadow insert to "
-                "avoid an untracked, repeatable insertion.",
+                "cannot track in shadow (result=%r). Disabling further promo "
+                "insertion for this process to avoid an untracked repeat loop.",
                 promo_type,
                 clip.get("media_id"),
                 add_result,
             )
+            self._untracked_insert_blocked = True
             return None
 
         if after_uid is not None:
@@ -492,6 +500,12 @@ class PromoDirector:
         """Evaluate and insert promos once. Called by the poller each cycle."""
         cfg = self._config
         if not cfg.enabled:
+            return
+        if self._untracked_insert_blocked:
+            logger.error(
+                "Promo on_poll skipped: a previous accepted add had no UID; "
+                "promo insertion is fail-closed until the service restarts"
+            )
             return
 
         # Frozen while a bulk live-queue operation (schedule fire / playlist

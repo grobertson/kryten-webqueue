@@ -19,7 +19,9 @@ import asyncpg
 from .config import Config
 from .migrate_sqlite_to_pg import copy_table_to_pg, verify_table_counts
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+)
 logger = logging.getLogger("recover_catalog_from_sqlite")
 
 

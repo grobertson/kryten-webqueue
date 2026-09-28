@@ -309,6 +309,35 @@ class _PlaylistsMixin:
     async def delete_schedule(self, schedule_id: int):
         await self._execute("DELETE FROM playlist_schedules WHERE id=?", [schedule_id])
 
+    async def expire_immutable_scheduled_playlists(self) -> int:
+        """Release playlists whose final scheduled immutability window expired.
+
+        SQLite stores schedule timestamps as ISO strings, so normalize both
+        sides through ``datetime()`` before comparing.  PostgreSQL has a
+        dedicated implementation using its native ``timestamptz`` values.
+        """
+        await self._execute("""
+            UPDATE saved_playlists SET is_immutable = 0
+            WHERE id IN (
+                SELECT sp.id FROM saved_playlists sp
+                JOIN playlist_schedules ps ON ps.playlist_id = sp.id
+                WHERE sp.is_immutable = 1
+                  AND ps.immutability_expires_at IS NOT NULL
+                  AND datetime(ps.immutability_expires_at) < datetime('now')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM playlist_schedules ps2
+                      WHERE ps2.playlist_id = sp.id
+                        AND ps2.is_active = 1
+                        AND (
+                            ps2.immutability_expires_at IS NULL
+                            OR datetime(ps2.immutability_expires_at) > datetime('now')
+                        )
+                  )
+            )
+            """)
+        row = await self._fetch_one("SELECT changes() AS count")
+        return int(row["count"]) if row else 0
+
     async def mark_schedule_fired(self, schedule_id: int, fired_at: str):
         await self._execute(
             "UPDATE playlist_schedules SET fired_at=? WHERE id=?",
@@ -381,16 +410,14 @@ class _PlaylistsMixin:
         # string comparison that stays true from fire time until the calendar
         # day rolls over, so the lock lingered until midnight instead of
         # releasing at fire_at.
-        row = await self._fetch_one(
-            """
+        row = await self._fetch_one("""
             SELECT 1 FROM playlist_schedules
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND datetime(fire_at) > datetime('now')
             LIMIT 1
-        """
-        )
+        """)
         return row is not None
 
     async def get_active_pre_fire_lock(self) -> dict | None:
@@ -399,8 +426,7 @@ class _PlaylistsMixin:
         Used to give users a specific "pay-to-play closes before [event]"
         message instead of a generic locked error.
         """
-        return await self._fetch_one(
-            """
+        return await self._fetch_one("""
             SELECT * FROM playlist_schedules
             WHERE is_active = 1
               AND lock_disabled = 0
@@ -408,8 +434,7 @@ class _PlaylistsMixin:
               AND datetime(fire_at) > datetime('now')
             ORDER BY datetime(fire_at)
             LIMIT 1
-        """
-        )
+        """)
 
     async def disable_active_pre_fire_locks(self) -> int:
         """Lift ALL currently-active pre-fire locks in a single operation.
@@ -420,16 +445,14 @@ class _PlaylistsMixin:
         ``lock_disabled`` to 0 when they re-arm, so future firings still lock.
         Returns the number of schedules affected.
         """
-        cursor = await self._db.execute(
-            """
+        cursor = await self._db.execute("""
             UPDATE playlist_schedules
             SET lock_disabled = 1
             WHERE is_active = 1
               AND lock_disabled = 0
               AND datetime(fire_at, '-' || pre_fire_lock_minutes || ' minutes') <= datetime('now')
               AND datetime(fire_at) > datetime('now')
-        """
-        )
+        """)
         await self._db.commit()
         return cursor.rowcount
 

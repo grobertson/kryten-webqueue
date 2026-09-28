@@ -388,9 +388,9 @@ async def test_queue_playlists_and_schedules(pg_db):
     # binding to its timestamptz column.
     updated_fire = (datetime.now(timezone.utc) + timedelta(hours=7)).isoformat()
     await pg_db.queue.update_schedule(far_id, fire_at=updated_fire, is_active=True)
-    assert (await pg_db.queue.get_schedule(far_id))["fire_at"] == datetime.fromisoformat(
-        updated_fire
-    )
+    assert (await pg_db.queue.get_schedule(far_id))[
+        "fire_at"
+    ] == datetime.fromisoformat(updated_fire)
     await pg_db.queue.mark_schedule_fired(
         near_id, datetime.now(timezone.utc).isoformat()
     )

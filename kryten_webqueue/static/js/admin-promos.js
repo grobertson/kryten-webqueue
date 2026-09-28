@@ -152,7 +152,12 @@ document.getElementById('settings-form').addEventListener('submit', async (e) =>
         body: JSON.stringify(collectSettings())
     });
     if (resp.ok) {
-        showToast('Promo settings saved', 'success');
+        const data = await resp.json();
+        if (data.persisted === false) {
+            showToast('Promos updated for this running service only; config could not be saved: ' + (data.persistence_error || 'unknown error'), 'error');
+        } else {
+            showToast('Promo settings saved', 'success');
+        }
         loadSettings();
     } else {
         const data = await resp.json().catch(() => ({}));

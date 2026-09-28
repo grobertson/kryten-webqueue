@@ -452,6 +452,29 @@ class _PgQueueDB(_PgDomainDB):
     async def delete_schedule(self, schedule_id: int):
         await self._execute("DELETE FROM playlist_schedules WHERE id=?", [schedule_id])
 
+    async def expire_immutable_scheduled_playlists(self) -> int:
+        """Release playlists whose final scheduled immutability window expired."""
+        result = await self._execute("""
+            UPDATE saved_playlists sp SET is_immutable = false
+            WHERE sp.is_immutable = true
+              AND EXISTS (
+                  SELECT 1 FROM playlist_schedules ps
+                  WHERE ps.playlist_id = sp.id
+                    AND ps.immutability_expires_at IS NOT NULL
+                    AND ps.immutability_expires_at < now()
+              )
+              AND NOT EXISTS (
+                  SELECT 1 FROM playlist_schedules ps2
+                  WHERE ps2.playlist_id = sp.id
+                    AND ps2.is_active = true
+                    AND (
+                        ps2.immutability_expires_at IS NULL
+                        OR ps2.immutability_expires_at > now()
+                    )
+              )
+            """)
+        return result.rowcount or 0
+
     async def mark_schedule_fired(self, schedule_id: int, fired_at: str):
         await self._execute(
             "UPDATE playlist_schedules SET fired_at=? WHERE id=?",

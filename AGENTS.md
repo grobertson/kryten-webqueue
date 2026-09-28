@@ -57,15 +57,18 @@ Run all four before committing. Do not bypass checks (`--no-verify`).
   Branches: `feature/…`, `fix/…`.
 
 ## Deployment
-Deployed via **pipx** on `grindhouse.local` as the `kryten-webqueue` systemd service
-(uvicorn on `port`, behind nginx; `deploy/` ships the unit + nginx config). Release flow:
+Deployed on `chandra-1.local` as the rootful Podman Quadlet
+`webqueue-app.service` (container name `webqueue-app`, port 2010). Its Quadlet
+definition is `deploy/podman/webqueue/webqueue-app.container`; runtime
+configuration is mounted from `/etc/kryten/webqueue`.
+
+Release flow:
 1. Bump `version` in `pyproject.toml`, update `CHANGELOG.md`.
 2. Commit, `git tag vX.Y.Z`, `git push && git push origin vX.Y.Z` (also published to PyPI).
-3. Install the tag and cycle the service:
+3. Build/deploy the image on Chandra-1, then cycle the Quadlet:
    ```
-   ssh kryten@grindhouse.local "sudo systemctl stop kryten-webqueue; \
-     pipx runpip kryten-webqueue install 'git+https://github.com/grobertson/kryten-webqueue.git@vX.Y.Z'; \
-     sudo systemctl start kryten-webqueue; systemctl is-active kryten-webqueue"
+   sudo systemctl restart webqueue-app.service
+   sudo systemctl is-active webqueue-app.service
    ```
 Trigger enrichment/sync jobs via `POST /admin/jobs/catalog_enrich/run` (admin session
 required; jobs are single-flight — restart the service to clear a stuck run).

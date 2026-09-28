@@ -39,8 +39,10 @@ async def update_promo_config(request: Request, user: dict = Depends(require_adm
         raise HTTPException(400, f"Invalid promo config: {e.errors()}") from e
 
     config = request.app.state.config
-    previous = config.promos
     config.promos = new_cfg
+    director = getattr(request.app.state, "promo_director", None)
+    if director is not None:
+        director.update_config(new_cfg)
     try:
         config.save()
     except (RuntimeError, OSError) as e:
@@ -48,14 +50,13 @@ async def update_promo_config(request: Request, user: dict = Depends(require_adm
         # the systemd sandbox). Roll the in-memory config back so the GET view and
         # the live PromoDirector stay consistent — otherwise the panel would show
         # the new value while promos kept running with the old one.
-        config.promos = previous
-        raise HTTPException(500, f"Could not persist promo config: {e}") from e
+        return {
+            "config": new_cfg.model_dump(),
+            "persisted": False,
+            "persistence_error": str(e),
+        }
 
-    director = getattr(request.app.state, "promo_director", None)
-    if director is not None:
-        director.update_config(new_cfg)
-
-    return {"config": new_cfg.model_dump()}
+    return {"config": new_cfg.model_dump(), "persisted": True}
 
 
 @router.get("/pools")

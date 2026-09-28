@@ -4,7 +4,6 @@ import os
 import pytest
 import asyncpg
 
-
 CHANDRA_PG_DSN = os.getenv(
     "KRYTEN_WEBQUEUE_PG_DSN",
     "postgresql://kryten:kryten_secret_password@chandra-1.local:5432/webqueue",
@@ -57,15 +56,13 @@ async def test_live_postgres_table_counts(pg_conn):
 
 async def test_live_postgres_full_text_search(pg_conn):
     """Verify tsvector full-text search with GIN index on catalog.catalog."""
-    rows = await pg_conn.fetch(
-        """
+    rows = await pg_conn.fetch("""
         SELECT friendly_token, title, ts_rank(search_vector, websearch_to_tsquery('english', 'Terminator')) AS rank
         FROM catalog.catalog
         WHERE search_vector @@ websearch_to_tsquery('english', 'Terminator')
         ORDER BY rank DESC
         LIMIT 5;
-        """
-    )
+        """)
     assert len(rows) > 0
     titles = [r["title"] for r in rows]
     assert any("Terminator" in t for t in titles)
@@ -73,15 +70,13 @@ async def test_live_postgres_full_text_search(pg_conn):
 
 async def test_live_postgres_trigram_fuzzy_matching(pg_conn):
     """Verify pg_trgm fuzzy matching handles typos like 'Terminatr'."""
-    rows = await pg_conn.fetch(
-        """
+    rows = await pg_conn.fetch("""
         SELECT friendly_token, title, similarity(title, 'Terminatr') AS sim
         FROM catalog.catalog
         WHERE similarity(title, 'Terminatr') > 0.3
         ORDER BY sim DESC
         LIMIT 5;
-        """
-    )
+        """)
     assert len(rows) > 0
     top_title = rows[0]["title"]
     assert "Terminator" in top_title

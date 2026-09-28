@@ -37,6 +37,12 @@ class _FakeApiGate:
         return {"success": True}
 
 
+class _NoUidApiGate(_FakeApiGate):
+    async def playlist_add(self, media_type, media_id, position="end", temp=True):
+        self.adds.append({"uid": None, "media_id": media_id, "type": media_type})
+        return {"success": True, "uid": None}
+
+
 class _FakeShadow:
     def __init__(self, items, now_playing=None):
         self._items = [dict(it) for it in items]
@@ -501,6 +507,29 @@ async def test_empty_pool_skips_insertion():
 
     await d.on_poll()
     assert _promo_items(shadow) == []
+
+
+async def test_accepted_add_without_uid_fails_closed_instead_of_looping():
+    shadow = _FakeShadow([_content(10), _content(20)], now_playing={"uid": 10})
+    api = _NoUidApiGate(now_playing={"uid": 10})
+    db = _FakeDb(pools={"channel_identity": [_clip("c1")]})
+    cfg = _config(
+        types={
+            "channel_identity": PromoTypeConfig(enabled=True, weight=1),
+            "event": PromoTypeConfig(enabled=False, weight=0),
+            "mod_shoutout": PromoTypeConfig(enabled=False, weight=0),
+            "feature_presentation": PromoTypeConfig(enabled=False),
+            "viewers_choice": PromoTypeConfig(enabled=False),
+        }
+    )
+    d = _director(api, shadow, db, cfg)
+    d._content_since_last_general = 4
+
+    await d.on_poll()
+    await d.on_poll()
+
+    assert len(api.adds) == 1
+    assert d._untracked_insert_blocked is True
 
 
 async def test_insert_viewers_choice_hook():

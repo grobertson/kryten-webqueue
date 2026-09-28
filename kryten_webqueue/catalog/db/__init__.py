@@ -75,6 +75,7 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "create_schedule": "queue",
     "update_schedule": "queue",
     "delete_schedule": "queue",
+    "expire_immutable_scheduled_playlists": "queue",
     "mark_schedule_fired": "queue",
     "get_active_schedule": "queue",
     "set_active_schedule": "queue",
