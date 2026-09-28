@@ -348,17 +348,19 @@ def run(params: dict, *, config, progress=None) -> dict:
         )
 
     motd_cfg = getattr(config, "motd", None)
-    poster_dir = Path(
-        getattr(motd_cfg, "poster_dir", "/home/mediacms.io/mediacms/static/motd_boxes")
-    ).expanduser()
-    poster_base_url: str = getattr(
-        motd_cfg, "poster_base_url", "https://www.dropsugar.co/static/motd_boxes"
-    )
-    output_dir = Path(getattr(motd_cfg, "output_dir", "~/kryten")).expanduser()
+    # Use the shared helper so this job fails with the same actionable message
+    # as the admin art upload instead of a bare PermissionError. The previous
+    # hardcoded fallbacks still pointed at the pre-container MediaCMS path,
+    # which does not exist in a container. Imported lazily: motd.builder
+    # imports this module, so a module-level import would be circular.
+    from ...motd.builder import ensure_poster_dir
+
+    poster_base_url: str = (getattr(motd_cfg, "poster_base_url", "") or "").rstrip("/")
+    output_dir = Path(getattr(motd_cfg, "output_dir", "") or "").expanduser()
     placeholder_dir: str = getattr(config, "placeholder_dir", "")
 
     if not dry_run:
-        poster_dir.mkdir(parents=True, exist_ok=True)
+        poster_dir = ensure_poster_dir(motd_cfg)
         output_dir.mkdir(parents=True, exist_ok=True)
 
     # Resolve workbook source (mirrors fetchurls.run())

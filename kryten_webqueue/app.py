@@ -353,24 +353,12 @@ async def lifespan(app: FastAPI):
         while True:
             await asyncio.sleep(300)  # every 5 minutes
             try:
-                await db._execute(
-                    """
-                    UPDATE saved_playlists SET is_immutable = 0
-                    WHERE id IN (
-                        SELECT sp.id FROM saved_playlists sp
-                        JOIN playlist_schedules ps ON ps.playlist_id = sp.id
-                        WHERE sp.is_immutable = 1
-                          AND ps.immutability_expires_at IS NOT NULL
-                          AND ps.immutability_expires_at < datetime('now')
-                          AND NOT EXISTS (
-                              SELECT 1 FROM playlist_schedules ps2
-                              WHERE ps2.playlist_id = sp.id
-                                AND ps2.is_active = 1
-                                AND (ps2.immutability_expires_at IS NULL OR ps2.immutability_expires_at > datetime('now'))
-                          )
+                released = await db.expire_immutable_scheduled_playlists()
+                if released:
+                    logger.info(
+                        "Released immutability on %d expired scheduled playlist(s)",
+                        released,
                     )
-                """
-                )
             except Exception as e:
                 logger.error(f"Immutability expiry error: {e}")
 
@@ -468,5 +456,23 @@ def create_app(config: Config) -> FastAPI:
     emote_dir = Path(config.emote_rehost.static_dir)
     emote_dir.mkdir(parents=True, exist_ok=True)
     app.mount("/emotes/images", StaticFiles(directory=str(emote_dir)), name="emotes")
+
+    # Weekend MOTD poster art (curator uploads and job-downloaded posters) also
+    # lives on the persistent volume.  It is served here for the same reason as
+    # the emotes: after the move into a container this service no longer shares a
+    # filesystem with the MediaCMS frontend, so anything the app writes is only
+    # publicly reachable through this app.  Keep `motd.poster_base_url` pointed
+    # at this mount (https://queue.dropsugar.co/motd/boxes/) or uploaded art will
+    # save successfully but render as a broken image on the channel.
+    # Directory listing is disabled so the volume can't be enumerated.
+    if not config.motd.poster_dir.strip():
+        raise RuntimeError("motd.poster_dir is required but not configured")
+    motd_poster_dir = Path(config.motd.poster_dir).expanduser()
+    motd_poster_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/motd/boxes",
+        StaticFiles(directory=str(motd_poster_dir)),
+        name="motd-boxes",
+    )
 
     return app

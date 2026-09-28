@@ -35,6 +35,42 @@ logger = logging.getLogger(__name__)
 
 SLOT_KEY_RE = re.compile(r"^night[1-3]-slot([1-9]\d{0,2})$")
 
+
+class PosterDirUnavailable(RuntimeError):
+    """``motd.poster_dir`` does not exist and cannot be created by this process.
+
+    Raised instead of letting a bare ``PermissionError`` escape as an opaque
+    500. The usual cause is a config that still points at a path from the
+    pre-container layout (e.g. ``/home/mediacms.io/...``) after the service
+    moved into a container, where that path is neither present nor creatable
+    by the non-root runtime user.
+    """
+
+
+def ensure_poster_dir(motd_cfg) -> Path:
+    """Create ``motd.poster_dir`` and return it, or explain why it is unusable.
+
+    Callers surface the message to the operator — a bare ``PermissionError``
+    from :meth:`Path.mkdir` gives no hint that the fix is a config change, not
+    a permissions problem on an existing directory.
+    """
+    configured = str(getattr(motd_cfg, "poster_dir", "") or "").strip()
+    if not configured:
+        raise PosterDirUnavailable("motd.poster_dir is not configured")
+    poster_dir = Path(configured).expanduser()
+    try:
+        poster_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise PosterDirUnavailable(
+            f"motd.poster_dir {poster_dir} is not writable by this process "
+            f"({type(exc).__name__}: {exc.strerror or exc}). "
+            "Point motd.poster_dir at a directory the service can create and "
+            "write to (a mounted volume such as /var/lib/kryten-webqueue/"
+            "motd_boxes), not a host path from a non-container layout."
+        ) from exc
+    return poster_dir
+
+
 # Every night the workbook can describe. The grid itself covers only the nights
 # in ``motd.nights`` — Sunday has no schedule yet, so its titles are parsed but
 # never placed.
@@ -221,9 +257,6 @@ def build_slots(
     pool = mystery_urls or []
     motd_cfg = getattr(config, "motd", None)
     slot_count = int(getattr(motd_cfg, "slots", 12) or 12)
-    poster_dir = Path(
-        getattr(motd_cfg, "poster_dir", "/home/mediacms.io/mediacms/static/motd_boxes")
-    ).expanduser()
     poster_base_url = str(getattr(motd_cfg, "poster_base_url", "") or "").rstrip("/")
     omdb_key = getattr(config, "omdb_api_key", "") or ""
 
@@ -270,8 +303,10 @@ def build_slots(
                 week_key,
             )
 
-    if not dry_run:
-        poster_dir.mkdir(parents=True, exist_ok=True)
+    # Fail loudly and actionably if the configured poster directory is unusable,
+    # rather than once per slot deep in the download loop. A dry run touches no
+    # filesystem, so it must not fail on a directory it would never write to.
+    poster_dir = ensure_poster_dir(motd_cfg) if not dry_run else None
 
     total = len(week.slots)
     for index, slot in enumerate(week.slots, 1):
@@ -314,11 +349,15 @@ def build_slots(
         filename = _poster_filename(
             datetime.date.fromisoformat(slot.date), slot.position, slot.night
         )
-        dest = poster_dir / filename
         if dry_run:
+            # Nothing is downloaded or written, so no directory is needed.
             slot.poster_url = f"{poster_base_url}/{filename}"
             slot.source = "omdb"
-        elif dest.exists() and not refresh_art:
+            continue
+
+        assert poster_dir is not None  # guaranteed by the dry-run branch above
+        dest = poster_dir / filename
+        if dest.exists() and not refresh_art:
             slot.poster_url = f"{poster_base_url}/{filename}"
             slot.source = "omdb"
         else:

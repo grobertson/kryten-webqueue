@@ -366,3 +366,86 @@ def test_render_escapes_curator_titles(tmp_path, monkeypatch, stub_lookup):
 )
 def test_slot_key_regex(key, ok):
     assert bool(builder.SLOT_KEY_RE.match(key)) is ok
+
+
+# --- poster directory availability ---
+#
+# Regression coverage for the containerization failure: with
+# `motd.poster_dir` left pointing at the pre-container MediaCMS path
+# (/home/mediacms.io/mediacms/static/motd_boxes), the admin art-upload endpoint
+# and the scheduled motd_publish job both died with a bare
+# "PermissionError: [Errno 13] Permission denied: '/home/mediacms.io'".
+
+
+def test_ensure_poster_dir_creates_a_missing_directory(tmp_path):
+    motd = SimpleNamespace(poster_dir=str(tmp_path / "boxes" / "motd"))
+    created = builder.ensure_poster_dir(motd)
+    assert created.is_dir()
+
+
+def test_ensure_poster_dir_is_idempotent(tmp_path):
+    motd = SimpleNamespace(poster_dir=str(tmp_path / "boxes"))
+    builder.ensure_poster_dir(motd)
+    assert builder.ensure_poster_dir(motd).is_dir()
+
+
+def test_ensure_poster_dir_reports_an_unusable_path_actionably(tmp_path, monkeypatch):
+    """A bare OSError becomes a PosterDirUnavailable naming the config key."""
+
+    def _deny(self, *a, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr("pathlib.Path.mkdir", _deny)
+    motd = SimpleNamespace(poster_dir="/home/mediacms.io/mediacms/static/motd_boxes")
+    with pytest.raises(builder.PosterDirUnavailable) as exc:
+        builder.ensure_poster_dir(motd)
+    message = str(exc.value)
+    assert "motd.poster_dir" in message
+    # Path separators differ per platform; assert on the path parts.
+    assert "mediacms" in message
+    # Must name the remedy, not just restate errno 13.
+    assert "/var/lib/kryten-webqueue" in message
+
+
+def test_ensure_poster_dir_rejects_an_unset_path():
+    with pytest.raises(builder.PosterDirUnavailable):
+        builder.ensure_poster_dir(SimpleNamespace(poster_dir=""))
+
+
+def test_default_poster_dir_lives_on_the_service_volume():
+    """The shipped default must not point at a foreign host path again."""
+    motd = MOTDConfig()
+    assert motd.poster_dir.startswith("/var/lib/kryten-webqueue/")
+    assert "mediacms" not in motd.poster_dir
+    assert motd.output_dir.startswith("/var/lib/kryten-webqueue/")
+
+
+def test_build_slots_surfaces_an_unusable_poster_dir(
+    tmp_path, monkeypatch, stub_lookup
+):
+    """A non-dry run fails once, up front, with an actionable message."""
+    _stub_workbook(monkeypatch, {1: ["The Big Bus (1976)"]})
+    config = _config(tmp_path)
+
+    def _deny(self, *a, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr("pathlib.Path.mkdir", _deny)
+    with pytest.raises(builder.PosterDirUnavailable):
+        builder.build_slots(config, today=datetime.date(2026, 3, 4))
+
+
+def test_dry_run_does_not_need_a_writable_poster_dir(
+    tmp_path, monkeypatch, stub_lookup
+):
+    """A dry run touches no filesystem, so it must not fail on an unusable one."""
+    _stub_workbook(monkeypatch, {1: ["The Big Bus (1976)"]})
+
+    def _deny(self, *a, **kw):
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr("pathlib.Path.mkdir", _deny)
+    week = builder.build_slots(
+        _config(tmp_path), dry_run=True, today=datetime.date(2026, 3, 4)
+    )
+    assert week.slots[0].source == "omdb"

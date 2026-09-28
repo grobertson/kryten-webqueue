@@ -111,9 +111,9 @@
   },
 
   "motd": {
-    "poster_dir": "/home/mediacms.io/mediacms/static/motd_boxes",
-    "poster_base_url": "https://www.dropsugar.co/static/motd_boxes",
-    "output_dir": "~/kryten",
+    "poster_dir": "/var/lib/kryten-webqueue/motd_boxes",
+    "poster_base_url": "https://queue.dropsugar.co/motd/boxes",
+    "output_dir": "/var/lib/kryten-webqueue/motd",
     "template": "channel_z.html",
     "slots": 12,
     "nights": [1, 2],

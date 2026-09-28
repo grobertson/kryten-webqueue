@@ -152,9 +152,19 @@ async def motd_publish_job(params: dict, ctx) -> dict:
     output_path: str | None = None
     if not dry_run:
         out_dir = Path(ctx.config.motd.output_dir).expanduser()
-        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise JobError(
+                f"motd.output_dir {out_dir} is not writable by this process "
+                f"({type(exc).__name__}: {exc.strerror or exc}). Point it at a "
+                "directory the service can create and write to."
+            ) from exc
         target = out_dir / f"motd-{week.week_key}.html"
-        await asyncio.to_thread(target.write_text, html, encoding="utf-8")
+        try:
+            await asyncio.to_thread(target.write_text, html, encoding="utf-8")
+        except OSError as exc:
+            raise JobError(f"Could not write {target}: {exc}") from exc
         output_path = str(target)
         logger.info("motd_publish: wrote snippet → %s", target)
 

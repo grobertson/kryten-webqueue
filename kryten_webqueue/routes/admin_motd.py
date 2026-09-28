@@ -9,17 +9,26 @@ are keyed to the week, so they retire on their own when the week rolls over.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 import secrets
-from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from ..auth.session import require_admin
-from ..motd.builder import SLOT_KEY_RE, build_slots, mystery_pool, week_context
+from ..motd.builder import (
+    SLOT_KEY_RE,
+    PosterDirUnavailable,
+    build_slots,
+    ensure_poster_dir,
+    mystery_pool,
+    week_context,
+)
 from ..motd.render import render_motd
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/motd", tags=["admin"])
 
@@ -97,7 +106,10 @@ async def motd_render(
 ):
     """Render the snippet for the weekend without publishing it."""
     built = await _build_current(request, week)
-    html = render_motd(request.app.state.config, built)
+    try:
+        html = render_motd(request.app.state.config, built)
+    except PosterDirUnavailable as exc:  # pragma: no cover - defensive
+        raise HTTPException(500, str(exc)) from exc
     return {"week_key": built.week_key, "html": html}
 
 
@@ -151,11 +163,22 @@ async def upload_override_art(
     if not _WEEK_KEY_RE.match(week_key):
         raise HTTPException(500, "Unexpected week key")
 
-    poster_dir = Path(config.motd.poster_dir).expanduser()
-    poster_dir.mkdir(parents=True, exist_ok=True)
+    # Surface an unusable poster directory as a clear 500 with a fixable cause
+    # instead of an opaque PermissionError traceback. The scheduled
+    # ``motd_publish`` job hits the same directory and would fail too.
+    try:
+        poster_dir = ensure_poster_dir(config.motd)
+    except PosterDirUnavailable as exc:
+        logger.error("MOTD art upload failed: %s", exc)
+        raise HTTPException(500, str(exc)) from exc
+
     # Random suffix busts the CDN/browser cache when a slot's art is replaced.
     filename = f"custom-{week_key}-{slot_key}-{secrets.token_hex(4)}{ext}"
-    await asyncio.to_thread((poster_dir / filename).write_bytes, data)
+    try:
+        await asyncio.to_thread((poster_dir / filename).write_bytes, data)
+    except OSError as exc:
+        logger.error("MOTD art upload failed: %s", exc)
+        raise HTTPException(500, f"Could not save the uploaded art: {exc}") from exc
 
     poster_url = f"{config.motd.poster_base_url.rstrip('/')}/{filename}"
     await request.app.state.db.upsert_motd_override(

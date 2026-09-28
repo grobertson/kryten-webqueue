@@ -1,5 +1,6 @@
 import json
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Literal
 import urllib.parse
@@ -39,12 +40,23 @@ class MOTDLink(BaseModel):
 class MOTDConfig(BaseModel):
     """Settings for the MOTD poster generator and publisher jobs."""
 
-    # Filesystem path where poster images are written.
-    poster_dir: str = "/home/mediacms.io/mediacms/static/motd_boxes"
-    # Public base URL corresponding to poster_dir.
-    poster_base_url: str = "https://www.dropsugar.co/static/motd_boxes"
-    # Directory where the generated HTML snippet is written.
-    output_dir: str = "~/kryten"
+    # Filesystem path where poster images are written. Must be a directory the
+    # service can create and write to. The default points inside the service's
+    # own persistent volume; an earlier value of
+    # /home/mediacms.io/mediacms/static/motd_boxes only worked when this
+    # service ran on the MediaCMS host, and raised PermissionError everywhere
+    # else (including containers) at mkdir time.
+    poster_dir: str = "/var/lib/kryten-webqueue/motd_boxes"
+    # Public base URL corresponding to poster_dir, minus the trailing directory
+    # name. The app mounts poster_dir at /motd/boxes and serves it, so this
+    # must be that app's public URL. It used to point at the MediaCMS frontend's
+    # /static/motd_boxes/, which this service stopped sharing a filesystem with
+    # when it moved into a container -- art saved fine but rendered broken.
+    poster_base_url: str = "https://queue.dropsugar.co/motd/boxes"
+    # Directory where the generated HTML snippet is written. Kept on the same
+    # persistent volume so the snippet survives a container recreate (a
+    # home-relative default would be lost with the container filesystem).
+    output_dir: str = "/var/lib/kryten-webqueue/motd"
 
     # --- motd_publish ---
     # Jinja template under kryten_webqueue/templates/motd/.
@@ -495,8 +507,25 @@ class Config(BaseModel):
         """
         if self._source_path is None:
             raise RuntimeError("Config has no source path; cannot persist changes")
-        tmp = self._source_path.with_name(self._source_path.name + ".tmp")
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(self.model_dump(), f, indent=2)
-            f.write("\n")
-        tmp.replace(self._source_path)
+        # A fixed ``config.json.tmp`` name lets concurrent admin requests race:
+        # one request can replace (or remove) the other request's temp file.
+        # Keep the temporary file in the destination directory so ``replace``
+        # remains atomic, but give every writer its own name.
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{self._source_path.name}.",
+            suffix=".tmp",
+            dir=self._source_path.parent,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(self.model_dump(), f, indent=2)
+                f.write("\n")
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_name, self._source_path)
+        except Exception:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
+            raise

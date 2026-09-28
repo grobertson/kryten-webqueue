@@ -1,5 +1,59 @@
 # Changelog
 
+## [0.50.2] - 2026-09-28
+
+### Fixed
+
+- **Saving a MOTD slot override with custom art no longer fails with an opaque
+  500.** `motd.poster_dir` still pointed at the pre-container MediaCMS path
+  (`/home/mediacms.io/mediacms/static/motd_boxes`), which does not exist inside
+  the container and cannot be created by the non-root runtime user, so the
+  upload endpoint raised a bare `PermissionError` for every attempt. The
+  defaults now live on the service's own persistent volume
+  (`/var/lib/kryten-webqueue/...`), and an unusable directory is reported as a
+  clear, actionable error naming the config key and a valid location rather than
+  a traceback. URL-only overrides (the `PUT` path) were never affected — they
+  touch no filesystem — which is why the failure looked intermittent.
+- **MOTD poster art is now actually served.** The app mounts `motd.poster_dir`
+  at `/motd/boxes` and `motd.poster_base_url` points at it, mirroring how
+  rehosted emotes are served from the same volume. Previously the base URL
+  pointed at the MediaCMS frontend's `/static/motd_boxes/`, which this service
+  stopped sharing a filesystem with during the Podman move — art written by the
+  app was never publicly reachable, so posters would have rendered broken even
+  once saving worked. The reverse-proxy config documents and proxies the path.
+- **The `motd_posters` job no longer carries its own stale copy of the
+  pre-container paths** (it hardcoded both `poster_dir` and
+  `poster_base_url`); it now uses the shared `ensure_poster_dir` helper and
+  fails with the same actionable message as the admin upload.
+- **The scheduled `motd_publish` job reports directory problems actionably**
+  instead of failing with a raw errno, and its `output_dir` now defaults onto
+  the persistent volume so the generated snippet survives a container recreate.
+
+### Added
+
+- Route-level tests for the admin MOTD override endpoints (save by URL, art
+  upload, clear, week scoping, auth/validation), which previously covered only
+  the database layer and never exercised the HTTP surface the panel calls.
+- Static-serving contract tests pinning the mount path, the
+  `poster_base_url`-matches-the-mount invariant, that the reverse proxy does not
+  shadow the art with a local alias, and that no directory listing is exposed.
+
+## [0.50.1] - 2026-09-25
+
+### Fixed
+
+- **Promo insertion now fails closed if api-gate accepts an add but does not
+  return its CyTube UID.** The item cannot be tracked in the queue shadow, so
+  retrying used to enqueue another promo on every poll. Further promo inserts
+  are now blocked for that process, preserving the next non-promo item.
+- **Disabling promos in the admin panel now takes effect immediately even when
+  config persistence fails.** The response clearly marks the change as
+  non-persistent so an operator can fix the mount and make it durable.
+- **Podman config persistence:** the Quadlet now mounts the configuration
+  directory instead of a read-only single-file bind mount, allowing the atomic
+  rename used to save admin edits. Config writes also use unique same-directory
+  temporary files to avoid concurrent-save collisions.
+
 ## [0.50.0] - 2026-09-24
 
 ### Added
