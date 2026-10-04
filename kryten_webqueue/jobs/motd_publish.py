@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+from concurrent.futures import Future
 from pathlib import Path
 
 from ..motd.builder import build_slots, mystery_pool
@@ -129,9 +130,12 @@ async def motd_publish_job(params: dict, ctx) -> dict:
     }
 
     loop = asyncio.get_running_loop()
+    progress_updates: list[Future[None]] = []
 
     def _emit(detail: dict) -> None:
-        asyncio.run_coroutine_threadsafe(ctx.progress(detail), loop)
+        progress_updates.append(
+            asyncio.run_coroutine_threadsafe(ctx.progress(detail), loop)
+        )
 
     try:
         week = await asyncio.to_thread(
@@ -147,6 +151,10 @@ async def motd_publish_job(params: dict, ctx) -> dict:
         )
     except RuntimeError as exc:
         raise JobError(str(exc)) from exc
+    finally:
+        await asyncio.gather(
+            *(asyncio.wrap_future(update) for update in progress_updates)
+        )
 
     next_event = await _next_event(ctx.db)
     html = render_motd(ctx.config, week, next_event=next_event)

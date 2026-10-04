@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.50.6] - 2026-10-03
+
+### Fixed
+
+- Drain MOTD builder progress callbacks before finalizing the publish job.
+  Late progress writes could otherwise overwrite a completed job's final
+  summary, including its published status. Covered by a delayed-callback
+  regression and discovered during live Admin-job verification.
+
 ## [0.50.5] - 2026-10-03
 
 ### Fixed

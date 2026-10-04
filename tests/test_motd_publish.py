@@ -7,6 +7,7 @@ lookup and poster download are stubbed.
 """
 
 import datetime
+import asyncio
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -44,6 +45,41 @@ async def test_next_event_serializes_native_postgres_timestamp():
     event = await _next_event(database)
     assert event["fire_at"] == fire_at.isoformat()
     assert json.loads(json.dumps(event))["fire_at"] == fire_at.isoformat()
+
+
+async def test_late_builder_progress_is_drained_before_final_summary(
+    tmp_path, monkeypatch, stub_lookup
+):
+    _stub_workbook(monkeypatch, {})
+    config = _config(tmp_path, slots=8)
+    week = builder.build_slots(config, dry_run=True)
+    phases = []
+
+    def build(*args, **kwargs):
+        kwargs["emit"]({"phase": "late-slot"})
+        return week
+
+    async def progress(detail):
+        if detail.get("phase") == "late-slot":
+            await asyncio.sleep(0.02)
+        phases.append(detail.get("phase"))
+
+    monkeypatch.setattr("kryten_webqueue.jobs.motd_publish.build_slots", build)
+    api = SimpleNamespace(
+        get_motd=AsyncMock(return_value=render.render_motd(config, week)),
+        set_motd=AsyncMock(),
+    )
+    ctx = SimpleNamespace(
+        config=config,
+        api_gate=api,
+        db=SimpleNamespace(
+            list_motd_overrides=AsyncMock(return_value=[]),
+            get_next_schedule=AsyncMock(return_value=None),
+        ),
+        progress=progress,
+    )
+    await motd_publish_job({"publish": True}, ctx)
+    assert phases == ["late-slot", "complete"]
 
 
 def _config(tmp_path, **motd_kw):
