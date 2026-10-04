@@ -18,7 +18,7 @@ import logging
 from pathlib import Path
 
 from ..motd.builder import build_slots, mystery_pool
-from ..motd.render import render_motd
+from ..motd.render import MOTDMergeError, render_motd, update_motd_slots
 from .manager import JobError
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ MOTD_PUBLISH_SCHEMA = [
         "type": "bool",
         "default": True,
         "required": False,
-        "help": "Push the rendered snippet to CyTube's MOTD. Turn off to only write the HTML file.",
+        "help": "Update tagged movie links and images in the live MOTD, preserving other HTML. Turn off to write a generated HTML file only.",
     },
     {
         "name": "dry_run",
@@ -148,6 +148,17 @@ async def motd_publish_job(params: dict, ctx) -> dict:
 
     next_event = await _next_event(ctx.db)
     html = render_motd(ctx.config, week, next_event=next_event)
+
+    if publish:
+        try:
+            current = await ctx.api_gate.get_motd()
+            html = update_motd_slots(current, html)
+        except MOTDMergeError as exc:
+            raise JobError(f"MOTD not published: {exc}") from exc
+        except Exception as exc:
+            raise JobError(
+                f"Could not read the live MOTD; nothing published: {exc}"
+            ) from exc
 
     output_path: str | None = None
     if not dry_run:

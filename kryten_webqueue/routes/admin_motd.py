@@ -26,7 +26,7 @@ from ..motd.builder import (
     mystery_pool,
     week_context,
 )
-from ..motd.render import render_motd
+from ..motd.render import MOTDMergeError, render_motd, update_motd_slots
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +110,15 @@ async def motd_render(
         html = render_motd(request.app.state.config, built)
     except PosterDirUnavailable as exc:  # pragma: no cover - defensive
         raise HTTPException(500, str(exc)) from exc
+    try:
+        current = await request.app.state.api_gate.get_motd()
+        html = update_motd_slots(current, html)
+    except MOTDMergeError as exc:
+        raise HTTPException(409, f"MOTD cannot be updated safely: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(
+            503, "Could not read the live MOTD for a safe preview"
+        ) from exc
     return {"week_key": built.week_key, "html": html}
 
 

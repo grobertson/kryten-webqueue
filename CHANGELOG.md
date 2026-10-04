@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.50.4] - 2026-10-03
+
+### Fixed
+
+- MOTD publishing now updates movie boxes by matching
+  `data-kryten-motd-slot` attributes on each anchor and image instead of
+  replacing the entire live document. Only `href`/`title` on the anchor and
+  `src`/`alt` on the image are managed; banner art, headings, footer text,
+  styling, and other manually edited HTML are preserved. The live MOTD is
+  fetched after building the new lineup, and the Admin render preview uses
+  the same merge as publishing.
+- Existing unmarked poster grids gain stable markers only when their
+  structure exactly matches the configured layout. Missing, duplicate,
+  mismatched, or ambiguous markers stop publishing rather than triggering a
+  destructive fallback. No NATS, KV, or configuration schema changes are
+  required; eight-box and other configured layouts are supported.
+
 ## [0.50.3] - 2026-10-03
 
 ### Fixed

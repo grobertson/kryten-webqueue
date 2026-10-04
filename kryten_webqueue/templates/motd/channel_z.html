@@ -15,8 +15,8 @@
 {% for night in nights %}
             <!-- {{ night.label }} -->
 {% for slot in night.slots %}
-            <a href="{{ slot.href|safe_url }}" target="_blank" rel="noopener noreferrer"{% if slot.title %} title="{{ slot.title }}"{% endif %}>
-            <img src="{{ slot.poster_url|safe_url }}"{% if slot.title %} alt="{{ slot.title }}"{% endif %} />
+            <a href="{{ slot.href|safe_url }}" data-kryten-motd-slot="{{ slot.slot_key }}" target="_blank" rel="noopener noreferrer"{% if slot.title %} title="{{ slot.title }}"{% endif %}>
+            <img src="{{ slot.poster_url|safe_url }}" data-kryten-motd-slot="{{ slot.slot_key }}"{% if slot.title %} alt="{{ slot.title }}"{% endif %} />
             </a>
 
 {% endfor %}

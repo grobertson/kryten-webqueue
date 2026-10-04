@@ -8,11 +8,14 @@ lookup and poster download are stubbed.
 
 import datetime
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from kryten_webqueue.catalog.db import Database
 from kryten_webqueue.config import MOTDConfig
+from kryten_webqueue.jobs.manager import JobError
+from kryten_webqueue.jobs.motd_publish import motd_publish_job
 from kryten_webqueue.motd import builder, render
 
 
@@ -351,6 +354,134 @@ def test_render_escapes_curator_titles(tmp_path, monkeypatch, stub_lookup):
 
 
 # --- slot key validation ---
+
+
+def test_render_marks_both_tags_for_each_of_eight_slots(
+    tmp_path, monkeypatch, stub_lookup
+):
+    _stub_workbook(monkeypatch, {})
+    config = _config(tmp_path, slots=8)
+    week = builder.build_slots(config, today=datetime.date(2026, 3, 4))
+    html = render.render_motd(config, week)
+    assert len(week.slots) == 8
+    for slot in week.slots:
+        assert html.count(f'data-kryten-motd-slot="{slot.slot_key}"') == 2
+
+
+def test_managed_slot_update_preserves_manual_html_and_tag_styling():
+    current = '<h1>Hand edited announcement</h1>\n<a data-kryten-motd-slot="night1-slot1" class="custom" style="color:red" href="https://old"><img data-kryten-motd-slot="night1-slot1" src="https://old/img" width="140" /></a>\n<footer>Manual footer &amp; links</footer>'
+    generated = '<a data-kryten-motd-slot="night1-slot1" href="https://new/movie" title="New Movie"><img data-kryten-motd-slot="night1-slot1" src="https://new/poster" alt="New Movie" /></a>'
+    updated = render.update_motd_slots(current, generated)
+    assert updated.startswith("<h1>Hand edited announcement</h1>\n")
+    assert updated.endswith("\n<footer>Manual footer &amp; links</footer>")
+    assert 'class="custom"' in updated and 'style="color:red"' in updated
+    assert 'width="140"' in updated
+    assert 'href="https://new/movie"' in updated
+    assert 'src="https://new/poster"' in updated
+
+
+def test_legacy_grid_migration_keeps_banner_and_footer():
+    current = '<img src="https://custom/banner"><div class="poster-grid"><a href="https://old"><img src="https://old/poster"></a></div><p>Hand edited footer</p>'
+    generated = '<a data-kryten-motd-slot="night1-slot1" href="https://new"><img data-kryten-motd-slot="night1-slot1" src="https://new/poster"></a>'
+    updated = render.update_motd_slots(current, generated)
+    assert updated.startswith('<img src="https://custom/banner">')
+    assert updated.endswith("<p>Hand edited footer</p>")
+    assert updated.count('data-kryten-motd-slot="night1-slot1"') == 2
+
+
+def test_reordered_boxes_follow_markers_not_display_position():
+    def box(slot, url):
+        return f'<a data-kryten-motd-slot="{slot}" href="https://{url}"><img data-kryten-motd-slot="{slot}" src="https://{url}/poster"></a>'
+
+    current = box("night1-slot2", "old2") + box("night1-slot1", "old1")
+    generated = box("night1-slot1", "new1") + box("night1-slot2", "new2")
+    updated = render.update_motd_slots(current, generated)
+    assert updated.index("https://new2") < updated.index("https://new1")
+
+
+@pytest.mark.parametrize("separator", ["\r", "\r\n", "\u2028"])
+def test_managed_updates_preserve_nonstandard_line_separators(separator):
+    before = f"<p>Manual{separator}announcement</p>"
+    current = (
+        before
+        + '<a data-kryten-motd-slot="night1-slot1"><img data-kryten-motd-slot="night1-slot1"></a>'
+    )
+    generated = '<a data-kryten-motd-slot="night1-slot1" href="https://new"><img data-kryten-motd-slot="night1-slot1" src="https://new/poster"></a>'
+    assert render.update_motd_slots(current, generated).startswith(before)
+
+
+@pytest.mark.parametrize(
+    "current",
+    [
+        "<p>Unrecognised hand-built MOTD</p>",
+        '<div class="poster-grid"></div>',
+        '<a data-kryten-motd-slot="night1-slot1"><img></a>',
+        '<a data-kryten-motd-slot="night1-slot1"><img data-kryten-motd-slot="night1-slot1"></a><a data-kryten-motd-slot="night1-slot1"></a>',
+    ],
+)
+def test_unsafe_or_incomplete_slot_markup_is_rejected(current):
+    generated = '<a data-kryten-motd-slot="night1-slot1" href="https://new"><img data-kryten-motd-slot="night1-slot1" src="https://new/poster"></a>'
+    with pytest.raises(render.MOTDMergeError):
+        render.update_motd_slots(current, generated)
+
+
+async def test_publish_job_merges_fresh_live_html_before_sending(
+    tmp_path, monkeypatch, stub_lookup
+):
+    _stub_workbook(monkeypatch, {})
+    config = _config(tmp_path, slots=8)
+    week = builder.build_slots(config, dry_run=True)
+    current = render.render_motd(config, week).replace(
+        "weekend-body", "hand-styled-body"
+    )
+    current = "<aside>Manual announcement</aside>\n" + current
+    api = SimpleNamespace(
+        get_motd=AsyncMock(return_value=current), set_motd=AsyncMock()
+    )
+    ctx = SimpleNamespace(
+        config=config,
+        api_gate=api,
+        db=SimpleNamespace(
+            list_motd_overrides=AsyncMock(return_value=[]),
+            get_next_schedule=AsyncMock(return_value=None),
+        ),
+        progress=AsyncMock(),
+    )
+    result = await motd_publish_job({"publish": True}, ctx)
+    sent = api.set_motd.await_args.args[0]
+    assert sent.startswith("<aside>Manual announcement</aside>\n")
+    assert 'class="hand-styled-body"' in sent
+    assert result["published"] is True
+    assert (tmp_path / "out" / f"motd-{week.week_key}.html").read_text(
+        encoding="utf-8"
+    ) == sent
+
+
+@pytest.mark.parametrize(
+    "live", [RuntimeError("api offline"), "<p>Unrecognised custom MOTD</p>"]
+)
+async def test_publish_job_never_sends_when_live_read_or_merge_fails(
+    tmp_path, monkeypatch, stub_lookup, live
+):
+    _stub_workbook(monkeypatch, {})
+    api = SimpleNamespace(get_motd=AsyncMock(), set_motd=AsyncMock())
+    if isinstance(live, Exception):
+        api.get_motd.side_effect = live
+    else:
+        api.get_motd.return_value = live
+    ctx = SimpleNamespace(
+        config=_config(tmp_path),
+        api_gate=api,
+        db=SimpleNamespace(
+            list_motd_overrides=AsyncMock(return_value=[]),
+            get_next_schedule=AsyncMock(return_value=None),
+        ),
+        progress=AsyncMock(),
+    )
+    with pytest.raises(JobError):
+        await motd_publish_job({"publish": True}, ctx)
+    api.set_motd.assert_not_awaited()
+    assert not (tmp_path / "out").exists()
 
 
 @pytest.mark.parametrize(
