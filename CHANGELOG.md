@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.50.3] - 2026-10-03
+
+### Fixed
+
+- **Rehost Emotes no longer wipes newly added channel emotes.** Since 0.50.0 the
+  job replaced CyTube's entire emote list with a manifest built from image files
+  on disk, both before and after each run (`emote_rehost.sync_disk_manifest`,
+  default `true`). Any emote not yet rehosted (i.e. every new one) was
+  deleted before the job could see it, and the channel was reset to the last
+  on-disk state. The scheduled 24h run did the same thing. The live channel list
+  is now the source of truth: emotes are only updated one at a time. The
+  `emotes.json` manifest is still written as a restore artifact, but it is no
+  longer pushed, and failure to build it no longer aborts the job.
+- A permanently unavailable source image (404/410/etc.) no longer pushes a
+  broken `.../<name>DEAD` URL to CyTube; the emote is left untouched and
+  reported as failed.
+
+### Deprecated
+
+- `emote_rehost.sync_disk_manifest` is ignored (logs a warning when `true`) and
+  removed from `config.example.json`. The `manifest_pushed` result field is gone.
+
+### Known Issues (Deferred)
+
+- Rehosting names that normalize to the same filename (such as `#foo_bar` and
+  `#foobar`) can overwrite another emote's image. Resolve filename collisions
+  in the next rehosting maintenance round without changing channel names.
+- The disk manifest includes only GIF/WebP files, while downloads also support
+  PNG/JPEG. Extend export coverage in the next maintenance round so a manual
+  restore does not omit these formats. Neither issue explains the reported
+  `#leathertowel` example; its disappearance time was not established by the
+  available production logs or backups.
+
 ## [0.50.2] - 2026-09-28
 
 ### Fixed

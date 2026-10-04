@@ -103,7 +103,6 @@
     "static_dir": "/var/lib/kryten-webqueue/emotes/images",
     "base_url": "https://queue.dropsugar.co/emotes/images",
     "manifest_path": "/var/lib/kryten-webqueue/emotes/emotes.json",
-    "sync_disk_manifest": true,
     "backup_dir": "/var/lib/kryten-webqueue/emotes/backups",
     "check_interval_hours": 24.0,
     "download_max_retries": 5,

@@ -244,30 +244,37 @@ def _write_json(path: Path, data: list[dict]) -> None:
     tmp.replace(path)
 
 
+async def _refresh_manifest(
+    static_dir: Path, base_url: str, manifest_path: Path
+) -> int:
+    """Rewrite the on-disk export; never fatal because it is not load-bearing."""
+    try:
+        manifest = await asyncio.to_thread(
+            write_emote_manifest, static_dir, base_url, manifest_path
+        )
+    except (ValueError, OSError) as exc:
+        logger.warning("Could not refresh emote manifest %s: %s", manifest_path, exc)
+        return 0
+    return len(manifest)
+
+
 async def rehost_emotes_job(params: dict, ctx) -> dict:
-    """Rehost externally-hosted channel emotes to dropsugar.co."""
+    """Rehost externally-hosted channel emotes to dropsugar.co.
+
+    The live CyTube emote list is the source of truth: emotes are only ever
+    updated one at a time, never replaced wholesale from files on disk.
+    """
     cfg = ctx.config.emote_rehost
     api = ctx.api_gate
     static_dir = Path(cfg.static_dir)
     manifest_path = Path(cfg.manifest_path)
     await asyncio.to_thread(static_dir.mkdir, parents=True, exist_ok=True)
-    try:
-        manifest = await asyncio.to_thread(
-            write_emote_manifest, static_dir, cfg.base_url, manifest_path
-        )
-    except ValueError as exc:
-        raise JobError(f"Could not build emote manifest: {exc}") from exc
-    manifest_count = len(manifest)
 
-    manifest_pushed = 0
     if cfg.sync_disk_manifest:
-        try:
-            await api.replace_emotes(manifest)
-            manifest_pushed = manifest_count
-        except Exception as exc:
-            raise JobError(
-                f"Could not replace CyTube emotes from disk manifest: {exc}"
-            ) from exc
+        logger.warning(
+            "emote_rehost.sync_disk_manifest is deprecated and ignored: replacing the "
+            "channel emote list from disk deletes emotes not yet rehosted"
+        )
 
     try:
         emotes = await api.get_emotes()
@@ -284,8 +291,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "pushed": 0,
             "failed_emotes": [],
             "manifest_path": str(manifest_path),
-            "manifest_count": manifest_count,
-            "manifest_pushed": manifest_pushed,
+            "manifest_count": await _refresh_manifest(
+                static_dir, cfg.base_url, manifest_path
+            ),
         }
 
     backup_dir = Path(cfg.backup_dir)
@@ -325,8 +333,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
                 "failed_emotes": [],
                 "log": str(log_path),
                 "manifest_path": str(manifest_path),
-                "manifest_count": manifest_count,
-                "manifest_pushed": manifest_pushed,
+                "manifest_count": await _refresh_manifest(
+                    static_dir, cfg.base_url, manifest_path
+                ),
             }
             await ctx.progress({"step": "complete", **result})
             return result
@@ -355,11 +364,12 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             )
             elapsed = time.perf_counter() - t0
 
-            if ext is None:
+            if ext is None or ext == _DEAD:
                 logger.warning(
-                    "[%d/%d] FAILED %s (%.1fs) — %s",
+                    "[%d/%d] FAILED%s %s (%.1fs) — %s",
                     i,
                     len(to_rehost),
+                    " (source permanently unavailable)" if ext == _DEAD else "",
                     name,
                     elapsed,
                     url,
@@ -418,13 +428,9 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             backup_dir / f"emotes-{stamp}-after.json",
             list(updated.values()),
         )
-        manifest = await asyncio.to_thread(
-            write_emote_manifest, static_dir, cfg.base_url, manifest_path
+        manifest_count = await _refresh_manifest(
+            static_dir, cfg.base_url, manifest_path
         )
-        manifest_count = len(manifest)
-        if cfg.sync_disk_manifest:
-            await api.replace_emotes(manifest)
-            manifest_pushed = manifest_count
 
         logger.info(
             "Done: %d/%d succeeded, %d removed (dead), %d failed",
@@ -451,7 +457,6 @@ async def rehost_emotes_job(params: dict, ctx) -> dict:
             "log": str(log_path),
             "manifest_path": str(manifest_path),
             "manifest_count": manifest_count,
-            "manifest_pushed": manifest_pushed,
         }
         await ctx.progress({"step": "complete", **result})
         return result

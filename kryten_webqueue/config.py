@@ -20,8 +20,8 @@ class EmoteRehostConfig(BaseModel):
     # Disk-derived export (``[{\"name\": \"#emote\", \"image\": \"...\"}]``)
     # used to restore the channel emote list after a service migration.
     manifest_path: str = "/var/lib/kryten-webqueue/emotes/emotes.json"
-    # Replace CyTube's emote list from the disk-derived manifest on each run.
-    sync_disk_manifest: bool = True
+    # Deprecated, ignored: wholesale replace from disk deleted not-yet-rehosted emotes.
+    sync_disk_manifest: bool = False
     # Directory for timestamped backup JSON files (created if absent).
     backup_dir: str = "/var/lib/kryten-webqueue/emotes/backups"
     # Background check interval in hours; 0 disables the periodic loop.
