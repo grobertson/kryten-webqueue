@@ -7,6 +7,7 @@ lookup and poster download are stubbed.
 """
 
 import datetime
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,7 +16,7 @@ import pytest
 from kryten_webqueue.catalog.db import Database
 from kryten_webqueue.config import MOTDConfig
 from kryten_webqueue.jobs.manager import JobError
-from kryten_webqueue.jobs.motd_publish import motd_publish_job
+from kryten_webqueue.jobs.motd_publish import _next_event, motd_publish_job
 from kryten_webqueue.motd import builder, render
 
 
@@ -26,6 +27,23 @@ async def db(tmp_path):
     await database.run_migrations()
     yield database
     await database.close()
+
+
+async def test_next_event_serializes_native_postgres_timestamp():
+    fire_at = datetime.datetime(2026, 10, 9, 22, tzinfo=datetime.timezone.utc)
+    database = SimpleNamespace(
+        get_next_schedule=AsyncMock(
+            return_value={
+                "id": 1,
+                "playlist_id": 2,
+                "label": "Friday",
+                "fire_at": fire_at,
+            }
+        )
+    )
+    event = await _next_event(database)
+    assert event["fire_at"] == fire_at.isoformat()
+    assert json.loads(json.dumps(event))["fire_at"] == fire_at.isoformat()
 
 
 def _config(tmp_path, **motd_kw):

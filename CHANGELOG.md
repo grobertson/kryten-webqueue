@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.50.5] - 2026-10-03
+
+### Fixed
+
+- Normalize the next scheduled event's native PostgreSQL timestamp to an ISO
+  string in MOTD job results. A successful channel update could otherwise be
+  reported as failed when serializing its result to JSON. Discovered during
+  live verification of the selective MOTD publisher.
+
 ## [0.50.4] - 2026-10-03
 
 ### Fixed

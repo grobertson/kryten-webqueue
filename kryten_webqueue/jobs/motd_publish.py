@@ -106,7 +106,9 @@ async def _next_event(db) -> dict | None:
         "schedule_id": row.get("id"),
         "playlist_id": row.get("playlist_id"),
         "label": row.get("label") or "Scheduled event",
-        "fire_at": fire_at,
+        "fire_at": (
+            fire_at.isoformat() if isinstance(fire_at, datetime.datetime) else fire_at
+        ),
         "starts_in": starts_in,
     }
 
