@@ -18,8 +18,10 @@ import random
 import shutil
 import time
 from datetime import datetime, timezone
+from html.parser import HTMLParser
+from itertools import chain
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
 
 import requests
 
@@ -43,6 +45,29 @@ _USER_AGENTS = [
 ]
 
 _EMOTE_EXTENSIONS = frozenset({".gif", ".webp"})
+_MAX_SOURCE_PAGE_BYTES = 2 * 1024 * 1024
+
+
+class _InvalidImageResponse(ValueError):
+    pass
+
+
+class _GiphyMediaParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.media_urls: list[str] = []
+        self.preview_url: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attributes = dict(attrs)
+        if tag == "img" and "giphy-gif-img" in (attributes.get("class") or "").split():
+            source = attributes.get("src")
+            if source:
+                self.media_urls.append(source)
+        elif tag == "meta":
+            key = (attributes.get("property") or attributes.get("name") or "").lower()
+            if key in {"og:image", "og:image:secure_url", "twitter:image"}:
+                self.preview_url = self.preview_url or attributes.get("content")
 
 
 def normalize_emote_name(value: str) -> str:
@@ -108,23 +133,63 @@ def write_emote_manifest(
     return manifest
 
 
-def _detect_ext(url: str, content_type: str | None) -> str:
-    """Determine file extension from Content-Type or URL path; default .gif."""
-    if content_type:
-        ct = content_type.lower()
-        if "gif" in ct:
-            return ".gif"
-        if "png" in ct:
-            return ".png"
-        if "jpeg" in ct or "jpg" in ct:
-            return ".jpg"
-        if "webp" in ct:
-            return ".webp"
-    path = unquote(urlparse(url).path).lower()
-    for ext in (".gif", ".png", ".jpg", ".jpeg", ".webp"):
-        if path.endswith(ext):
-            return ".jpg" if ext == ".jpeg" else ext
-    return ".gif"
+def _detect_ext(prefix: bytes, content_type: str | None) -> str:
+    """Identify supported image bytes; never infer image data from a URL."""
+    if prefix.startswith((b"GIF87a", b"GIF89a")):
+        return ".gif"
+    if prefix.startswith(b"\x89PNG\r\n\x1a\n"):
+        return ".png"
+    if prefix.startswith(b"\xff\xd8\xff"):
+        return ".jpg"
+    if len(prefix) >= 12 and prefix[:4] == b"RIFF" and prefix[8:12] == b"WEBP":
+        return ".webp"
+    received = content_type or "unknown content type"
+    raise _InvalidImageResponse(f"Response was not a supported image ({received})")
+
+
+def _is_html_response(prefix: bytes, content_type: str | None) -> bool:
+    try:
+        _detect_ext(prefix, content_type)
+        return False
+    except _InvalidImageResponse:
+        pass
+    normalized = prefix.lstrip(b"\xef\xbb\xbf \t\r\n").lower()
+    return bool(
+        content_type
+        and "html" in content_type.lower()
+        or normalized.startswith((b"<!doctype html", b"<html", b"<?xml"))
+    )
+
+
+def _resolve_giphy_media_url(page_url: str, page_html: bytes) -> str | None:
+    page_host = (urlparse(page_url).hostname or "").lower()
+    if page_host != "giphy.com" and not page_host.endswith(".giphy.com"):
+        return None
+    parser = _GiphyMediaParser()
+    parser.feed(page_html.decode("utf-8", errors="replace"))
+    page_id = urlparse(page_url).path.rstrip("/").rsplit("/", 1)[-1].rsplit("-", 1)[-1]
+    candidates = [*parser.media_urls]
+    if parser.preview_url:
+        candidates.append(parser.preview_url)
+    candidate = next(
+        (
+            candidate
+            for candidate in candidates
+            if page_id in urlparse(candidate).path.strip("/").split("/")
+        ),
+        None,
+    )
+    if candidate is None and not page_id:
+        candidate = parser.media_urls[0] if parser.media_urls else parser.preview_url
+    if not candidate:
+        return None
+    parsed = urlparse(candidate)
+    media_host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or (
+        media_host != "giphy.com" and not media_host.endswith(".giphy.com")
+    ):
+        return None
+    return candidate
 
 
 def _make_session() -> requests.Session:
@@ -155,9 +220,13 @@ def _place_emote(
     base = static_dir / bare_name
     tmp = base.parent / f"{base.name}.tmp"
     session = _make_session()
+    page_url = url
+    download_url = url
+    resolved_page = False
 
     try:
         for attempt in range(max_retries):
+            resp = None
             try:
                 headers: dict[str, str] = {
                     "User-Agent": random.choice(_USER_AGENTS),
@@ -166,42 +235,105 @@ def _place_emote(
                     "Referer": "https://giphy.com/",
                     "DNT": "1",
                 }
-                if tmp.exists():
+                if tmp.exists() and not resolved_page:
                     headers["Range"] = f"bytes={tmp.stat().st_size}-"
 
-                # (connect_timeout, read_timeout): read timeout applies between
-                # each chunk so a stalled body is caught, not just slow headers.
-                resp = session.get(url, headers=headers, timeout=(10, 30), stream=True)
-
-                if resp.status_code in _NON_RETRYABLE:
-                    logger.info("Permanent %d for %s — skipping", resp.status_code, url)
-                    return _DEAD
-
-                if resp.status_code == 429:
-                    wait = float(resp.headers.get("Retry-After", 60)) + random.uniform(
-                        0, 10
+                # A Giphy share URL serves HTML; resolve its primary animated
+                # media URL, then request it with the share page as Referer.
+                for _ in range(2):
+                    resp = session.get(
+                        download_url, headers=headers, timeout=(10, 30), stream=True
                     )
-                    logger.info("Rate-limited on %s; waiting %.0fs", url, wait)
-                    time.sleep(wait)
+
+                    if resp.status_code in _NON_RETRYABLE:
+                        logger.info(
+                            "Permanent %d for %s — skipping",
+                            resp.status_code,
+                            download_url,
+                        )
+                        return _DEAD
+
+                    if resp.status_code == 429:
+                        wait = float(
+                            resp.headers.get("Retry-After", 60)
+                        ) + random.uniform(0, 10)
+                        logger.info(
+                            "Rate-limited on %s; waiting %.0fs", download_url, wait
+                        )
+                        time.sleep(wait)
+                        resp.close()
+                        resp = None
+                        break
+
+                    resp.raise_for_status()
+                    chunks = iter(resp.iter_content(chunk_size=8192))
+                    first_chunk = next(chunks, b"")
+                    content_type = resp.headers.get("content-type")
+
+                    if not _is_html_response(first_chunk, content_type):
+                        break
+                    if resolved_page:
+                        raise _InvalidImageResponse(
+                            f"Resolved media URL still returned HTML: {download_url}"
+                        )
+
+                    page = bytearray()
+                    for chunk in chain((first_chunk,), chunks):
+                        if chunk:
+                            page.extend(chunk)
+                            if len(page) > _MAX_SOURCE_PAGE_BYTES:
+                                raise _InvalidImageResponse(
+                                    "Source HTML exceeded the 2 MiB resolver limit"
+                                )
+
+                    media_url = _resolve_giphy_media_url(page_url, bytes(page))
+                    if not media_url:
+                        raise _InvalidImageResponse(
+                            f"HTML source did not contain a supported Giphy media URL: {page_url}"
+                        )
+                    logger.info(
+                        "Resolved Giphy page %s to media URL %s", page_url, media_url
+                    )
+                    resp.close()
+                    resp = None
+                    download_url = media_url
+                    resolved_page = True
+                    headers["Referer"] = page_url
+                    headers.pop("Range", None)
+                    tmp.unlink(missing_ok=True)
+                    continue
+                else:
                     continue
 
-                resp.raise_for_status()
+                if resp is None or _is_html_response(first_chunk, content_type):
+                    continue
 
-                ext = _detect_ext(url, resp.headers.get("content-type"))
                 mode = "ab" if "Range" in headers and resp.status_code == 206 else "wb"
+                prefix = bytearray(tmp.read_bytes()[:12] if mode == "ab" else b"")
                 with open(tmp, mode) as fh:
-                    for chunk in resp.iter_content(chunk_size=8192):
+                    for chunk in chain((first_chunk,), chunks):
                         if chunk:
+                            if len(prefix) < 12:
+                                prefix.extend(chunk[: 12 - len(prefix)])
                             fh.write(chunk)
 
+                ext = _detect_ext(bytes(prefix), content_type)
                 final = base.with_suffix(ext)
                 shutil.move(str(tmp), str(final))
                 _set_permissions(final)
                 return ext
 
+            except _InvalidImageResponse as exc:
+                logger.warning("Rejecting non-image response for %s: %s", page_url, exc)
+                return None
+
             except requests.exceptions.RequestException as exc:
                 logger.info(
-                    "Attempt %d/%d for %s: %s", attempt + 1, max_retries, url, exc
+                    "Attempt %d/%d for %s: %s",
+                    attempt + 1,
+                    max_retries,
+                    download_url,
+                    exc,
                 )
                 tmp.unlink(missing_ok=True)
             except Exception as exc:
@@ -209,10 +341,13 @@ def _place_emote(
                     "Unexpected error attempt %d/%d for %s: %s",
                     attempt + 1,
                     max_retries,
-                    url,
+                    download_url,
                     exc,
                 )
                 tmp.unlink(missing_ok=True)
+            finally:
+                if resp is not None:
+                    resp.close()
 
             # Ample backoff: 15s, 30s, 60s, 120s, 120s … with jitter
             time.sleep(min(120, 15 * (2**attempt)) + random.uniform(0, 10))

@@ -131,6 +131,72 @@ async def test_leathertowel_download_uses_hashtag_filename_and_survives_next_run
     assert second["total_emotes"] == 2
 
 
+async def test_giphy_share_page_rehosts_primary_animated_media(
+    tmp_path: Path, monkeypatch
+):
+    page_url = "https://giphy.com/gifs/mrw-good-meagan-9uoYC7cjcU6w8"
+    media_url = "https://media0.giphy.com/media/signed/9uoYC7cjcU6w8/giphy.gif"
+    destination_url = "https://queue.dropsugar.co/emotes/images/clapcharlesdutton.gif"
+    page = (
+        "<!doctype html><html>"
+        '<img class="giphy-gif-img" src="https://media3.giphy.com/media/related-id/200.gif" alt="related">'
+        f'<img class="giphy-gif-img" src="{media_url}" alt="slow clap">'
+        '<img class="giphy-gif-img" src="https://media3.giphy.com/media/another-id/200.gif" alt="another related">'
+        "</html>"
+    ).encode()
+    gif = b"GIF89a\x01\x00\x01\x00\x80\x00\x00\x00\x00\x00\xff\xff\xff;"
+    page_response = Mock(
+        status_code=200,
+        headers={"content-type": "text/html; charset=utf-8"},
+        iter_content=Mock(return_value=[page]),
+    )
+    image_response = Mock(
+        status_code=200,
+        headers={"content-type": "image/gif"},
+        iter_content=Mock(return_value=[gif]),
+    )
+    session = Mock()
+    session.get.side_effect = [page_response, image_response]
+    monkeypatch.setattr(rehost_emotes, "_make_session", lambda: session)
+    monkeypatch.setattr(rehost_emotes, "_set_permissions", Mock())
+    api = _FakeApiGate([{"name": "#clapcharlesdutton", "image": page_url}])
+
+    result = await rehost_emotes_job({}, _ctx(tmp_path, api, download_max_retries=1))
+
+    assert [call.args[0] for call in session.get.call_args_list] == [
+        page_url,
+        media_url,
+    ]
+    assert session.get.call_args_list[1].kwargs["headers"]["Referer"] == page_url
+    assert (tmp_path / "images" / "clapcharlesdutton.gif").read_bytes() == gif
+    assert api.updates == [("#clapcharlesdutton", destination_url)]
+    assert result["succeeded"] == 1
+    assert result["failed"] == 0
+
+
+async def test_non_giphy_html_200_is_rejected_without_publishing_url(
+    tmp_path: Path, monkeypatch
+):
+    page_url = "https://example.com/clapcharlesdutton.gif"
+    page = b"<!doctype html><html><body>Not an image</body></html>"
+    response = Mock(
+        status_code=200,
+        headers={"content-type": "text/html; charset=utf-8"},
+        iter_content=Mock(return_value=[page]),
+    )
+    session = Mock()
+    session.get.return_value = response
+    monkeypatch.setattr(rehost_emotes, "_make_session", lambda: session)
+    api = _FakeApiGate([{"name": "#clapcharlesdutton", "image": page_url}])
+
+    result = await rehost_emotes_job({}, _ctx(tmp_path, api, download_max_retries=1))
+
+    assert api.updates == []
+    assert not (tmp_path / "images" / "clapcharlesdutton.gif").exists()
+    assert result["succeeded"] == 0
+    assert result["failed_emotes"] == ["#clapcharlesdutton"]
+
+
 async def test_job_does_not_push_url_for_permanently_dead_source(
     tmp_path: Path, monkeypatch
 ):

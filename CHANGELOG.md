@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.50.7] - 2026-10-04
+
+### Fixed
+
+- Giphy share-page URLs now resolve to the primary media asset matching the
+  Giphy ID, with the source page sent as `Referer`. The rehoster validates
+  GIF/PNG/JPEG/WebP signatures before saving or updating CyTube, so HTTP 200
+  HTML pages can no longer be published under image extensions. Unsupported
+  HTML sources fail without changing the channel URL.
+
 ## [0.50.6] - 2026-10-03
 
 ### Fixed
