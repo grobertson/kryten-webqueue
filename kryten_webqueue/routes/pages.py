@@ -463,3 +463,11 @@ async def admin_motd_page(request: Request):
     if not user or user.get("rank", 0) < 3:
         return RedirectResponse("/auth/login")
     return templates.TemplateResponse(request, "admin/motd.html", {"user": user})
+
+
+@router.get("/admin/media", response_class=HTMLResponse)
+async def admin_media_page(request: Request):
+    user = _get_user_or_none(request)
+    if not user or user.get("rank", 0) < 3:
+        return RedirectResponse("/auth/login")
+    return templates.TemplateResponse(request, "admin/media.html", {"user": user})

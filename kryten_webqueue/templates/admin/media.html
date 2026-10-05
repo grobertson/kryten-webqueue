@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Media Library - Admin{% endblock %}
+{% block body_class %}admin-page{% endblock %}
+
+{% block content %}
+<div class="admin-dashboard">
+    <h1>Media Library</h1>
+    <p><a href="/admin">&larr; Back to Admin</a> &middot; <a href="/admin/motd">MOTD</a></p>
+
+    <div class="admin-section">
+        <div class="section-head"><h2>Upload</h2></div>
+        <p class="muted">
+            GIF, PNG, JPEG, or WebP (animated GIF/WebP welcome). Metadata such as camera
+            EXIF and comments is stripped. Each upload gets a permanent public link; names
+            are never reused, even after deletion.
+        </p>
+        <form id="media-upload" class="media-upload">
+            <label class="media-drop" id="media-drop">
+                <input type="file" id="media-file" accept="image/gif,image/png,image/jpeg,image/webp" hidden>
+                <span id="media-drop-label">Drop an image here or click to choose</span>
+            </label>
+            <div class="field"><label for="media-slug">Name (optional)</label>
+                <input type="text" id="media-slug" placeholder="halloween-banner"></div>
+            <div class="field"><label for="media-desc">Description (optional)</label>
+                <input type="text" id="media-desc" maxlength="500"></div>
+            <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+        <div id="media-result"></div>
+    </div>
+
+    <div class="admin-section">
+        <div class="section-head">
+            <h2>Library</h2>
+            <input type="search" id="media-search" placeholder="Search name, description, uploader">
+        </div>
+        <div id="media-list" class="media-grid"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/admin-media.js?v={{ app_version }}"></script>
+{% endblock %}

@@ -1,6 +1,8 @@
 import aiosqlite
 from pathlib import Path
 
+from .schemas.motd_templates_schema import MOTD_TEMPLATES_SQLITE
+
 
 MIGRATIONS = [
     # v1: Migration tracking table
@@ -552,6 +554,8 @@ MIGRATIONS = [
         PRIMARY KEY (week_key, slot_key)
     );
     """,
+    # v31: MOTD templates, schedules, publications, media library, audit log.
+    MOTD_TEMPLATES_SQLITE,
 ]
 
 

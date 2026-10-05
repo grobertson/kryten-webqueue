@@ -257,29 +257,44 @@ def _headline(config, week: MOTDWeek) -> str:
 
 def render_motd(config, week: MOTDWeek, *, next_event: dict | None = None) -> str:
     """Render the poster-grid MOTD snippet for ``week``."""
+    template = _environment().get_template(
+        getattr(config.motd, "template", "channel_z.html")
+    )
+    return template.render(**motd_context(config, week, next_event=next_event))
+
+
+def motd_context(config, week: MOTDWeek, *, next_event: dict | None = None) -> dict:
+    """Data shared by the file template, the grid partial, and user templates."""
     motd_cfg = config.motd
     nights: list[dict] = []
     for slot in week.slots:
         if not nights or nights[-1]["night"] != slot.night:
             nights.append({"night": slot.night, "label": slot.night_label, "slots": []})
         nights[-1]["slots"].append(slot)
-
-    template = _environment().get_template(
-        getattr(motd_cfg, "template", "channel_z.html")
-    )
-    return template.render(
-        banner_url=getattr(motd_cfg, "banner_url", ""),
-        headline=_headline(config, week),
-        nights=nights,
-        slots=week.slots,
-        links=[
+    return {
+        "banner_url": getattr(motd_cfg, "banner_url", ""),
+        "headline": _headline(config, week),
+        "nights": nights,
+        "slots": week.slots,
+        "links": [
             {"label": link.label, "url": link.url}
             for link in getattr(motd_cfg, "links", [])
         ],
-        next_event=next_event,
-        show_next_event=bool(getattr(motd_cfg, "show_next_event", False)),
-        week_key=week.week_key,
-        generated_at=datetime.datetime.now(datetime.timezone.utc).isoformat(
+        "next_event": next_event,
+        "show_next_event": bool(getattr(motd_cfg, "show_next_event", False)),
+        "week_key": week.week_key,
+        "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(
             timespec="seconds"
         ),
-    )
+    }
+
+
+def render_movie_grid(context: dict) -> str:
+    """The standard marked poster grid, rendered by the trusted environment."""
+    return _environment().get_template("_movie_grid.html").render(**context)
+
+
+def collect_motd_slots(html: str) -> set[str]:
+    """Slot keys of every valid anchor/image pair; raises MOTDMergeError if malformed."""
+    parser = _MOTDParser(html)
+    return set(_slot_tags(parser, _markers(parser)))

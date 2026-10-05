@@ -2,7 +2,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -33,6 +33,17 @@ from .routes.admin_schedules import router as admin_schedules_router
 from .routes.admin_queue import router as admin_queue_router
 from .routes.admin_jobs import router as admin_jobs_router
 from .routes.admin_motd import router as admin_motd_router
+from .routes.admin_motd_templates import (
+    audit_router as admin_audit_router,
+    router as admin_motd_templates_router,
+)
+from .routes.admin_media import router as admin_media_router
+from .motd.automation import (
+    MOTD_RETENTION_PRUNE_SCHEMA,
+    MOTDAutomation,
+    motd_retention_prune_job,
+)
+from .motd.composer import ensure_seeded
 from .routes.admin_job_schedules import router as admin_job_schedules_router
 from .routes.admin_catalog import router as admin_catalog_router
 from .routes.admin_promos import router as admin_promos_router
@@ -185,6 +196,12 @@ async def lifespan(app: FastAPI):
         schema=MOTD_PUBLISH_SCHEMA,
     )
     job_manager.register(
+        "motd_retention_prune",
+        motd_retention_prune_job,
+        label="MOTD History Pruner (audit, publications, backups)",
+        schema=MOTD_RETENTION_PRUNE_SCHEMA,
+    )
+    job_manager.register(
         "tmdb_index_refresh",
         tmdb_index_refresh_job,
         label="TMDB Index Refresh (rebuild local index from dumps)",
@@ -239,8 +256,30 @@ async def lifespan(app: FastAPI):
             label="Device Key Ban Reconcile (revoke banned users' API keys)",
             created_by="system",
         )
+    if await db.get_job_schedule("motd_retention_prune") is None:
+        await db.upsert_job_schedule(
+            "motd_retention_prune",
+            "17 9 * * *",
+            label="MOTD History Pruner (30-day retention)",
+            created_by="system",
+        )
     await job_scheduler.start()
     app.state.job_scheduler = job_scheduler
+
+    # MOTD templates: seed the default master once, then reconcile the channel
+    # against the template schedules. A missing PostgreSQL migration
+    # (sql/002_motd_templates_media.sql) must not take the whole app down.
+    motd_automation = MOTDAutomation(db, job_manager, config)
+    try:
+        if await ensure_seeded(db):
+            logger.info("Seeded the default MOTD master template")
+        await motd_automation.start()
+    except Exception:  # noqa: BLE001 - MOTD automation is optional at startup
+        logger.exception(
+            "MOTD templates unavailable; apply sql/002_motd_templates_media.sql "
+            "on PostgreSQL. Automation is not running."
+        )
+    app.state.motd_automation = motd_automation
 
     # WebSocket manager
     ws_manager = WebSocketManager()
@@ -393,6 +432,7 @@ async def lifespan(app: FastAPI):
         task.cancel()
     await asyncio.gather(*bg_tasks, return_exceptions=True)
     await job_manager.stop()  # cancel running jobs while DB/client still open
+    await motd_automation.stop()
     await job_scheduler.stop()
     await poller.stop()
     await race_poller.stop()
@@ -424,6 +464,9 @@ def create_app(config: Config) -> FastAPI:
     app.include_router(admin_queue_router)
     app.include_router(admin_jobs_router)
     app.include_router(admin_motd_router)
+    app.include_router(admin_motd_templates_router)
+    app.include_router(admin_audit_router)
+    app.include_router(admin_media_router)
     app.include_router(admin_job_schedules_router)
     app.include_router(admin_catalog_router)
     app.include_router(admin_promos_router)
@@ -474,5 +517,19 @@ def create_app(config: Config) -> FastAPI:
         StaticFiles(directory=str(motd_poster_dir)),
         name="motd-boxes",
     )
+
+    # Admin media library (uploaded MOTD and general-purpose art). Deleted files
+    # move to media.trash_dir, outside this mount, so they stop serving at once.
+    media_dir = Path(config.media.dir).expanduser()
+    media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(media_dir)), name="media")
+
+    @app.middleware("http")
+    async def _media_headers(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/media/"):
+            response.headers["X-Content-Type-Options"] = "nosniff"
+            response.headers.setdefault("Cache-Control", "public, max-age=86400")
+        return response
 
     return app

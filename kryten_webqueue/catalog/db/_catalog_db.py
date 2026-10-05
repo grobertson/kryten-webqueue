@@ -6,12 +6,20 @@ from ._catalog import _CatalogMixin, HIDDEN_CATEGORY_NAMES, HIDDEN_TAG_NAMES
 from ._people import _PeopleMixin
 from ._enrichment import _EnrichmentMixin
 from ._motd import _MOTDMixin
+from ._motd_templates import _MOTDTemplatesMixin
 from .schemas.catalog_schema import CATALOG_MIGRATIONS
 
 logger = logging.getLogger(__name__)
 
 
-class _CatalogDB(_CatalogMixin, _PeopleMixin, _EnrichmentMixin, _MOTDMixin, _DomainDB):
+class _CatalogDB(
+    _CatalogMixin,
+    _PeopleMixin,
+    _EnrichmentMixin,
+    _MOTDMixin,
+    _MOTDTemplatesMixin,
+    _DomainDB,
+):
     """Catalog domain database handling catalog metadata, categories, tags, people, studios, and enrichment."""
 
     def __init__(self, db_path: str):

@@ -26,7 +26,9 @@ from ..motd.builder import (
     mystery_pool,
     week_context,
 )
-from ..motd.render import MOTDMergeError, render_motd, update_motd_slots
+from ..motd.composer import render_composition, resolve_composition
+from ..motd.render import motd_context
+from ..motd.templating import MOTDTemplateError, js_length
 
 logger = logging.getLogger(__name__)
 
@@ -104,22 +106,27 @@ async def motd_preview(
 async def motd_render(
     request: Request, week: str = "current", user: dict = Depends(require_admin)
 ):
-    """Render the snippet for the weekend without publishing it."""
+    """Render exactly what a publish would send right now, without sending it."""
     built = await _build_current(request, week)
+    db = request.app.state.db
+    config = request.app.state.config
     try:
-        html = render_motd(request.app.state.config, built)
-    except PosterDirUnavailable as exc:  # pragma: no cover - defensive
-        raise HTTPException(500, str(exc)) from exc
-    try:
-        current = await request.app.state.api_gate.get_motd()
-        html = update_motd_slots(current, html)
-    except MOTDMergeError as exc:
-        raise HTTPException(409, f"MOTD cannot be updated safely: {exc}") from exc
-    except Exception as exc:
+        composition = await resolve_composition(db)
+        rendered = await render_composition(
+            db, config, motd_context(config, built), composition
+        )
+    except MOTDTemplateError as exc:
         raise HTTPException(
-            503, "Could not read the live MOTD for a safe preview"
+            422, f"The scheduled template cannot be published: {exc}"
         ) from exc
-    return {"week_key": built.week_key, "html": html}
+    return {
+        "week_key": built.week_key,
+        "html": rendered.html,
+        "chars": js_length(rendered.html),
+        "max_chars": config.motd.max_html_chars,
+        "warnings": rendered.warnings,
+        "composition": composition.summary(),
+    }
 
 
 @router.put("/overrides/{slot_key}")

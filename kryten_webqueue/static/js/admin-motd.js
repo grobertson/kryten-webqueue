@@ -179,14 +179,20 @@ async function clearOverride(slotKey) {
 
 async function previewHtml() {
     const resp = await fetch(`/admin/motd/render?week=${encodeURIComponent(weekParam())}`);
-    if (!resp.ok) { showToast('Preview failed', 'error'); return; }
-    const { html } = await resp.json();
-    document.getElementById('preview-html').textContent = html;
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) { showToast(data.detail || 'Preview failed', 'error'); return; }
+    const zones = Object.entries(data.composition.zones || {})
+        .map(([zone, f]) => `${zone}: ${f ? f.template : 'empty'}`).join(', ');
+    document.getElementById('preview-meta').textContent =
+        `Template ${data.composition.master}${zones ? ` (${zones})` : ''} · ` +
+        `${data.chars}/${data.max_chars} characters` +
+        ((data.warnings || []).length ? ` · ${data.warnings.join('; ')}` : '');
+    document.getElementById('preview-html').textContent = data.html;
     document.getElementById('preview-section').hidden = false;
 }
 
 async function publish() {
-    if (!confirm('Replace the live channel MOTD with this grid?')) return;
+    if (!confirm('Replace the live channel MOTD with the scheduled template? The current MOTD is backed up first.')) return;
     const resp = await fetch(`/admin/motd/publish?week=${encodeURIComponent(weekParam())}`, {
         method: 'POST',
     });

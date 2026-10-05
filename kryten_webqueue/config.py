@@ -95,6 +95,29 @@ class MOTDConfig(BaseModel):
     # Max size accepted by the admin alternate-art upload endpoint.
     upload_max_bytes: int = 5 * 1024 * 1024
 
+    # --- templates & scheduling (see docs/MOTD_TEMPLATES_SPEC.md) ---
+    # Wall-clock zone admins schedule in; storage is always UTC.
+    timezone: str = "America/New_York"
+    # Off until an admin has previewed and published the seeded default master.
+    automation_enabled: bool = False
+    reconcile_interval_seconds: int = 60
+    # CyTube silently cuts the MOTD at 20000 JavaScript (UTF-16) code units.
+    max_html_chars: int = 20000
+    # Audit log, publication history, and live-MOTD backups.
+    retention_days: int = 30
+
+
+class MediaConfig(BaseModel):
+    """Admin media library: uploaded art served publicly at ``/media``."""
+
+    dir: str = "/var/lib/kryten-webqueue/media/public"
+    # Deleted files move here, outside the public mount.
+    trash_dir: str = "/var/lib/kryten-webqueue/media/trash"
+    base_url: str = "https://queue.dropsugar.co/media"
+    max_image_bytes: int = 10 * 1024 * 1024
+    max_image_pixels: int = 40_000_000
+    max_frames: int = 1000
+
 
 class FetchUrlsConfig(BaseModel):
     """Settings for the fetchurls job.
@@ -416,6 +439,7 @@ class Config(BaseModel):
     fetch_queue: FetchQueueConfig = FetchQueueConfig()
     emote_rehost: EmoteRehostConfig = EmoteRehostConfig()
     motd: MOTDConfig = MOTDConfig()
+    media: MediaConfig = MediaConfig()
     # Presence-based cancel/refund of pending paid items
     presence_refund: PresenceRefundConfig = PresenceRefundConfig()
 

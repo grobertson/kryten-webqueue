@@ -21,6 +21,7 @@ from ._fetch_queue import _FetchQueueMixin
 from ._blackouts import _BlackoutMixin
 from ._devices import _DevicesMixin
 from ._motd import _MOTDMixin
+from ._motd_templates import _MOTDTemplatesMixin
 
 from ._catalog_db import _CatalogDB
 from ._queue_db import _QueueDB
@@ -201,6 +202,40 @@ _DOMAIN_METHOD_MAP: dict[str, str] = {
     "get_motd_overrides_for_week": "catalog",
     "upsert_motd_override": "catalog",
     "delete_motd_override": "catalog",
+    "list_motd_overrides": "catalog",
+    "clear_motd_overrides": "catalog",
+    # catalog: MOTD templates, schedules, publications, media, audit
+    "list_motd_templates": "catalog",
+    "get_motd_template": "catalog",
+    "get_motd_template_by_id": "catalog",
+    "get_default_motd_template": "catalog",
+    "count_motd_templates": "catalog",
+    "create_motd_template": "catalog",
+    "save_motd_template_revision": "catalog",
+    "update_motd_template_meta": "catalog",
+    "set_default_motd_template": "catalog",
+    "archive_motd_template": "catalog",
+    "list_motd_template_revisions": "catalog",
+    "get_motd_template_revision": "catalog",
+    "get_motd_revision": "catalog",
+    "list_motd_schedules": "catalog",
+    "get_motd_schedule": "catalog",
+    "create_motd_schedule": "catalog",
+    "update_motd_schedule": "catalog",
+    "delete_motd_schedule": "catalog",
+    "count_live_motd_schedules_for_template": "catalog",
+    "add_motd_publication": "catalog",
+    "get_latest_motd_publication": "catalog",
+    "list_motd_publications": "catalog",
+    "create_media_asset": "catalog",
+    "get_media_asset": "catalog",
+    "media_slug_exists": "catalog",
+    "list_media_assets": "catalog",
+    "update_media_asset_description": "catalog",
+    "soft_delete_media_asset": "catalog",
+    "add_admin_audit": "catalog",
+    "list_admin_audit": "catalog",
+    "prune_motd_history": "catalog",
 }
 
 
@@ -216,6 +251,7 @@ class Database(
     _BlackoutMixin,
     _DevicesMixin,
     _MOTDMixin,
+    _MOTDTemplatesMixin,
     _DBBase,
 ):
     """Database facade coordinating catalog, queue, jobs, and users SQLite databases."""

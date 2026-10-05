@@ -5,49 +5,165 @@
 {% block content %}
 <div class="admin-dashboard">
     <h1>Message of the Day</h1>
-    <p><a href="/admin">&larr; Back to Admin</a></p>
+    <p><a href="/admin">&larr; Back to Admin</a> &middot; <a href="/admin/media">Media Library</a></p>
 
-    <div class="admin-section">
-        <div class="section-head">
-            <h2>Weekend Poster Grid</h2>
-            <div class="motd-actions">
-                <select id="week-select" title="Which weekend to build">
-                    <option value="current">This weekend</option>
-                    <option value="next">Next weekend (early debut)</option>
-                </select>
-                <button type="button" class="btn btn-sm" id="btn-reload">Refresh</button>
-                <button type="button" class="btn btn-sm" id="btn-preview">Preview HTML</button>
-                <button type="button" class="btn btn-sm btn-primary" id="btn-publish">Publish to Channel</button>
+    <div class="admin-tabs-card">
+        <div class="tabs" role="tablist">
+            <button class="tab-btn active" data-motd-tab="grid" role="tab">Weekend Grid</button>
+            <button class="tab-btn" data-motd-tab="templates" role="tab">Templates</button>
+            <button class="tab-btn" data-motd-tab="schedule" role="tab">Schedule</button>
+            <button class="tab-btn" data-motd-tab="history" role="tab">History</button>
+        </div>
+
+        <!-- Weekend grid (per-slot overrides) -->
+        <div class="tab-panel" id="motd-tab-grid">
+            <div class="admin-section">
+                <div class="section-head">
+                    <h2>Weekend Poster Grid</h2>
+                    <div class="motd-actions">
+                        <select id="week-select" title="Which weekend to build">
+                            <option value="current">This weekend</option>
+                            <option value="next">Next weekend (early debut)</option>
+                        </select>
+                        <button type="button" class="btn btn-sm" id="btn-reload">Refresh</button>
+                        <button type="button" class="btn btn-sm" id="btn-preview">Preview HTML</button>
+                        <button type="button" class="btn btn-sm btn-primary" id="btn-publish">Publish to Channel</button>
+                    </div>
+                </div>
+                <p class="muted">
+                    Titles come from the weekend schedule workbook. Each is resolved to an
+                    IMDb link and poster art automatically; slots with no title yet, or a
+                    title that can't be verified, show a mystery box. Override any slot
+                    below to pin a title, upload alternate art, or point the link somewhere
+                    other than IMDb. Overrides apply to the selected weekend only and
+                    retire on their own once that week rolls over. Publishing renders the
+                    currently scheduled template and replaces the whole channel MOTD (the
+                    previous one is backed up).
+                </p>
+                <div id="grid-status" class="muted">Loading&hellip;</div>
+                <div id="motd-grid"></div>
+            </div>
+
+            <div class="admin-section" id="preview-section" hidden>
+                <div class="section-head">
+                    <h2>Rendered Snippet</h2>
+                    <button type="button" class="btn btn-sm" id="btn-copy">Copy</button>
+                </div>
+                <div id="preview-meta" class="muted"></div>
+                <pre id="preview-html" class="motd-preview"></pre>
+            </div>
+
+            <div class="admin-section">
+                <div class="section-head"><h2>Currently Live</h2></div>
+                <p class="muted">The MOTD the channel is showing right now.</p>
+                <pre id="current-motd" class="motd-preview">Loading&hellip;</pre>
             </div>
         </div>
-        <p class="muted">
-            Titles come from the weekend schedule workbook. Each is resolved to an
-            IMDb link and poster art automatically; slots with no title yet, or a
-            title that can't be verified, show a mystery box. Override any slot
-            below to pin a title, upload alternate art, or point the link somewhere
-            other than IMDb. Overrides apply to the selected weekend only and
-            retire on their own once that week rolls over.
-        </p>
-        <div id="grid-status" class="muted">Loading&hellip;</div>
-        <div id="motd-grid"></div>
-    </div>
 
-    <div class="admin-section" id="preview-section" hidden>
-        <div class="section-head">
-            <h2>Rendered Snippet</h2>
-            <button type="button" class="btn btn-sm" id="btn-copy">Copy</button>
+        <!-- Templates -->
+        <div class="tab-panel" id="motd-tab-templates" hidden>
+            <div class="motd-editor-layout">
+                <aside class="motd-template-list">
+                    <div class="section-head">
+                        <h2>Templates</h2>
+                        <button type="button" class="btn btn-sm btn-primary" id="tpl-new">New</button>
+                    </div>
+                    <label class="muted"><input type="checkbox" id="tpl-show-archived"> Show archived</label>
+                    <div id="tpl-list"></div>
+                </aside>
+
+                <section class="motd-editor" id="tpl-editor" hidden>
+                    <div class="section-head">
+                        <h2 id="tpl-title">Template</h2>
+                        <div class="motd-actions">
+                            <button type="button" class="btn btn-sm" id="tpl-insert-media">Insert media</button>
+                            <button type="button" class="btn btn-sm" id="tpl-revisions">Revisions</button>
+                            <button type="button" class="btn btn-sm" id="tpl-default">Make default</button>
+                            <button type="button" class="btn btn-sm btn-danger" id="tpl-archive">Archive</button>
+                            <button type="button" class="btn btn-sm" id="tpl-save-as">Save as&hellip;</button>
+                            <button type="button" class="btn btn-sm btn-primary" id="tpl-save">Save</button>
+                        </div>
+                    </div>
+                    <div id="tpl-live-banner" class="motd-banner" hidden></div>
+                    <div id="tpl-meta" class="muted"></div>
+                    <div class="motd-editor-panes">
+                        <div class="motd-editor-pane">
+                            <textarea id="tpl-body" class="motd-code" spellcheck="false" wrap="off"></textarea>
+                            <details class="muted motd-help">
+                                <summary>Template reference</summary>
+                                <p>Sandboxed Jinja. Values are HTML-escaped automatically; use <code>&lt;style&gt;</code> tags for styling.</p>
+                                <ul>
+                                    <li><code>{{ '{{ movie_grid() }}' }}</code> &mdash; the weekend poster grid (required in every master).</li>
+                                    <li><code>{{ '{{ zone("promo") }}' }}</code> &mdash; a slot filled by whichever fragment is scheduled for that zone (masters only).</li>
+                                    <li><code>{{ '{% if zone_active("promo") %}' }}&hellip;{{ '{% endif %}' }}</code> &mdash; branch on a scheduled fragment.</li>
+                                    <li><code>{{ '{{ media_url("slug") }}' }}</code> &mdash; public URL of an uploaded image.</li>
+                                    <li><code>headline</code>, <code>banner_url</code>, <code>week_key</code>, <code>nights</code>, <code>slots</code>, <code>links</code>, <code>next_event</code>, <code>show_next_event</code>, <code>now</code> (Eastern), <code>generated_at</code>, filter <code>safe_url</code>.</li>
+                                </ul>
+                                <p>CyTube cuts the MOTD at 20,000 characters (emoji count double), strips comments and scripts.</p>
+                            </details>
+                        </div>
+                        <div class="motd-editor-pane">
+                            <div class="motd-actions">
+                                <select id="pv-week" title="Weekend data">
+                                    <option value="current">This weekend</option>
+                                    <option value="next">Next weekend</option>
+                                </select>
+                                <select id="pv-grid" title="Grid data">
+                                    <option value="sample">Placeholder grid (fast)</option>
+                                    <option value="live">Real grid (slower)</option>
+                                </select>
+                                <label class="muted">As of <input type="datetime-local" id="pv-asof"></label>
+                                <select id="pv-host" title="Host master for fragment previews" hidden></select>
+                                <button type="button" class="btn btn-sm" id="pv-refresh">Refresh</button>
+                            </div>
+                            <div id="pv-status" class="muted"></div>
+                            <iframe id="pv-frame" class="motd-preview-frame" sandbox title="MOTD preview"></iframe>
+                        </div>
+                    </div>
+                </section>
+            </div>
         </div>
-        <pre id="preview-html" class="motd-preview"></pre>
-    </div>
 
-    <div class="admin-section">
-        <div class="section-head"><h2>Currently Live</h2></div>
-        <p class="muted">The MOTD the channel is showing right now.</p>
-        <pre id="current-motd" class="motd-preview">Loading&hellip;</pre>
+        <!-- Schedule -->
+        <div class="tab-panel" id="motd-tab-schedule" hidden>
+            <div class="admin-section">
+                <div class="section-head">
+                    <h2>Schedules</h2>
+                    <button type="button" class="btn btn-sm btn-primary" id="sch-new">New schedule</button>
+                </div>
+                <p class="muted">Times are Eastern (<span id="sch-tz">America/New_York</span>). Masters replace the whole MOTD; fragments fill a zone of whichever master is live. Higher priority wins; ties go to the shorter window.</p>
+                <div id="sch-list"></div>
+            </div>
+            <div class="admin-section">
+                <div class="section-head"><h2>Next 30 days</h2></div>
+                <div id="sch-warnings"></div>
+                <div id="sch-timeline"></div>
+            </div>
+        </div>
+
+        <!-- History -->
+        <div class="tab-panel" id="motd-tab-history" hidden>
+            <div class="admin-section">
+                <div class="section-head">
+                    <h2>Automation</h2>
+                    <label><input type="checkbox" id="auto-enabled"> Publish schedule changes automatically</label>
+                </div>
+                <div id="auto-status" class="muted">Loading&hellip;</div>
+            </div>
+            <div class="admin-section">
+                <div class="section-head"><h2>Publications</h2></div>
+                <div id="pub-list"></div>
+            </div>
+            <div class="admin-section">
+                <div class="section-head"><h2>Audit Trail</h2></div>
+                <div id="audit-list"></div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/js/admin-motd.js?v={{ app_version }}"></script>
+<script src="/static/js/admin-motd-templates.js?v={{ app_version }}"></script>
 {% endblock %}

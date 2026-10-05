@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.51.0] - 2026-10-05
+
+### Added
+
+- **MOTD templates.** Admins can create, edit, preview, and save any number of
+  named MOTD templates with full revision history (append-only; restore
+  re-saves an old revision). Templates are sandboxed Jinja
+  (`ImmutableSandboxedEnvironment`, no filesystem access) with a documented
+  context. **Masters** are whole MOTDs and must contain the movie grid
+  (`{{ movie_grid() }}`). **Fragments** fill named zones in a master via
+  `{{ zone("name") }}` and `{% if zone_active("name") %}`. A second admin's
+  stale save is refused with 409. See `docs/MOTD_TEMPLATES_SPEC.md`.
+- **MOTD schedules.** Masters and zone fragments are scheduled independently,
+  as one-off windows or recurring windows (weekly hours or a raw RRULE).
+  Windows are entered in `America/New_York`, stay on the wall clock across
+  DST, and are stored in UTC. Overlaps resolve by priority, then the narrower
+  window. A 30-day timeline warns about fragments hidden by a master without
+  their zone, and about schedules that are always outranked.
+- **Automatic transitions** (`motd.automation_enabled`, **off by default**).
+  The setting is editable from the MOTD History tab; changes apply immediately
+  and are persisted back to the service config file. A reconcile loop checks
+  every `motd.reconcile_interval_seconds` and on startup whether the scheduled
+  composition differs from the last publication. When it does, the loop runs
+  the normal `motd_publish` job, keeping whichever weekend is live.
+- **Media library** at `/admin/media`. Upload GIF/PNG/JPEG/WebP (animated
+  included) and get a permanent `https://queue.dropsugar.co/media/<slug>.<ext>`
+  link plus a `{{ media_url("slug") }}` template snippet. Type is detected
+  from file bytes. Images are decoded under pixel/frame limits and re-encoded
+  so EXIF/XMP/comments are stripped, while frames, durations, and loop count
+  are preserved. Slugs are never reused. Deleting is blocked while a current
+  template references the file. Deleted files move out of the public mount.
+- **Admin audit trail** (`/admin/audit`) for template, schedule, media, and
+  automation changes, with **30-day retention**. A daily
+  `motd_retention_prune` job also prunes publication history and MOTD backups.
+- Admin MOTD page tabs: Templates (editor with live sandboxed preview, "as of"
+  time travel, host master for fragments, media picker), Schedule, History
+  (publications, automation toggle, audit).
+
+### Changed
+
+- **Templates are now the source of truth for the channel MOTD.** Publishing
+  backs up the live MOTD to `motd.output_dir/backups/` and then replaces the
+  whole document with the scheduled composition. This supersedes the 0.50.4
+  selective slot merge; hand edits made in CyTube's MOTD editor will be
+  overwritten. Rendered documents still carry the slot markers, so rolling
+  back to 0.50.6 stays safe. On first start the default master
+  `channel-z-weekend` is seeded from the built-in layout, with a `promo` zone.
+- Publishing fails closed when the rendered MOTD exceeds 20000 UTF-16 code
+  units (`motd.max_html_chars`). CyTube silently truncates above that length,
+  and emoji count double.
+- `GET /admin/motd/render` returns the composed render, with character count,
+  lint warnings, and composition. It no longer merges with the live MOTD, and
+  a template error is now 422 instead of 409/503.
+- Job results report `html_chars` (UTF-16 units) instead of `html_bytes`.
+
+### Upgrade notes
+
+- **PostgreSQL:** apply `kryten_webqueue/catalog/db/sql/002_motd_templates_media.sql`
+  before starting 0.51.0. SQLite layouts migrate automatically (v31).
+- Before enabling automation, preview and manually publish the seeded master.
+  Port any live-only hand edits into it first, because they are replaced.
+- The reverse proxy needs `/media/` passed through to the app (see
+  `deploy/nginx-queue.conf`). The existing catch-all already does this.
+
 ## [0.50.7] - 2026-10-04
 
 ### Fixed

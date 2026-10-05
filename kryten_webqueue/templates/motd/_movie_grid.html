@@ -1,0 +1,14 @@
+{#- Standard marked movie grid. Rendered by the trusted environment and exposed to
+    sandboxed user templates as movie_grid(). Slot markers are load-bearing:
+    publish validation and rollback-safe merges both key on them. -#}
+<div class="poster-grid">
+{% for night in nights %}
+            <!-- {{ night.label }} -->
+{% for slot in night.slots %}
+            <a href="{{ slot.href|safe_url }}" data-kryten-motd-slot="{{ slot.slot_key }}" target="_blank" rel="noopener noreferrer"{% if slot.title %} title="{{ slot.title }}"{% endif %}>
+            <img src="{{ slot.poster_url|safe_url }}" data-kryten-motd-slot="{{ slot.slot_key }}"{% if slot.title %} alt="{{ slot.title }}"{% endif %} />
+            </a>
+
+{% endfor %}
+{% endfor %}
+        </div>

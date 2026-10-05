@@ -1,5 +1,7 @@
 """Catalog domain schema and migrations for catalog.sqlite3."""
 
+from .motd_templates_schema import MOTD_TEMPLATES_SQLITE
+
 CATALOG_MIGRATIONS: list[str] = [
     # v1: Migration tracking table
     """
@@ -145,4 +147,6 @@ CATALOG_MIGRATIONS: list[str] = [
         PRIMARY KEY (week_key, slot_key)
     );
     """,
+    # MOTD templates, schedules, publications, media library, audit log.
+    MOTD_TEMPLATES_SQLITE,
 ]

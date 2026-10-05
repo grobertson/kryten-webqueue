@@ -15,7 +15,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from kryten_webqueue.catalog.db import Database
-from kryten_webqueue.config import MOTDConfig
+from kryten_webqueue.config import MediaConfig, MOTDConfig
 from kryten_webqueue.jobs.manager import JobError
 from kryten_webqueue.jobs.motd_publish import _next_event, motd_publish_job
 from kryten_webqueue.motd import builder, render
@@ -48,7 +48,7 @@ async def test_next_event_serializes_native_postgres_timestamp():
 
 
 async def test_late_builder_progress_is_drained_before_final_summary(
-    tmp_path, monkeypatch, stub_lookup
+    tmp_path, monkeypatch, stub_lookup, db
 ):
     _stub_workbook(monkeypatch, {})
     config = _config(tmp_path, slots=8)
@@ -70,13 +70,7 @@ async def test_late_builder_progress_is_drained_before_final_summary(
         set_motd=AsyncMock(),
     )
     ctx = SimpleNamespace(
-        config=config,
-        api_gate=api,
-        db=SimpleNamespace(
-            list_motd_overrides=AsyncMock(return_value=[]),
-            get_next_schedule=AsyncMock(return_value=None),
-        ),
-        progress=progress,
+        config=config, api_gate=api, db=db, progress=progress, triggered_by="admin"
     )
     await motd_publish_job({"publish": True}, ctx)
     assert phases == ["late-slot", "complete"]
@@ -94,6 +88,9 @@ def _config(tmp_path, **motd_kw):
     )
     return SimpleNamespace(
         motd=motd,
+        media=MediaConfig(
+            dir=str(tmp_path / "media"), base_url="https://cdn.example/media"
+        ),
         omdb_api_key="key",
         fetchurls=SimpleNamespace(workbook_path=""),
     )
@@ -479,63 +476,89 @@ def test_unsafe_or_incomplete_slot_markup_is_rejected(current):
         render.update_motd_slots(current, generated)
 
 
-async def test_publish_job_merges_fresh_live_html_before_sending(
-    tmp_path, monkeypatch, stub_lookup
+async def test_publish_job_backs_up_live_motd_then_replaces_it_with_the_template(
+    tmp_path, monkeypatch, stub_lookup, db
 ):
     _stub_workbook(monkeypatch, {})
     config = _config(tmp_path, slots=8)
-    week = builder.build_slots(config, dry_run=True)
-    current = render.render_motd(config, week).replace(
-        "weekend-body", "hand-styled-body"
-    )
-    current = "<aside>Manual announcement</aside>\n" + current
-    api = SimpleNamespace(
-        get_motd=AsyncMock(return_value=current), set_motd=AsyncMock()
-    )
+    live = "<p>Unrecognised hand-built MOTD</p>"
+    api = SimpleNamespace(get_motd=AsyncMock(return_value=live), set_motd=AsyncMock())
     ctx = SimpleNamespace(
         config=config,
         api_gate=api,
-        db=SimpleNamespace(
-            list_motd_overrides=AsyncMock(return_value=[]),
-            get_next_schedule=AsyncMock(return_value=None),
-        ),
+        db=db,
         progress=AsyncMock(),
+        triggered_by="admin",
+        run_id=42,
     )
     result = await motd_publish_job({"publish": True}, ctx)
+
     sent = api.set_motd.await_args.args[0]
-    assert sent.startswith("<aside>Manual announcement</aside>\n")
-    assert 'class="hand-styled-body"' in sent
+    assert "Unrecognised hand-built MOTD" not in sent
+    assert render.collect_motd_slots(sent) == {
+        f"night{n}-slot{p}" for n in (1, 2) for p in range(1, 5)
+    }
     assert result["published"] is True
-    assert (tmp_path / "out" / f"motd-{week.week_key}.html").read_text(
+    assert result["composition"]["master"] == "channel-z-weekend"
+    assert open(result["backup_path"], encoding="utf-8").read() == live
+    week_key = result["week_key"]
+    assert (tmp_path / "out" / f"motd-{week_key}.html").read_text(
         encoding="utf-8"
     ) == sent
 
+    publication = await db.get_latest_motd_publication()
+    assert publication["trigger"] == "manual"
+    assert publication["published_by"] == "admin"
+    assert publication["job_run_id"] == 42
+    assert publication["composition_key"] == result["composition"]["composition_key"]
+    assert publication["week_key"] == week_key
+    assert isinstance(publication["published_at"], datetime.datetime)
+    assert json.loads(json.dumps(result, default=str))["published"] is True
 
-@pytest.mark.parametrize(
-    "live", [RuntimeError("api offline"), "<p>Unrecognised custom MOTD</p>"]
-)
-async def test_publish_job_never_sends_when_live_read_or_merge_fails(
-    tmp_path, monkeypatch, stub_lookup, live
+
+async def test_publish_job_never_sends_when_the_live_read_fails(
+    tmp_path, monkeypatch, stub_lookup, db
 ):
     _stub_workbook(monkeypatch, {})
-    api = SimpleNamespace(get_motd=AsyncMock(), set_motd=AsyncMock())
-    if isinstance(live, Exception):
-        api.get_motd.side_effect = live
-    else:
-        api.get_motd.return_value = live
-    ctx = SimpleNamespace(
-        config=_config(tmp_path),
-        api_gate=api,
-        db=SimpleNamespace(
-            list_motd_overrides=AsyncMock(return_value=[]),
-            get_next_schedule=AsyncMock(return_value=None),
-        ),
-        progress=AsyncMock(),
+    api = SimpleNamespace(
+        get_motd=AsyncMock(side_effect=RuntimeError("api offline")),
+        set_motd=AsyncMock(),
     )
-    with pytest.raises(JobError):
+    ctx = SimpleNamespace(
+        config=_config(tmp_path), api_gate=api, db=db, progress=AsyncMock()
+    )
+    with pytest.raises(JobError, match="back it up"):
         await motd_publish_job({"publish": True}, ctx)
     api.set_motd.assert_not_awaited()
     assert not (tmp_path / "out").exists()
+    assert await db.get_latest_motd_publication() is None
+
+
+async def test_publish_job_never_sends_an_invalid_default_master(
+    tmp_path, monkeypatch, stub_lookup, db
+):
+    _stub_workbook(monkeypatch, {})
+    body = "<p>No movie grid here</p>"
+    template = await db.create_motd_template(
+        name="broken",
+        kind="master",
+        display_name="Broken",
+        description=None,
+        body=body,
+        body_sha256="x",
+        zones=[],
+        note=None,
+        created_by="t",
+    )
+    await db.set_default_motd_template(template["id"])
+    api = SimpleNamespace(get_motd=AsyncMock(return_value=""), set_motd=AsyncMock())
+    ctx = SimpleNamespace(
+        config=_config(tmp_path), api_gate=api, db=db, progress=AsyncMock()
+    )
+    with pytest.raises(JobError, match="movie grid"):
+        await motd_publish_job({"publish": True}, ctx)
+    api.get_motd.assert_not_awaited()
+    api.set_motd.assert_not_awaited()
 
 
 @pytest.mark.parametrize(

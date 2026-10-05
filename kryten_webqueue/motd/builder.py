@@ -230,6 +230,31 @@ def _apply_mystery(slot: MOTDSlot, motd_cfg, pool: list[str]) -> None:
     slot.href = getattr(motd_cfg, "mystery_box_href", "") or ""
 
 
+def sample_week(config, *, week_offset: int = 0) -> MOTDWeek:
+    """An all-mystery grid with the configured layout; no workbook or network.
+
+    Template saves validate against this so an editor never waits on SharePoint
+    or OMDB just to check that a master still carries the full movie grid.
+    """
+    motd_cfg = getattr(config, "motd", None)
+    base_day = datetime.date.today() + datetime.timedelta(weeks=week_offset)
+    week_key, friday, saturday = upcoming_weekend_sheet(base_day)
+    sunday = friday + datetime.timedelta(days=2)
+    nights = _grid_nights(motd_cfg)
+    slots = _blank_grid(
+        friday,
+        saturday,
+        sunday,
+        _slot_counts(nights, int(getattr(motd_cfg, "slots", 12) or 12)),
+        nights,
+    )
+    for slot in slots:
+        _apply_mystery(slot, motd_cfg, [])
+    return MOTDWeek(
+        week_key=week_key, friday=friday, saturday=saturday, sunday=sunday, slots=slots
+    )
+
+
 def build_slots(
     config,
     *,

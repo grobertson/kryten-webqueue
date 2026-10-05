@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 import asyncpg
 
 from ._pg_base_domain import _PgDomainDB, parse_dt
+from ._motd_templates import _PgMOTDTemplatesMixin
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +221,7 @@ _CATALOG_UPDATE_ALLOWED = {
 _CATALOG_TIMESTAMP_KEYS = {"added_at", "synced_at"}
 
 
-class _PgCatalogDB(_PgDomainDB):
+class _PgCatalogDB(_PgMOTDTemplatesMixin, _PgDomainDB):
     """Postgres implementation of the catalog domain (schema ``catalog``)."""
 
     # --- Browse / search ---
